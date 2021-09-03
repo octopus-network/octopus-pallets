@@ -62,7 +62,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://rpc.testnet.near.org")
+			.url("https://near-rpc.testnet.octopus.network")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
