@@ -34,7 +34,7 @@ use sp_runtime::{
 		Duration,
 	},
 	traits::{CheckedConversion, Hash, IdentifyAccount, Keccak256, StaticLookup},
-	DigestItem, Perbill, RuntimeDebug,
+	DigestItem, RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -310,7 +310,8 @@ pub mod pallet {
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
 
 	#[pallet::storage]
-	pub type PlannedValidatorSet<T: Config> = StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
+	pub type PlannedValidatorSet<T: Config> =
+		StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -961,7 +962,11 @@ pub mod pallet {
 					// TODO: ugly
 					if let Ok(_) = res {
 						<PlannedValidatorSet<T>>::kill();
-						log!(info, "validator set changed to: {:#?}", planned_validator_set.clone());
+						log!(
+							info,
+							"validator set changed to: {:#?}",
+							planned_validator_set.clone()
+						);
 						staked = planned_validator_set
 							.clone()
 							.validators
@@ -974,15 +979,7 @@ pub mod pallet {
 						winners = planned_validator_set
 							.validators
 							.into_iter()
-							.map(|vals| {
-								T::LposInterface::bond_and_validate(
-									vals.id.clone(),
-									vals.weight,
-									Perbill::zero(),
-									false,
-								);
-								vals.id
-							})
+							.map(|vals| vals.id)
 							.collect();
 					}
 				}

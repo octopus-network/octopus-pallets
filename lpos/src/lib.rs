@@ -26,7 +26,6 @@ use frame_support::{
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_appchain::traits::ElectionProvider;
-use pallet_octopus_appchain::traits::LposInterface;
 use pallet_session::historical;
 use sp_npos_elections::Supports;
 use sp_runtime::KeyTypeId;
@@ -322,34 +321,6 @@ impl<T: Config>
 	pallet_octopus_appchain::traits::LposInterface<<T as frame_system::Config>::AccountId>
 	for Pallet<T>
 {
-	fn bond_and_validate(
-		controller: <T as frame_system::Config>::AccountId,
-		value: u128,
-		commission: Perbill,
-		blocked: bool,
-	) -> DispatchResult {
-		let prefs = ValidatorPrefs { commission, blocked };
-
-		let mut claimed_rewards;
-
-		if let Some(ledger) = Self::ledger(&controller) {
-			claimed_rewards = ledger.claimed_rewards;
-		} else {
-			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = Self::history_depth();
-			let last_reward_era = current_era.saturating_sub(history_depth);
-			claimed_rewards = (last_reward_era..current_era).collect();
-		}
-
-		// TODO
-		<Payee<T>>::insert(&controller, RewardDestination::Controller);
-
-		let item = StakingLedger { active: value, claimed_rewards };
-		Self::update_ledger(&controller, &item);
-		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
-		Self::validate(controller, prefs)
-	}
-
 	fn in_current_validator_set(
 		id: KeyTypeId,
 		key_data: &[u8],
@@ -1474,6 +1445,34 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn bond_and_validate(
+		controller: <T as frame_system::Config>::AccountId,
+		value: u128,
+		commission: Perbill,
+		blocked: bool,
+	) -> DispatchResult {
+		let prefs = ValidatorPrefs { commission, blocked };
+
+		let mut claimed_rewards;
+
+		if let Some(ledger) = Self::ledger(&controller) {
+			claimed_rewards = ledger.claimed_rewards;
+		} else {
+			let current_era = CurrentEra::<T>::get().unwrap_or(0);
+			let history_depth = Self::history_depth();
+			let last_reward_era = current_era.saturating_sub(history_depth);
+			claimed_rewards = (last_reward_era..current_era).collect();
+		}
+
+		// TODO
+		<Payee<T>>::insert(&controller, RewardDestination::Controller);
+
+		let item = StakingLedger { active: value, claimed_rewards };
+		Self::update_ledger(&controller, &item);
+		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
+		Self::validate(controller, prefs)
+	}
+
 	/// Declare the desire to validate for the origin controller.
 	///
 	/// Effects will be felt at the beginning of the next era.
@@ -1909,6 +1908,10 @@ impl<T: Config> Pallet<T> {
 		log!(info, "Election result: {:?}", election_result);
 		let exposures = Self::collect_exposures(election_result);
 		log!(info, "Election result: {:?}", exposures);
+
+		exposures.iter().for_each(|(stash, exposure)| {
+			Self::bond_and_validate(stash.clone(), exposure.total, Perbill::zero(), false);
+		});
 
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
