@@ -310,7 +310,7 @@ pub mod pallet {
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
 
 	#[pallet::storage]
-	pub type NextValidatorSet<T: Config> = StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
+	pub type PlannedValidatorSet<T: Config> = StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -763,7 +763,7 @@ pub mod pallet {
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
-						<NextValidatorSet<T>>::put(val_set);
+						<PlannedValidatorSet<T>>::put(val_set);
 					}
 					Observation::Burn(event) => {
 						if let Err(error) =
@@ -942,9 +942,9 @@ pub mod pallet {
 		fn elect() -> Supports<T::AccountId> {
 			let mut staked = vec![];
 			let mut winners = vec![];
-			let next_val_set = <NextValidatorSet<T>>::get();
+			let next_val_set = <PlannedValidatorSet<T>>::get();
 			match next_val_set {
-				Some(new_val_set) => {
+				Some(planned_validator_set) => {
 					// TODO
 					let res = NextFactSequence::<T>::try_mutate(
 						|next_seq| -> DispatchResultWithPostInfo {
@@ -960,9 +960,9 @@ pub mod pallet {
 
 					// TODO: ugly
 					if let Ok(_) = res {
-						<NextValidatorSet<T>>::kill();
-						log!(info, "validator set changed to: {:#?}", new_val_set.clone());
-						staked = new_val_set
+						<PlannedValidatorSet<T>>::kill();
+						log!(info, "validator set changed to: {:#?}", planned_validator_set.clone());
+						staked = planned_validator_set
 							.clone()
 							.validators
 							.into_iter()
@@ -971,7 +971,7 @@ pub mod pallet {
 								distribution: vec![(vals.id, vals.weight)],
 							})
 							.collect();
-						winners = new_val_set
+						winners = planned_validator_set
 							.validators
 							.into_iter()
 							.map(|vals| {
