@@ -29,6 +29,7 @@ use pallet_octopus_appchain::traits::ElectionProvider;
 use pallet_octopus_appchain::traits::LposInterface;
 use pallet_session::historical;
 use sp_npos_elections::Supports;
+use sp_runtime::KeyTypeId;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
@@ -225,6 +226,8 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
+
+	fn in_current_validator_set(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
 }
 
 impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
@@ -251,6 +254,21 @@ where
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
+	}
+
+	fn in_current_validator_set(
+		id: KeyTypeId,
+		key_data: &[u8],
+	) -> Option<<T as frame_system::Config>::AccountId> {
+		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
+		if who.is_none() {
+			return None;
+		}
+
+		Self::validators().into_iter().find(|v| {
+			log!(info, "check {:#?} == {:#?}", v, who);
+			T::ValidatorIdOf::convert(v.clone()) == who
+		})
 	}
 }
 
@@ -330,6 +348,21 @@ impl<T: Config>
 		Self::update_ledger(&controller, &item);
 		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
 		Self::validate(controller, prefs)
+	}
+
+	fn in_current_validator_set(
+		id: KeyTypeId,
+		key_data: &[u8],
+	) -> Option<<T as frame_system::Config>::AccountId> {
+		T::SessionInterface::in_current_validator_set(id, key_data)
+	}
+
+	fn stake_of(who: &<T as frame_system::Config>::AccountId) -> u128 {
+		Self::ledger(who).map_or(0, |l| l.active)
+	}
+
+	fn total_stake() -> u128 {
+		T::SessionInterface::validators().iter().map(|v| Self::stake_of(v)).sum()
 	}
 }
 

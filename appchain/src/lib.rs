@@ -6,7 +6,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-use crate::traits::{LposInterface, SessionInterface};
+use crate::traits::LposInterface;
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -33,7 +33,7 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{CheckedConversion, Convert, Hash, IdentifyAccount, Keccak256, StaticLookup},
+	traits::{CheckedConversion, Hash, IdentifyAccount, Keccak256, StaticLookup},
 	DigestItem, Perbill, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -264,7 +264,7 @@ pub mod pallet {
 			AssetId = AssetId,
 			Balance = AssetBalance,
 		>;
-		type SessionInterface: traits::SessionInterface<Self::AccountId>;
+
 		type LposInterface: traits::LposInterface<Self::AccountId>;
 
 		// Configuration parameters
@@ -309,11 +309,6 @@ pub mod pallet {
 	pub(super) type RelayContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
 
-	/// The current set of validators of this appchain.
-	#[pallet::storage]
-	pub type CurrentValidatorSet<T: Config> =
-		StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
-
 	#[pallet::storage]
 	pub type NextValidatorSet<T: Config> = StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
 
@@ -325,13 +320,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, u32, Vec<Observation<T::AccountId>>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type Observing<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		Observation<T::AccountId>,
-		Vec<Validator<T::AccountId>>,
-		ValueQuery,
-	>;
+	pub type Observing<T: Config> =
+		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type AssetIdByName<T: Config> =
@@ -347,7 +337,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
 		pub relay_contract: String,
-		pub validators: Vec<(T::AccountId, u128)>,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 	}
 
@@ -357,7 +346,6 @@ pub mod pallet {
 			Self {
 				appchain_id: String::new(),
 				relay_contract: String::new(),
-				validators: Vec::new(),
 				asset_id_by_name: Vec::new(),
 			}
 		}
@@ -368,8 +356,6 @@ pub mod pallet {
 		fn build(&self) {
 			<AppchainId<T>>::put(self.appchain_id.as_bytes());
 			<RelayContract<T>>::put(self.relay_contract.as_bytes());
-
-			Pallet::<T>::initialize_validators(&self.validators);
 
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
@@ -499,18 +485,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
-			let cur_val_set =
-				<CurrentValidatorSet<T>>::get().ok_or(Error::<T>::NoCurrentValidatorSet)?;
 			let who = payload.public.clone().into_account();
+			let val_id = T::LposInterface::in_current_validator_set(
+				KEY_TYPE,
+				&payload.public.clone().into_account().encode(),
+			);
 
-			let val = cur_val_set.validators.iter().find(|v| {
-				T::SessionInterface::same_validator(
-					KEY_TYPE,
-					&payload.public.clone().into_account().encode(),
-					v.id.clone(),
-				)
-			});
-			if val.is_none() {
+			if val_id.is_none() {
 				log!(
 					info,
 					"Not a validator in current validator set: {:?}",
@@ -518,14 +499,16 @@ pub mod pallet {
 				);
 				return Err(Error::<T>::NotValidator.into());
 			}
-			let val = val.expect("Validator is valid; qed").clone();
+			let val_id = val_id.expect("Validator is valid; qed").clone();
 
 			//
 			log!(info, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
 			//
 
+			// TODO
+			// ensure!(val_set.set_id == validator_set.set_id + 1, Error::<T>::WrongSetId);
 			for observation in payload.observations.iter() {
-				Self::submit_observation(observation.clone(), &cur_val_set, &val)?;
+				Self::submit_observation(&val_id, observation.clone())?;
 			}
 
 			Ok(().into())
@@ -619,23 +602,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account()
-		}
-
-		fn initialize_validators(vals: &Vec<(<T as frame_system::Config>::AccountId, u128)>) {
-			if vals.len() != 0 {
-				assert!(
-					<CurrentValidatorSet<T>>::get().is_none(),
-					"CurrentValidatorSet is already initialized!"
-				);
-				<CurrentValidatorSet<T>>::put(ValidatorSet {
-					sequence_number: 0, // unused
-					set_id: 0,
-					validators: vals
-						.iter()
-						.map(|x| Validator { id: x.0.clone(), weight: x.1 })
-						.collect::<Vec<_>>(),
-				});
-			}
 		}
 
 		fn should_send(block_number: T::BlockNumber) -> bool {
@@ -759,9 +725,8 @@ pub mod pallet {
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
 		fn submit_observation(
+			validator_id: &T::AccountId,
 			observation: Observation<T::AccountId>,
-			validator_set: &ValidatorSet<T::AccountId>,
-			validator: &Validator<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			<Observations<T>>::mutate(observation.sequence_number(), |obs| {
 				let found = obs.iter().any(|o| o == &observation);
@@ -770,15 +735,18 @@ pub mod pallet {
 				}
 			});
 			<Observing<T>>::mutate(&observation, |vals| {
-				let found = vals.iter().any(|v| v.id == validator.id);
+				let found = vals.iter().any(|id| id == validator_id);
 				if !found {
-					vals.push(validator.clone());
+					vals.push(validator_id.clone());
 				} else {
-					log!(info, "{:?} submits a duplicate ocw tx", validator.id);
+					log!(info, "{:?} submits a duplicate ocw tx", validator_id);
 				}
 			});
-			let total_weight: u128 = validator_set.validators.iter().map(|v| v.weight).sum();
-			let weight: u128 = <Observing<T>>::get(&observation).iter().map(|v| v.weight).sum();
+			let total_stake: u128 = T::LposInterface::total_stake();
+			let stake: u128 = <Observing<T>>::get(&observation)
+				.iter()
+				.map(|v| T::LposInterface::stake_of(v))
+				.sum();
 
 			//
 			log!(
@@ -787,16 +755,14 @@ pub mod pallet {
 				<Observations<T>>::get(observation.sequence_number())
 			);
 			log!(info, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
-			log!(info, "️️️total_weight: {:?}, weight: {:?}", total_weight, weight);
+			log!(info, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
 			//
 
 			let seq_num = observation.sequence_number();
 
-			if 3 * weight > 2 * total_weight {
+			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
-						ensure!(val_set.set_id == validator_set.set_id + 1, Error::<T>::WrongSetId);
-
 						<NextValidatorSet<T>>::put(val_set);
 					}
 					Observation::Burn(event) => {
@@ -972,25 +938,6 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> traits::SessionInterface<<T as frame_system::Config>::AccountId> for T
-	where
-		T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
-	{
-		fn same_validator(
-			id: KeyTypeId,
-			key_data: &[u8],
-			validator: <T as frame_system::Config>::AccountId,
-		) -> bool {
-			let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
-			if who.is_none() {
-				return false;
-			}
-			log!(info, "check {:#?} == {:#?}", validator, who);
-
-			T::ValidatorIdOf::convert(validator) == who
-		}
-	}
-
 	impl<T: Config> traits::ElectionProvider<T::AccountId> for Pallet<T> {
 		fn elect() -> Supports<T::AccountId> {
 			let mut staked = vec![];
@@ -1013,7 +960,6 @@ pub mod pallet {
 
 					// TODO: ugly
 					if let Ok(_) = res {
-						<CurrentValidatorSet<T>>::put(new_val_set.clone());
 						<NextValidatorSet<T>>::kill();
 						log!(info, "validator set changed to: {:#?}", new_val_set.clone());
 						staked = new_val_set
@@ -1042,31 +988,6 @@ pub mod pallet {
 				}
 				None => {
 					log!(info, "validator set has't changed");
-
-					let current_val_set = <CurrentValidatorSet<T>>::get()
-						.expect("Current validator set is valid; qed");
-					staked = current_val_set
-						.clone()
-						.validators
-						.into_iter()
-						.map(|vals| StakedAssignment {
-							who: vals.id.clone(),
-							distribution: vec![(vals.id, vals.weight)],
-						})
-						.collect();
-					winners = current_val_set
-						.validators
-						.into_iter()
-						.map(|vals| {
-							T::LposInterface::bond_and_validate(
-								vals.id.clone(),
-								vals.weight,
-								Perbill::zero(),
-								false,
-							);
-							vals.id
-						})
-						.collect();
 				}
 			}
 

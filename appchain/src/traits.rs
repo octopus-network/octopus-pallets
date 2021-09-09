@@ -2,11 +2,6 @@ use frame_support::dispatch::DispatchResult;
 use sp_npos_elections::Supports;
 use sp_runtime::{KeyTypeId, Perbill};
 
-/// Means for interacting with a specialized version of the `session` trait.
-pub trait SessionInterface<AccountId>: frame_system::Config {
-	fn same_validator(id: KeyTypeId, key_data: &[u8], validator: AccountId) -> bool;
-}
-
 pub trait LposInterface<AccountId> {
 	fn bond_and_validate(
 		controller: AccountId,
@@ -14,6 +9,12 @@ pub trait LposInterface<AccountId> {
 		commission: Perbill,
 		blocked: bool,
 	) -> DispatchResult;
+
+	fn in_current_validator_set(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
+
+	fn stake_of(who: &AccountId) -> u128;
+
+	fn total_stake() -> u128;
 }
 
 pub trait ElectionProvider<AccountId> {
