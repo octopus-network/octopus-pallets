@@ -9,9 +9,10 @@ pub trait LposInterface<AccountId> {
 	fn total_stake() -> u128;
 }
 
-pub trait ElectionProvider<AccountId> {
-	/// Elect a new set of winners.
+/// Something that can provide a set of stakers for the next era.
+pub trait StakersProvider<AccountId> {
+	/// A new set of stakers.
 	///
-	/// The result is returned in a target major format, namely as vector of supports.
-	fn elect() -> Supports<AccountId>;
+	/// The result is returned in a vector of supports.
+	fn stakers() -> Supports<AccountId>;
 }

@@ -939,8 +939,8 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> traits::ElectionProvider<T::AccountId> for Pallet<T> {
-		fn elect() -> Supports<T::AccountId> {
+	impl<T: Config> traits::StakersProvider<T::AccountId> for Pallet<T> {
+		fn stakers() -> Supports<T::AccountId> {
 			let mut staked = vec![];
 			let mut winners = vec![];
 			let next_val_set = <PlannedValidatorSet<T>>::get();

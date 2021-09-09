@@ -25,7 +25,7 @@ use frame_support::{
 	weights::{Weight, WithPostDispatchInfo},
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_appchain::traits::ElectionProvider;
+use pallet_octopus_appchain::traits::StakersProvider;
 use pallet_session::historical;
 use sp_npos_elections::Supports;
 use sp_runtime::KeyTypeId;
@@ -393,10 +393,10 @@ pub mod pallet {
 		type UnixTime: UnixTime;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: ElectionProvider<Self::AccountId>;
+		type StakersProvider: StakersProvider<Self::AccountId>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: ElectionProvider<Self::AccountId>;
+		type GenesisStakersProvider: StakersProvider<Self::AccountId>;
 
 		/// Maximum number of nominations per nominator.
 		const MAX_NOMINATIONS: u32;
@@ -1895,9 +1895,9 @@ impl<T: Config> Pallet<T> {
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
 		let election_result = if is_genesis {
-			T::GenesisElectionProvider::elect()
+			T::GenesisStakersProvider::stakers()
 		} else {
-			T::ElectionProvider::elect()
+			T::StakersProvider::stakers()
 		};
 
 		// <frame_system::Pallet<T>>::register_extra_weight_unchecked(
