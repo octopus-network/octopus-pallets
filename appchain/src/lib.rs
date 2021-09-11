@@ -27,6 +27,7 @@ use serde::{de, Deserialize, Deserializer};
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_io::offchain_index;
 use sp_npos_elections::{to_supports, StakedAssignment, Supports};
+use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
 		http,
@@ -417,25 +418,53 @@ pub mod pallet {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			let appchain_id = Self::appchain_id();
-			if appchain_id.len() == 0 {
-				// detach appchain from main chain when appchain_id == ""
-				return;
-			}
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(info, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			if !Self::should_send(block_number) {
-				return;
-			}
+			// Only communicate with mainchain if we are a potential validator and the appchain_id is not an empty string.
+			let appchain_id = Self::appchain_id();
+			if sp_io::offchain::is_validator() && appchain_id.len() > 0 {
+				let mut found = false;
+				for key in <T::AuthorityId as AppCrypto<
+					<T as SigningTypes>::Public,
+					<T as SigningTypes>::Signature,
+				>>::RuntimeAppPublic::all()
+				.into_iter()
+				{
+					let generic_public = <T::AuthorityId as AppCrypto<
+						<T as SigningTypes>::Public,
+						<T as SigningTypes>::Signature,
+					>>::GenericPublic::from(key);
+					let public: <T as SigningTypes>::Public = generic_public.into();
 
-			let relay_contract = Self::relay_contract();
-			// TODO: move limit to trait
-			let limit = 10;
-			if let Err(e) =
-				Self::observing_mainchain(block_number, relay_contract, appchain_id.clone(), limit)
-			{
-				log!(info, "observing_mainchain: Error: {}", e);
+					let val_id = T::LposInterface::in_current_validator_set(
+						KEY_TYPE,
+						&public.clone().into_account().encode(),
+					);
+					log!(debug, "Check if in current set {:?}", val_id);
+					if val_id.is_some() {
+						found = true;
+					}
+				}
+				if !found {
+					log!(debug, "Skipping communication with mainchain. Not a validator.");
+					return;
+				}
+				if !Self::should_send(block_number) {
+					return;
+				}
+
+				let relay_contract = Self::relay_contract();
+				// TODO: move limit to trait
+				let limit = 10;
+				if let Err(e) = Self::observing_mainchain(
+					block_number,
+					relay_contract,
+					appchain_id.clone(),
+					limit,
+				) {
+					log!(info, "observing_mainchain: Error: {}", e);
+				}
 			}
 		}
 	}
