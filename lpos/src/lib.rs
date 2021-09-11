@@ -127,20 +127,11 @@ impl<AccountId> Default for RewardDestination<AccountId> {
 
 /// Preference of what happens regarding validation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorPrefs {
-	/// Reward that validator takes up-front; only the rest is split between themselves and
-	/// nominators.
-	#[codec(compact)]
-	pub commission: Perbill,
-	/// Whether or not this validator is accepting more nominations. If `true`, then no nominator
-	/// who is not already nominating this validator may nominate them. By default, validators
-	/// are accepting nominations.
-	pub blocked: bool,
-}
+pub struct ValidatorPrefs {}
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
-		ValidatorPrefs { commission: Default::default(), blocked: false }
+		ValidatorPrefs {}
 	}
 }
 
@@ -372,6 +363,15 @@ impl Default for Releases {
 		Releases::V1_0_0
 	}
 }
+
+/// Reward that validator takes up-front; only the rest is split between themselves and
+/// nominators.
+const COMMISSION: Perbill = Perbill::from_percent(20);
+
+/// Whether or not this validator is accepting more nominations. If `true`, then no nominator
+/// who is not already nominating this validator may nominate them. By default, validators
+/// are accepting nominations.
+const BLOCKED: bool = false;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -794,12 +794,9 @@ pub mod pallet {
 
 			for &(ref controller, balance, ref status) in &self.stakers {
 				let _ = match status {
-					StakerStatus::Validator => <Pallet<T>>::bond_and_validate(
-						controller.clone(),
-						balance,
-						Perbill::zero(),
-						false,
-					),
+					StakerStatus::Validator => {
+						<Pallet<T>>::bond_and_validate(controller.clone(), balance)
+					}
 					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
 						controller.clone(),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
@@ -1448,10 +1445,8 @@ impl<T: Config> Pallet<T> {
 	fn bond_and_validate(
 		controller: <T as frame_system::Config>::AccountId,
 		value: u128,
-		commission: Perbill,
-		blocked: bool,
 	) -> DispatchResult {
-		let prefs = ValidatorPrefs { commission, blocked };
+		let prefs = ValidatorPrefs {};
 
 		let mut claimed_rewards;
 
@@ -1559,7 +1554,7 @@ impl<T: Config> Pallet<T> {
 			.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
 			.map(|n| {
 				n.and_then(|n| {
-					if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+					if old.contains(&n) || !BLOCKED {
 						Ok(n)
 					} else {
 						Err(Error::<T>::BadTarget.into())
@@ -1647,7 +1642,7 @@ impl<T: Config> Pallet<T> {
 
 		let validator_prefs = Self::eras_validator_prefs(&era, &controller);
 		// Validator first gets a cut off the top.
-		let validator_commission = validator_prefs.commission;
+		let validator_commission = COMMISSION;
 		let validator_commission_payout = validator_commission * validator_total_payout;
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
@@ -1910,7 +1905,7 @@ impl<T: Config> Pallet<T> {
 		log!(info, "Election result: {:?}", exposures);
 
 		exposures.iter().for_each(|(stash, exposure)| {
-			Self::bond_and_validate(stash.clone(), exposure.total, Perbill::zero(), false);
+			Self::bond_and_validate(stash.clone(), exposure.total);
 		});
 
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
