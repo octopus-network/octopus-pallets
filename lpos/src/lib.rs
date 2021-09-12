@@ -135,18 +135,6 @@ impl Default for ValidatorPrefs {
 	}
 }
 
-/// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct StakingLedger<Balance: HasCompact> {
-	/// The total amount of the stash's balance that will be at stake in any forthcoming
-	/// rounds.
-	#[codec(compact)]
-	pub active: Balance,
-	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
-	/// for validators.
-	pub claimed_rewards: Vec<EraIndex>,
-}
-
 /// A record of the nominations made by a specific account.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Nominations<AccountId> {
@@ -320,7 +308,7 @@ impl<T: Config>
 	}
 
 	fn stake_of(who: &<T as frame_system::Config>::AccountId) -> u128 {
-		Self::ledger(who).map_or(0, |l| l.active)
+		Self::ledger(who).map_or(0, |v| v)
 	}
 
 	fn total_stake() -> u128 {
@@ -503,11 +491,19 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinValidatorBond<T: Config> = StorageValue<_, u128, ValueQuery>;
 
-	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
+	/// The ledger of a (bonded) stash.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<u128>>;
+	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, u128>;
 
+	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
+	/// for validators.
+	#[pallet::storage]
+	#[pallet::getter(fn claimed_rewards)]
+	pub type ClaimedRewards<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, Vec<EraIndex>>;
+
+	// TODO: move to ValidatorPrefs?
 	/// Where the reward payment should be made. Keyed by controller.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
@@ -891,6 +887,8 @@ pub mod pallet {
 		/// There are too many validators in the system. Governance needs to adjust the staking settings
 		/// to keep things safe for the runtime.
 		TooManyValidators,
+		/// There are not claimed rewards for this validator.
+		NoClaimedRewards,
 	}
 
 	#[pallet::hooks]
@@ -1448,22 +1446,18 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let prefs = ValidatorPrefs {};
 
-		let mut claimed_rewards;
-
-		if let Some(ledger) = Self::ledger(&controller) {
-			claimed_rewards = ledger.claimed_rewards;
-		} else {
+		if !ClaimedRewards::<T>::contains_key(&controller) {
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
 			let last_reward_era = current_era.saturating_sub(history_depth);
-			claimed_rewards = (last_reward_era..current_era).collect();
+			let claimed_rewards: Vec<EraIndex> = (last_reward_era..current_era).collect();
+			<ClaimedRewards<T>>::insert(&controller, claimed_rewards);
 		}
 
 		// TODO
 		<Payee<T>>::insert(&controller, RewardDestination::Controller);
 
-		let item = StakingLedger { active: value, claimed_rewards };
-		Self::update_ledger(&controller, &item);
+		<Ledger<T>>::insert(&controller, value);
 		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
 		Self::validate(controller, prefs)
 	}
@@ -1486,9 +1480,6 @@ impl<T: Config> Pallet<T> {
 	/// - Write: Nominators, Validators
 	/// # </weight>
 	pub fn validate(controller: T::AccountId, prefs: ValidatorPrefs) -> DispatchResult {
-		let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-		ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 		// Only check limits if they are not already a validator.
 		if !Validators::<T>::contains_key(&controller) {
 			// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
@@ -1529,9 +1520,6 @@ impl<T: Config> Pallet<T> {
 		controller: T::AccountId,
 		targets: Vec<<T::Lookup as StaticLookup>::Source>,
 	) -> DispatchResult {
-		let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-		ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 		// Only check limits if they are not already a nominator.
 		if !Nominators::<T>::contains_key(&controller) {
 			// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
@@ -1595,22 +1583,21 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
 
-		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
+		let mut claimed_rewards =
+			<ClaimedRewards<T>>::get(&controller).ok_or_else(|| Error::<T>::NoClaimedRewards)?;
 
-		ledger
-			.claimed_rewards
-			.retain(|&x| x >= current_era.saturating_sub(history_depth));
-		match ledger.claimed_rewards.binary_search(&era) {
+		claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		match claimed_rewards.binary_search(&era) {
 			Ok(_) => Err(Error::<T>::AlreadyClaimed
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+			Err(pos) => claimed_rewards.insert(pos, era),
 		}
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &controller);
 
 		/* Input data seems good, no errors allowed after this point */
 
-		<Ledger<T>>::insert(&controller, &ledger);
+		<ClaimedRewards<T>>::insert(&controller, claimed_rewards);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -1678,13 +1665,6 @@ impl<T: Config> Pallet<T> {
 
 		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
-	}
-
-	/// Update the ledger for a controller.
-	///
-	/// This will also update the stash lock.
-	fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<u128>) {
-		<Ledger<T>>::insert(controller, ledger);
 	}
 
 	/// Chill a stash account.
@@ -1904,6 +1884,7 @@ impl<T: Config> Pallet<T> {
 		let exposures = Self::collect_exposures(election_result);
 		log!(info, "Election result: {:?}", exposures);
 
+		<Ledger<T>>::remove_all(None);
 		exposures.iter().for_each(|(stash, exposure)| {
 			Self::bond_and_validate(stash.clone(), exposure.total);
 		});
