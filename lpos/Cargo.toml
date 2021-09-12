@@ -25,7 +25,6 @@ frame-system = { version = "3.0.0", default-features = false }
 pallet-session = { version = "3.0.0", default-features = false }
 pallet-authorship = { version = "3.0.0", default-features = false }
 sp-application-crypto = { version = "3.0.0", default-features = false }
-sp-npos-elections = { version = "3.0.0", default-features = false }
 log = { version = "0.4.14", default-features = false }
 paste = "1.0"
 pallet-octopus-appchain = { default-features = false, path = "../appchain" }
@@ -62,7 +61,6 @@ std = [
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
 	"log/std",
-	"sp-npos-elections/std",
 	"pallet-octopus-appchain/std",
 ]
 runtime-benchmarks = [

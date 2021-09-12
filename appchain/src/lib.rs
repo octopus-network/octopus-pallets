@@ -26,7 +26,6 @@ use frame_system::offchain::{
 use serde::{de, Deserialize, Deserializer};
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_io::offchain_index;
-use sp_npos_elections::{to_supports, StakedAssignment, Supports};
 use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
@@ -969,9 +968,9 @@ pub mod pallet {
 	}
 
 	impl<T: Config> traits::StakersProvider<T::AccountId> for Pallet<T> {
-		fn stakers() -> Supports<T::AccountId> {
+		// TODO: delegators
+		fn stakers() -> Vec<(T::AccountId, u128)> {
 			let mut staked = vec![];
-			let mut winners = vec![];
 			let next_val_set = <PlannedValidatorSet<T>>::get();
 			match next_val_set {
 				Some(planned_validator_set) => {
@@ -1000,15 +999,7 @@ pub mod pallet {
 							.clone()
 							.validators
 							.into_iter()
-							.map(|vals| StakedAssignment {
-								who: vals.id.clone(),
-								distribution: vec![(vals.id, vals.weight)],
-							})
-							.collect();
-						winners = planned_validator_set
-							.validators
-							.into_iter()
-							.map(|vals| vals.id)
+							.map(|vals| (vals.id, vals.weight))
 							.collect();
 					}
 				}
@@ -1017,7 +1008,7 @@ pub mod pallet {
 				}
 			}
 
-			to_supports(&winners, &staked).unwrap()
+			staked
 		}
 	}
 }

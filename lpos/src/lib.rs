@@ -27,7 +27,6 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_appchain::traits::StakersProvider;
 use pallet_session::historical;
-use sp_npos_elections::Supports;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -1967,30 +1966,16 @@ impl<T: Config> Pallet<T> {
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Supports<T::AccountId>,
+		supports: Vec<(T::AccountId, u128)>,
 	) -> Vec<(T::AccountId, Exposure<T::AccountId, u128>)> {
-		let total_issuance = T::Currency::total_issuance();
-
 		supports
 			.into_iter()
-			.map(|(validator, support)| {
+			.map(|(validator, weight)| {
 				// Build `struct exposure` from `support`.
-				let mut others = Vec::with_capacity(support.voters.len());
-				let mut own: u128 = 0;
-				let mut total: u128 = 0;
-				support
-					.voters
-					.into_iter()
-					// .map(|(nominator, weight)| (nominator, to_currency(weight)))
-					.for_each(|(nominator, stake)| {
-						if nominator == validator {
-							own = own.saturating_add(stake);
-						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
-						}
-						total = total.saturating_add(stake);
-					});
-
+				// let mut others = Vec::with_capacity(support.voters.len());
+				let mut others = vec![];
+				let mut own: u128 = weight;
+				let mut total: u128 = weight;
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
