@@ -28,8 +28,8 @@ use pallet_session::historical;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	traits::{AtLeast32BitUnsigned, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
-	DispatchError, Perbill, Percent, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Convert, SaturatedConversion, StaticLookup, Zero},
+	DispatchError, Perbill, RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
@@ -423,11 +423,6 @@ pub mod pallet {
 	#[pallet::getter(fn history_depth)]
 	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
-	/// The ideal number of staking participants.
-	#[pallet::storage]
-	#[pallet::getter(fn validator_count)]
-	pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// The ledger of a (bonded) stash.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
@@ -455,16 +450,6 @@ pub mod pallet {
 	pub type Validators<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
-	/// A tracker to keep count of the number of items in the `Validators` map.
-	#[pallet::storage]
-	pub type CounterForValidators<T> = StorageValue<_, u32, ValueQuery>;
-
-	/// The maximum validator count before we stop allowing new validators to join.
-	///
-	/// When this value is not set, no limits are enforced.
-	#[pallet::storage]
-	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
-
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 	///
 	/// When updating this storage item, you must also update the `CounterForNominators`.
@@ -472,10 +457,6 @@ pub mod pallet {
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
-
-	/// A tracker to keep count of the number of items in the `Nominators` map.
-	#[pallet::storage]
-	pub type CounterForNominators<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The current era index.
 	///
@@ -610,7 +591,6 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
-		pub validator_count: u32,
 		pub force_era: Forcing,
 		pub canceled_payout: BalanceOf<T>,
 		pub stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
@@ -621,7 +601,6 @@ pub mod pallet {
 		fn default() -> Self {
 			GenesisConfig {
 				history_depth: 84u32,
-				validator_count: Default::default(),
 				force_era: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
@@ -633,7 +612,6 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
-			ValidatorCount::<T>::put(self.validator_count);
 			ForceEra::<T>::put(self.force_era);
 			StorageVersion::<T>::put(Releases::V1_0_0);
 
@@ -796,55 +774,6 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			<Payee<T>>::insert(controller, payee);
-			Ok(())
-		}
-
-		/// Sets the ideal number of validators.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// Weight: O(1)
-		/// Write: Validator Count
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub fn set_validator_count(
-			origin: OriginFor<T>,
-			#[pallet::compact] new: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			ValidatorCount::<T>::put(new);
-			Ok(())
-		}
-
-		/// Increments the ideal number of validators.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// Same as [`set_validator_count`].
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub fn increase_validator_count(
-			origin: OriginFor<T>,
-			#[pallet::compact] additional: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += additional);
-			Ok(())
-		}
-
-		/// Scale up the ideal number of validators by a factor.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// Same as [`set_validator_count`].
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
-			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += factor * *n);
 			Ok(())
 		}
 
@@ -1168,18 +1097,6 @@ impl<T: Config> Pallet<T> {
 	/// - Write: Nominators, Validators
 	/// # </weight>
 	pub fn validate(controller: T::AccountId, prefs: ValidatorPrefs) -> DispatchResult {
-		// Only check limits if they are not already a validator.
-		if !Validators::<T>::contains_key(&controller) {
-			// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new validators to protect the runtime.
-			if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
-				ensure!(
-					CounterForValidators::<T>::get() < max_validators,
-					Error::<T>::TooManyValidators
-				);
-			}
-		}
-
 		Self::do_remove_nominator(&controller);
 		Self::do_add_validator(&controller, prefs);
 		Ok(())
@@ -1725,9 +1642,6 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
-		if !Nominators::<T>::contains_key(who) {
-			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
-		}
 		Nominators::<T>::insert(who, nominations);
 	}
 
@@ -1736,7 +1650,6 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
 		}
 	}
 
@@ -1745,9 +1658,6 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the validator already exists, their preferences will be updated.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		if !Validators::<T>::contains_key(who) {
-			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
-		}
 		Validators::<T>::insert(who, prefs);
 	}
 
@@ -1756,7 +1666,6 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
 		}
 	}
 }
@@ -1849,16 +1758,6 @@ where
 		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
 	}
 }
-
-/// A `Convert` implementation that finds the stash of the given controller account,
-/// if any.
-// pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
-//
-// impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
-// 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-// 		<Pallet<T>>::ledger(&controller).map(|l| l.stash)
-// 	}
-// }
 
 /// A typed conversion from stash account ID to the active exposure of nominators
 /// on that account.
