@@ -359,6 +359,7 @@ const COMMISSION: Perbill = Perbill::from_percent(20);
 /// who is not already nominating this validator may nominate them. By default, validators
 /// are accepting nominations.
 const BLOCKED: bool = false;
+const MINIMUM_VALIDATOR_COUNT: usize = 4;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -384,9 +385,6 @@ pub mod pallet {
 
 		/// Something that provides the election functionality at genesis.
 		type GenesisStakersProvider: StakersProvider<Self::AccountId>;
-
-		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -440,15 +438,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
-		}
-	}
-
 	#[pallet::type_value]
 	pub(crate) fn HistoryDepthOnEmpty() -> u32 {
 		84u32
@@ -470,25 +459,12 @@ pub mod pallet {
 	#[pallet::getter(fn validator_count)]
 	pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Minimum number of staking participants before emergency conditions are imposed.
-	#[pallet::storage]
-	#[pallet::getter(fn minimum_validator_count)]
-	pub type MinimumValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 	/// easy to initialize and the performance hit is minimal (we expect no more than four
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
 	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
-
-	/// The minimum active bond to become and maintain the role of a nominator.
-	#[pallet::storage]
-	pub type MinNominatorBond<T: Config> = StorageValue<_, u128, ValueQuery>;
-
-	/// The minimum active bond to become and maintain the role of a validator.
-	#[pallet::storage]
-	pub type MinValidatorBond<T: Config> = StorageValue<_, u128, ValueQuery>;
 
 	/// The ledger of a (bonded) stash.
 	#[pallet::storage]
@@ -538,12 +514,6 @@ pub mod pallet {
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
 	pub type CounterForNominators<T> = StorageValue<_, u32, ValueQuery>;
-
-	/// The maximum nominator count before we stop allowing new validators to join.
-	///
-	/// When this value is not set, no limits are enforced.
-	#[pallet::storage]
-	pub type MaxNominatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
 	/// The current era index.
 	///
@@ -735,24 +705,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
-	/// The threshold for when users can start calling `chill_other` for other validators / nominators.
-	/// The threshold is compared to the actual number of validators / nominators (`CountFor*`) in
-	/// the system compared to the configured max (`Max*Count`).
-	#[pallet::storage]
-	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
 		pub validator_count: u32,
-		pub minimum_validator_count: u32,
 		pub invulnerables: Vec<T::AccountId>,
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
 		pub stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
-		pub min_nominator_bond: u128,
-		pub min_validator_bond: u128,
 	}
 
 	#[cfg(feature = "std")]
@@ -761,14 +722,11 @@ pub mod pallet {
 			GenesisConfig {
 				history_depth: 84u32,
 				validator_count: Default::default(),
-				minimum_validator_count: Default::default(),
 				invulnerables: Default::default(),
 				force_era: Default::default(),
 				slash_reward_fraction: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
-				min_nominator_bond: Default::default(),
-				min_validator_bond: Default::default(),
 			}
 		}
 	}
@@ -778,14 +736,11 @@ pub mod pallet {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
-			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
 			Invulnerables::<T>::put(&self.invulnerables);
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V1_0_0);
-			MinNominatorBond::<T>::put(self.min_nominator_bond);
-			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			for &(ref controller, balance, ref status) in &self.stakers {
 				let _ = match status {
@@ -1341,37 +1296,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update the various staking limits this pallet.
-		///
-		/// * `min_nominator_bond`: The minimum active bond needed to be a nominator.
-		/// * `min_validator_bond`: The minimum active bond needed to be a validator.
-		/// * `max_nominator_count`: The max number of users who can be a nominator at once.
-		///   When set to `None`, no limit is enforced.
-		/// * `max_validator_count`: The max number of users who can be a validator at once.
-		///   When set to `None`, no limit is enforced.
-		///
-		/// Origin must be Root to call this function.
-		///
-		/// NOTE: Existing nominators and validators will not be affected by this update.
-		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(T::WeightInfo::set_staking_limits())]
-		pub fn set_staking_limits(
-			origin: OriginFor<T>,
-			min_nominator_bond: u128,
-			min_validator_bond: u128,
-			max_nominator_count: Option<u32>,
-			max_validator_count: Option<u32>,
-			threshold: Option<Percent>,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			MinNominatorBond::<T>::set(min_nominator_bond);
-			MinValidatorBond::<T>::set(min_validator_bond);
-			MaxNominatorsCount::<T>::set(max_nominator_count);
-			MaxValidatorsCount::<T>::set(max_validator_count);
-			ChillThreshold::<T>::set(threshold);
-			Ok(())
-		}
-
 		/// Declare a `controller` to stop participating as either a validator or nominator.
 		///
 		/// Effects will be felt at the beginning of the next era.
@@ -1519,20 +1443,7 @@ impl<T: Config> Pallet<T> {
 		controller: T::AccountId,
 		targets: Vec<<T::Lookup as StaticLookup>::Source>,
 	) -> DispatchResult {
-		// Only check limits if they are not already a nominator.
-		if !Nominators::<T>::contains_key(&controller) {
-			// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new nominators to protect the runtime.
-			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				ensure!(
-					CounterForNominators::<T>::get() < max_nominators,
-					Error::<T>::TooManyNominators
-				);
-			}
-		}
-
 		ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-		ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 
 		let old = Nominators::<T>::get(&controller).map_or_else(Vec::new, |x| x.targets);
 
@@ -1888,7 +1799,7 @@ impl<T: Config> Pallet<T> {
 			Self::bond_and_validate(stash.clone(), exposure.total);
 		});
 
-		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
+		if exposures.len() < MINIMUM_VALIDATOR_COUNT {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			match CurrentEra::<T>::get() {
 				Some(current_era) if current_era > 0 => log!(
@@ -1897,7 +1808,7 @@ impl<T: Config> Pallet<T> {
 					elected, minimum is {})",
 					CurrentEra::<T>::get().unwrap_or(0),
 					exposures.len(),
-					Self::minimum_validator_count(),
+					MINIMUM_VALIDATOR_COUNT,
 				),
 				None => {
 					// The initial era is allowed to have no exposures.
