@@ -11,7 +11,6 @@ pub mod testing_utils;
 mod tests;
 
 pub mod inflation;
-pub mod slashing;
 pub mod weights;
 
 use codec::{Decode, Encode, HasCompact};
@@ -19,8 +18,7 @@ use frame_support::traits::SaturatingCurrencyToVote;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, Imbalance,
-		OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, OnUnbalanced, UnixTime,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -171,22 +169,6 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-}
-
-/// A pending slash record. The value of the slash has been computed but not applied yet,
-/// rather deferred for several eras.
-#[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
-	/// The stash ID of the offending validator.
-	validator: AccountId,
-	/// The validator's own slash.
-	own: Balance,
-	/// All other slashed stakers and amounts.
-	others: Vec<(AccountId, Balance)>,
-	/// Reporters of the offence; bounty payout recipients.
-	reporters: Vec<AccountId>,
-	/// The amount of payout.
-	payout: Balance,
 }
 
 /// Means for interacting with a specialized version of the `session` trait.
@@ -393,9 +375,6 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Handler for the unbalanced reduction when slashing a staker.
-		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
 		/// Handler for the unbalanced increment when rewarding a staker.
 		type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
@@ -406,16 +385,6 @@ pub mod pallet {
 		/// Number of eras that staked funds must remain bonded for.
 		#[pallet::constant]
 		type BondingDuration: Get<EraIndex>;
-
-		/// Number of eras that slashes are deferred by, after computation.
-		///
-		/// This should be less than the bonding duration. Set to 0 if slashes
-		/// should be applied immediately, without opportunity for intervention.
-		#[pallet::constant]
-		type SlashDeferDuration: Get<EraIndex>;
-
-		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: self::SessionInterface<Self::AccountId>;
@@ -458,13 +427,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
 	pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
-
-	/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
-	/// easy to initialize and the performance hit is minimal (we expect no more than four
-	/// invulnerables) and restricted to testnets.
-	#[pallet::storage]
-	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// The ledger of a (bonded) stash.
 	#[pallet::storage]
@@ -623,29 +585,6 @@ pub mod pallet {
 	#[pallet::getter(fn force_era)]
 	pub type ForceEra<T> = StorageValue<_, Forcing, ValueQuery>;
 
-	/// The percentage of the slash that is distributed to reporters.
-	///
-	/// The rest of the slashed value is handled by the `Slash`.
-	#[pallet::storage]
-	#[pallet::getter(fn slash_reward_fraction)]
-	pub type SlashRewardFraction<T> = StorageValue<_, Perbill, ValueQuery>;
-
-	/// The amount of currency given to reporters of a slash event which was
-	/// canceled by extraordinary circumstances (e.g. governance).
-	#[pallet::storage]
-	#[pallet::getter(fn canceled_payout)]
-	pub type CanceledSlashPayout<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
-
-	/// All unapplied slashes that are queued for later.
-	#[pallet::storage]
-	pub type UnappliedSlashes<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		EraIndex,
-		Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>,
-		ValueQuery,
-	>;
-
 	/// A mapping from still-bonded eras to the first session index of that era.
 	///
 	/// Must contains information for eras for the range:
@@ -653,43 +592,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
-
-	/// All slashing events on validators, mapped by era to the highest slash proportion
-	/// and slash value of the era.
-	#[pallet::storage]
-	pub(crate) type ValidatorSlashInEra<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EraIndex,
-		Twox64Concat,
-		T::AccountId,
-		(Perbill, BalanceOf<T>),
-	>;
-
-	/// All slashing events on nominators, mapped by era to the highest slash value of the era.
-	#[pallet::storage]
-	pub(crate) type NominatorSlashInEra<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, BalanceOf<T>>;
-
-	/// Slashing spans for stash accounts.
-	#[pallet::storage]
-	pub(crate) type SlashingSpans<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
-
-	/// Records information about the maximum slash of a stash within a slashing span,
-	/// as well as how much reward has been paid out.
-	#[pallet::storage]
-	pub(crate) type SpanSlash<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		(T::AccountId, slashing::SpanIndex),
-		slashing::SpanRecord<BalanceOf<T>>,
-		ValueQuery,
-	>;
-
-	/// The earliest era for which we have a pending, unapplied slash.
-	#[pallet::storage]
-	pub(crate) type EarliestUnappliedSlash<T> = StorageValue<_, EraIndex>;
 
 	/// The last planned session scheduled by the session pallet.
 	///
@@ -709,9 +611,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
 		pub validator_count: u32,
-		pub invulnerables: Vec<T::AccountId>,
 		pub force_era: Forcing,
-		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
 		pub stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
 	}
@@ -722,9 +622,7 @@ pub mod pallet {
 			GenesisConfig {
 				history_depth: 84u32,
 				validator_count: Default::default(),
-				invulnerables: Default::default(),
 				force_era: Default::default(),
-				slash_reward_fraction: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
 			}
@@ -736,10 +634,7 @@ pub mod pallet {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
-			Invulnerables::<T>::put(&self.invulnerables);
 			ForceEra::<T>::put(self.force_era);
-			CanceledSlashPayout::<T>::put(self.canceled_payout);
-			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V1_0_0);
 
 			for &(ref controller, balance, ref status) in &self.stakers {
@@ -873,19 +768,6 @@ pub mod pallet {
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
 		}
-
-		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					)
-				);
-			}
-		}
 	}
 
 	#[pallet::call]
@@ -914,42 +796,6 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			<Payee<T>>::insert(controller, payee);
-			Ok(())
-		}
-
-		/// (Re-)set the controller of a stash.
-		///
-		/// Effects will be felt at the beginning of the next era.
-		///
-		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `origin` account key.
-		/// ----------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: Bonded, Ledger New Controller, Ledger Old Controller
-		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_controller())]
-		pub fn set_controller(
-			origin: OriginFor<T>,
-			controller: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			// let stash = ensure_signed(origin)?;
-			// let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			// let controller = T::Lookup::lookup(controller)?;
-			// if <Ledger<T>>::contains_key(&controller) {
-			// 	Err(Error::<T>::AlreadyPaired)?
-			// }
-			// if controller != old_controller {
-			// 	<Bonded<T>>::insert(&stash, &controller);
-			// 	if let Some(l) = <Ledger<T>>::take(&old_controller) {
-			// 		<Ledger<T>>::insert(&controller, l);
-			// 	}
-			// }
 			Ok(())
 		}
 
@@ -1047,50 +893,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the validators who cannot be slashed (if any).
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// - O(V)
-		/// - Write: Invulnerables
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
-		pub fn set_invulnerables(
-			origin: OriginFor<T>,
-			invulnerables: Vec<T::AccountId>,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			<Invulnerables<T>>::put(invulnerables);
-			Ok(())
-		}
-
-		/// Force a current staker to become completely unstaked, immediately.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// O(S) where S is the number of slashing spans to be removed
-		/// Reads: Bonded, Slashing Spans, Account, Locks
-		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Account, Locks
-		/// Writes Each: SpanSlash * S
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
-		pub fn force_unstake(
-			origin: OriginFor<T>,
-			stash: T::AccountId,
-			num_slashing_spans: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			// // Remove all staking-related information.
-			// Self::kill_stash(&stash, num_slashing_spans)?;
-
-			// // Remove the lock.
-			// T::Currency::remove_lock(STAKING_ID, &stash);
-			Ok(())
-		}
-
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
 		/// The dispatch origin must be Root.
@@ -1109,43 +911,6 @@ pub mod pallet {
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ForceEra::<T>::put(Forcing::ForceAlways);
-			Ok(())
-		}
-
-		/// Cancel enactment of a deferred slash.
-		///
-		/// Can be called by the `T::SlashCancelOrigin`.
-		///
-		/// Parameters: era and indices of the slashes for that era to kill.
-		///
-		/// # <weight>
-		/// Complexity: O(U + S)
-		/// with U unapplied slashes weighted with U=1000
-		/// and S is the number of slash indices to be canceled.
-		/// - Read: Unapplied Slashes
-		/// - Write: Unapplied Slashes
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::cancel_deferred_slash(slash_indices.len() as u32))]
-		pub fn cancel_deferred_slash(
-			origin: OriginFor<T>,
-			era: EraIndex,
-			slash_indices: Vec<u32>,
-		) -> DispatchResult {
-			T::SlashCancelOrigin::ensure_origin(origin)?;
-
-			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
-
-			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
-			let last_item = slash_indices[slash_indices.len() - 1];
-			ensure!((last_item as usize) < unapplied.len(), Error::<T>::InvalidSlashIndex);
-
-			for (removed, index) in slash_indices.into_iter().enumerate() {
-				let index = (index as usize) - removed;
-				unapplied.remove(index);
-			}
-
-			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 			Ok(())
 		}
 
@@ -1703,18 +1468,11 @@ impl<T: Config> Pallet<T> {
 				let n_to_prune =
 					bonded.iter().take_while(|&&(era_idx, _)| era_idx < first_kept).count();
 
-				// Kill slashing metadata.
-				for (pruned_era, _) in bonded.drain(..n_to_prune) {
-					slashing::clear_era_metadata::<T>(pruned_era);
-				}
-
 				if let Some(&(_, first_session)) = bonded.first() {
 					T::SessionInterface::prune_historical_up_to(first_session);
 				}
 			}
 		});
-
-		Self::apply_unapplied_slashes(active_era);
 	}
 
 	/// Compute payout for era.
@@ -1901,8 +1659,6 @@ impl<T: Config> Pallet<T> {
 	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	fn kill_stash(controller: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
-		slashing::clear_stash_metadata::<T>(controller, num_slashing_spans)?;
-
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(controller);
@@ -1923,24 +1679,6 @@ impl<T: Config> Pallet<T> {
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
 		ErasStartSessionIndex::<T>::remove(era_index);
-	}
-
-	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
-	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let slash_defer_duration = T::SlashDeferDuration::get();
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if let Some(ref mut earliest) = earliest {
-				let keep_from = active_era.saturating_sub(slash_defer_duration);
-				for era in (*earliest)..keep_from {
-					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
-					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash);
-					}
-				}
-
-				*earliest = (*earliest).max(keep_from)
-			}
-		})
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1980,11 +1718,6 @@ impl<T: Config> Pallet<T> {
 		exposure: Exposure<T::AccountId, u128>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn set_slash_reward_fraction(fraction: Perbill) {
-		SlashRewardFraction::<T>::put(fraction);
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -2166,110 +1899,7 @@ where
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) -> Weight {
-		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
-		let mut add_db_reads_writes = |reads, writes| {
-			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
-		};
-
-		let active_era = {
-			let active_era = Self::active_era();
-			add_db_reads_writes(1, 0);
-			if active_era.is_none() {
-				// This offence need not be re-submitted.
-				return consumed_weight;
-			}
-			active_era.expect("value checked not to be `None`; qed").index
-		};
-		let active_era_start_session_index = Self::eras_start_session_index(active_era)
-			.unwrap_or_else(|| {
-				frame_support::print("Error: start_session_index must be set for current_era");
-				0
-			});
-		add_db_reads_writes(1, 0);
-
-		let window_start = active_era.saturating_sub(T::BondingDuration::get());
-
-		// Fast path for active-era report - most likely.
-		// `slash_session` cannot be in a future active era. It must be in `active_era` or before.
-		let slash_era = if slash_session >= active_era_start_session_index {
-			active_era
-		} else {
-			let eras = BondedEras::<T>::get();
-			add_db_reads_writes(1, 0);
-
-			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
-				Some(&(ref slash_era, _)) => *slash_era,
-				// Before bonding period. defensive - should be filtered out.
-				None => return consumed_weight,
-			}
-		};
-
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if earliest.is_none() {
-				*earliest = Some(active_era)
-			}
-		});
-		add_db_reads_writes(1, 1);
-
-		let slash_defer_duration = T::SlashDeferDuration::get();
-
-		let invulnerables = Self::invulnerables();
-		add_db_reads_writes(1, 0);
-
-		// for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
-		// 	let (stash, exposure) = &details.offender;
-
-		// 	// Skip if the validator is invulnerable.
-		// 	if invulnerables.contains(stash) {
-		// 		continue
-		// 	}
-
-		// 	let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
-		// 		stash,
-		// 		slash: *slash_fraction,
-		// 		exposure,
-		// 		slash_era,
-		// 		window_start,
-		// 		now: active_era,
-		// 		reward_proportion,
-		// 	});
-
-		// 	if let Some(mut unapplied) = unapplied {
-		// 		let nominators_len = unapplied.others.len() as u64;
-		// 		let reporters_len = details.reporters.len() as u64;
-
-		// 		{
-		// 			let upper_bound = 1 /* Validator/NominatorSlashInEra */ + 2 /* fetch_spans */;
-		// 			let rw = upper_bound + nominators_len * upper_bound;
-		// 			add_db_reads_writes(rw, rw);
-		// 		}
-		// 		unapplied.reporters = details.reporters.clone();
-		// 		if slash_defer_duration == 0 {
-		// 			// Apply right away.
-		// 			slashing::apply_slash::<T>(unapplied);
-		// 			{
-		// 				let slash_cost = (6, 5);
-		// 				let reward_cost = (2, 2);
-		// 				add_db_reads_writes(
-		// 					(1 + nominators_len) * slash_cost.0 + reward_cost.0 * reporters_len,
-		// 					(1 + nominators_len) * slash_cost.1 + reward_cost.1 * reporters_len
-		// 				);
-		// 			}
-		// 		} else {
-		// 			// Defer to end of some `slash_defer_duration` from now.
-		// 			<Self as Store>::UnappliedSlashes::mutate(
-		// 				active_era,
-		// 				move |for_later| for_later.push(unapplied),
-		// 			);
-		// 			add_db_reads_writes(1, 1);
-		// 		}
-		// 	} else {
-		// 		add_db_reads_writes(4 /* fetch_spans */, 5 /* kick_out_if_recent */)
-		// 	}
-		// }
-
 		consumed_weight
 	}
 }
@@ -2302,9 +1932,4 @@ where
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
-}
-
-/// Check that list is sorted and has no duplicates.
-fn is_sorted_and_unique(list: &[u32]) -> bool {
-	list.windows(2).all(|w| w[0] < w[1])
 }
