@@ -1457,6 +1457,7 @@ impl<T: Config> Pallet<T> {
 		let election_result = if is_genesis {
 			T::GenesisStakersProvider::stakers()
 		} else {
+			<Ledger<T>>::remove_all(None);
 			T::StakersProvider::stakers()
 		};
 
@@ -1469,7 +1470,6 @@ impl<T: Config> Pallet<T> {
 		let exposures = Self::collect_exposures(election_result);
 		log!(info, "Election result: {:?}", exposures);
 
-		<Ledger<T>>::remove_all(None);
 		exposures.iter().for_each(|(stash, exposure)| {
 			Self::bond_and_validate(stash.clone(), exposure.total);
 		});
