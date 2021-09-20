@@ -23,7 +23,7 @@ use frame_support::{
 	weights::{Weight, WithPostDispatchInfo},
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_appchain::traits::StakersProvider;
+use pallet_octopus_appchain::{traits::StakersProvider, StakerStatus};
 use pallet_session::historical;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
@@ -91,18 +91,6 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
 	individual: BTreeMap<AccountId, RewardPoint>,
-}
-
-/// Indicates the initial status of the staker.
-#[derive(RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
 }
 
 /// A destination account for payment.
@@ -341,7 +329,6 @@ const COMMISSION: Perbill = Perbill::from_percent(20);
 /// who is not already nominating this validator may nominate them. By default, validators
 /// are accepting nominations.
 const BLOCKED: bool = false;
-const MINIMUM_VALIDATOR_COUNT: usize = 4;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -364,9 +351,6 @@ pub mod pallet {
 
 		/// Something that provides the election functionality.
 		type StakersProvider: StakersProvider<Self::AccountId>;
-
-		/// Something that provides the election functionality at genesis.
-		type GenesisStakersProvider: StakersProvider<Self::AccountId>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -583,8 +567,6 @@ pub mod pallet {
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
-	///
-	/// This is set to v6.0.0 for new networks.
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
@@ -593,7 +575,6 @@ pub mod pallet {
 		pub history_depth: u32,
 		pub force_era: Forcing,
 		pub canceled_payout: BalanceOf<T>,
-		pub stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -603,7 +584,6 @@ pub mod pallet {
 				history_depth: 84u32,
 				force_era: Default::default(),
 				canceled_payout: Default::default(),
-				stakers: Default::default(),
 			}
 		}
 	}
@@ -614,19 +594,6 @@ pub mod pallet {
 			HistoryDepth::<T>::put(self.history_depth);
 			ForceEra::<T>::put(self.force_era);
 			StorageVersion::<T>::put(Releases::V1_0_0);
-
-			for &(ref controller, balance, ref status) in &self.stakers {
-				let _ = match status {
-					StakerStatus::Validator => {
-						<Pallet<T>>::bond_and_validate(controller.clone(), balance)
-					}
-					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						controller.clone(),
-						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
-					),
-					_ => Ok(()),
-				};
-			}
 		}
 	}
 
@@ -1305,13 +1272,13 @@ impl<T: Config> Pallet<T> {
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
 					// Either `Forcing::ForceNone`,
-					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
+					// or `Forcing::NotForcing if era_length < T::SessionsPerEra::get()`.
 					return None;
 				}
 			}
 
 			// New era.
-			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
+			let maybe_new_era_validators = Self::try_trigger_new_era(session_index);
 			if maybe_new_era_validators.is_some()
 				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
@@ -1322,7 +1289,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			// Set initial era.
 			log!(debug, "Starting the first era.");
-			Self::try_trigger_new_era(session_index, is_genesis)
+			Self::try_trigger_new_era(session_index)
 		}
 	}
 
@@ -1450,55 +1417,17 @@ impl<T: Config> Pallet<T> {
 	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
 	///
 	/// In case a new era is planned, the new validator set is returned.
-	fn try_trigger_new_era(
-		start_session_index: SessionIndex,
-		is_genesis: bool,
-	) -> Option<Vec<T::AccountId>> {
-		let election_result = if is_genesis {
-			T::GenesisStakersProvider::stakers()
-		} else {
-			<Ledger<T>>::remove_all(None);
-			T::StakersProvider::stakers()
-		};
-
-		// <frame_system::Pallet<T>>::register_extra_weight_unchecked(
-		// 	weight,
-		// 	frame_support::weights::DispatchClass::Mandatory,
-		// );
-
+	fn try_trigger_new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		let election_result = T::StakersProvider::stakers();
 		log!(info, "Election result: {:?}", election_result);
+
 		let exposures = Self::collect_exposures(election_result);
 		log!(info, "Election result: {:?}", exposures);
 
+		<Ledger<T>>::remove_all(None);
 		exposures.iter().for_each(|(stash, exposure)| {
 			Self::bond_and_validate(stash.clone(), exposure.total);
 		});
-
-		if exposures.len() < MINIMUM_VALIDATOR_COUNT {
-			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
-			match CurrentEra::<T>::get() {
-				Some(current_era) if current_era > 0 => log!(
-					warn,
-					"chain does not have enough staking candidates to operate for era {:?} ({} \
-					elected, minimum is {})",
-					CurrentEra::<T>::get().unwrap_or(0),
-					exposures.len(),
-					MINIMUM_VALIDATOR_COUNT,
-				),
-				None => {
-					// The initial era is allowed to have no exposures.
-					// In this case the SessionManager is expected to choose a sensible validator
-					// set.
-					// TODO: this should be simplified #8911
-					CurrentEra::<T>::put(0);
-					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
-				}
-				_ => (),
-			}
-
-			Self::deposit_event(Event::StakingElectionFailed);
-			return None;
-		}
 
 		Self::deposit_event(Event::StakingElection);
 		Some(Self::trigger_new_era(start_session_index, exposures))
@@ -1552,11 +1481,12 @@ impl<T: Config> Pallet<T> {
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Vec<(T::AccountId, u128)>,
+		stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
 	) -> Vec<(T::AccountId, Exposure<T::AccountId, u128>)> {
-		supports
+		stakers
 			.into_iter()
-			.map(|(validator, weight)| {
+			.map(|(validator, weight, _)| {
+				// TODO: julian assume no delegators
 				// Build `struct exposure` from `support`.
 				// let mut others = Vec::with_capacity(support.voters.len());
 				let mut others = vec![];
@@ -1752,9 +1682,17 @@ where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
+		log!(info, "note_author: {:?}", author);
 		Self::reward_by_ids(vec![(author, 20)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
+		log!(
+			info,
+			"note_uncle: {:?} {:?} - {:?}",
+			author,
+			_age,
+			<pallet_authorship::Pallet<T>>::author()
+		);
 		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
 	}
 }

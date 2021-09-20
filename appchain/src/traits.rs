@@ -14,5 +14,5 @@ pub trait StakersProvider<AccountId> {
 	/// A new set of stakers.
 	///
 	/// The result is returned in a vector of supports.
-	fn stakers() -> Vec<(AccountId, u128)>;
+	fn stakers() -> Vec<(AccountId, u128, crate::StakerStatus<AccountId>)>;
 }
