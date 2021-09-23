@@ -133,18 +133,6 @@ pub struct ValidatorSet<AccountId> {
 	validators: Vec<Validator<AccountId>>,
 }
 
-/// Indicates the initial status of the staker.
-#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
-}
-
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BurnEvent<AccountId> {
 	/// The sequence number of this fact on the mainchain.
@@ -322,8 +310,7 @@ pub mod pallet {
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
 
 	#[pallet::storage]
-	pub type PlannedStakers<T: Config> =
-		StorageValue<_, Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>, ValueQuery>;
+	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -351,7 +338,7 @@ pub mod pallet {
 		pub appchain_id: String,
 		pub relay_contract: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
-		pub stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)>,
+		pub validators: Vec<(T::AccountId, u128)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -361,7 +348,7 @@ pub mod pallet {
 				appchain_id: String::new(),
 				relay_contract: String::new(),
 				asset_id_by_name: Vec::new(),
-				stakers: Vec::new(),
+				validators: Vec::new(),
 			}
 		}
 	}
@@ -375,7 +362,7 @@ pub mod pallet {
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
 			}
-			<PlannedStakers<T>>::put(self.stakers.clone());
+			<PlannedValidators<T>>::put(self.validators.clone());
 		}
 	}
 
@@ -807,13 +794,9 @@ pub mod pallet {
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
-						let stakers: Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)> =
-							val_set
-								.validators
-								.iter()
-								.map(|v| (v.id.clone(), v.weight, StakerStatus::Validator))
-								.collect();
-						<PlannedStakers<T>>::put(stakers);
+						let validators: Vec<(T::AccountId, u128)> =
+							val_set.validators.iter().map(|v| (v.id.clone(), v.weight)).collect();
+						<PlannedValidators<T>>::put(validators);
 					}
 					Observation::Burn(event) => {
 						if let Err(error) =
@@ -988,10 +971,9 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> traits::StakersProvider<T::AccountId> for Pallet<T> {
-		// TODO: delegators
-		fn stakers() -> Vec<(T::AccountId, u128, StakerStatus<T::AccountId>)> {
-			let stakers = <PlannedStakers<T>>::get();
+	impl<T: Config> traits::ValidatorsProvider<T::AccountId> for Pallet<T> {
+		fn validators() -> Vec<(T::AccountId, u128)> {
+			let validators = <PlannedValidators<T>>::get();
 			let res = NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
 				if let Some(v) = next_seq.checked_add(1) {
 					*next_seq = v;
@@ -1001,7 +983,7 @@ pub mod pallet {
 				}
 				Ok(().into())
 			});
-			stakers
+			validators
 		}
 	}
 }

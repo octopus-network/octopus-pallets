@@ -9,10 +9,8 @@ pub trait LposInterface<AccountId> {
 	fn total_stake() -> u128;
 }
 
-/// Something that can provide a set of stakers for the next era.
-pub trait StakersProvider<AccountId> {
-	/// A new set of stakers.
-	///
-	/// The result is returned in a vector of supports.
-	fn stakers() -> Vec<(AccountId, u128, crate::StakerStatus<AccountId>)>;
+/// Something that can provide a set of validators for the next era.
+pub trait ValidatorsProvider<AccountId> {
+	/// A new set of validators.
+	fn validators() -> Vec<(AccountId, u128)>;
 }
