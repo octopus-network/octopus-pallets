@@ -10,7 +10,6 @@ pub mod testing_utils;
 #[cfg(test)]
 mod tests;
 
-pub mod inflation;
 pub mod weights;
 
 use codec::{Decode, Encode};
@@ -85,16 +84,6 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
 	individual: BTreeMap<AccountId, RewardPoint>,
-}
-
-/// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorPrefs {}
-
-impl Default for ValidatorPrefs {
-	fn default() -> Self {
-		ValidatorPrefs {}
-	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.
@@ -280,14 +269,6 @@ pub mod pallet {
 	#[pallet::getter(fn ledger)]
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, u128>;
 
-	/// The map from (wannabe) validator stash key to the preferences of that validator.
-	///
-	/// When updating this storage item, you must also update the `CounterForValidators`.
-	#[pallet::storage]
-	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
-
 	/// The current era index.
 	///
 	/// This is the latest planned era, depending on how the Session pallet queues the validator
@@ -322,24 +303,6 @@ pub mod pallet {
 	#[pallet::getter(fn eras_stakers)]
 	pub type ErasStakers<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, u128, ValueQuery>;
-
-	/// Similar to `ErasStakers`, this holds the preferences of validators.
-	///
-	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
-	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
-	// If prefs hasn't been set or has been removed then 0 commission is returned.
-	#[pallet::storage]
-	#[pallet::getter(fn eras_validator_prefs)]
-	pub type ErasValidatorPrefs<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EraIndex,
-		Twox64Concat,
-		T::AccountId,
-		ValidatorPrefs,
-		ValueQuery,
-	>;
 
 	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
 	///
@@ -647,171 +610,13 @@ pub mod pallet {
 			}
 			Ok(())
 		}
-
-		/// Remove all data structure concerning a staker/stash once its balance is at the minimum.
-		/// This is essentially equivalent to `withdraw_unbonded` except it can be called by anyone
-		/// and the target `stash` must have no funds left beyond the ED.
-		///
-		/// This can be called from any origin.
-		///
-		/// - `stash`: The stash account to reap. Its balance must be zero.
-		///
-		/// # <weight>
-		/// Complexity: O(S) where S is the number of slashing spans on the account.
-		/// DB Weight:
-		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
-		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Stash Account, Locks
-		/// - Writes Each: SpanSlash * S
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
-		pub fn reap_stash(
-			_origin: OriginFor<T>,
-			stash: T::AccountId,
-			num_slashing_spans: u32,
-		) -> DispatchResult {
-			// let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
-			// ensure!(at_minimum, Error::<T>::FundedTarget);
-			// Self::kill_stash(&stash, num_slashing_spans)?;
-			// T::Currency::remove_lock(STAKING_ID, &stash);
-			Ok(())
-		}
-
-		/// Remove the given nominations from the calling validator.
-		///
-		/// Effects will be felt at the beginning of the next era.
-		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`. The controller
-		/// account should represent a validator.
-		///
-		/// - `who`: A list of nominator stash accounts who are nominating this validator which
-		///   should no longer be nominating this validator.
-		///
-		/// Note: Making this call only makes sense if you first set the validator preferences to
-		/// block any further nominations.
-		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
-		pub fn kick(
-			origin: OriginFor<T>,
-			who: Vec<<T::Lookup as StaticLookup>::Source>,
-		) -> DispatchResult {
-			// let controller = ensure_signed(origin)?;
-			// let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			// let stash = &ledger.stash;
-
-			// for nom_stash in who.into_iter()
-			// 	.map(T::Lookup::lookup)
-			// 	.collect::<Result<Vec<T::AccountId>, _>>()?
-			// 	.into_iter()
-			// {
-			// 	Nominators::<T>::mutate(&nom_stash, |maybe_nom| if let Some(ref mut nom) = maybe_nom {
-			// 		if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
-			// 			nom.targets.swap_remove(pos);
-			// 			Self::deposit_event(Event::<T>::Kicked(nom_stash.clone(), stash.clone()));
-			// 		}
-			// 	});
-			// }
-
-			Ok(())
-		}
-
-		/// Declare a `controller` to stop participating as either a validator or nominator.
-		///
-		/// Effects will be felt at the beginning of the next era.
-		///
-		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
-		///
-		/// If the caller is the same as the controller being targeted, then no further checks are
-		/// enforced, and this function behaves just like `chill`.
-		///
-		/// If the caller is different than the controller being targeted, the following conditions
-		/// must be met:
-		/// * A `ChillThreshold` must be set and checked which defines how close to the max
-		///   nominators or validators we must reach before users can start chilling one-another.
-		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
-		///   how close we are to the threshold.
-		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
-		///   if this is a person that should be chilled because they have not met the threshold
-		///   bond required.
-		///
-		/// This can be helpful if bond requirements are updated, and we need to remove old users
-		/// who do not satisfy these requirements.
-		///
-		// TODO: Maybe we can deprecate `chill` in the future.
-		// https://github.com/paritytech/substrate/issues/9111
-		#[pallet::weight(T::WeightInfo::chill_other())]
-		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
-			// // Anyone can call this function.
-			// let caller = ensure_signed(origin)?;
-			// let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			// let stash = ledger.stash;
-
-			// // In order for one user to chill another user, the following conditions must be met:
-			// // * A `ChillThreshold` is set which defines how close to the max nominators or
-			// //   validators we must reach before users can start chilling one-another.
-			// // * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
-			// //   we are to the threshold.
-			// // * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
-			// //   determine this is a person that should be chilled because they have not met the
-			// //   threshold bond required.
-			// //
-			// // Otherwise, if caller is the same as the controller, this is just like `chill`.
-			// if caller != controller {
-			// 	let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-			// 	let min_active_bond = if Nominators::<T>::contains_key(&stash) {
-			// 		let max_nominator_count = MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-			// 		let current_nominator_count = CounterForNominators::<T>::get();
-			// 		ensure!(threshold * max_nominator_count < current_nominator_count, Error::<T>::CannotChillOther);
-			// 		MinNominatorBond::<T>::get()
-			// 	} else if Validators::<T>::contains_key(&stash) {
-			// 		let max_validator_count = MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-			// 		let current_validator_count = CounterForValidators::<T>::get();
-			// 		ensure!(threshold * max_validator_count < current_validator_count, Error::<T>::CannotChillOther);
-			// 		MinValidatorBond::<T>::get()
-			// 	} else {
-			// 		Zero::zero()
-			// 	};
-
-			// 	ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
-			// }
-
-			// Self::chill_stash(&stash);
-			Ok(())
-		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	fn bond_and_validate(
-		controller: <T as frame_system::Config>::AccountId,
-		value: u128,
-	) -> DispatchResult {
-		let prefs = ValidatorPrefs {};
-
+	fn bond_and_validate(controller: <T as frame_system::Config>::AccountId, value: u128) {
 		<Ledger<T>>::insert(&controller, value);
 		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
-		Self::validate(controller, prefs)
-	}
-
-	/// Declare the desire to validate for the origin controller.
-	///
-	/// Effects will be felt at the beginning of the next era.
-	///
-	/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-	/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
-	///
-	/// # <weight>
-	/// - Independent of the arguments. Insignificant complexity.
-	/// - Contains a limited number of reads.
-	/// - Writes are limited to the `origin` account key.
-	/// -----------
-	/// Weight: O(1)
-	/// DB Weight:
-	/// - Read: Era Election Status, Ledger
-	/// - Write: Nominators, Validators
-	/// # </weight>
-	pub fn validate(controller: T::AccountId, prefs: ValidatorPrefs) -> DispatchResult {
-		Self::do_add_validator(&controller, prefs);
-		Ok(())
 	}
 
 	fn do_payout_stakers(controller: T::AccountId, era: EraIndex) {
@@ -916,11 +721,6 @@ impl<T: Config> Pallet<T> {
 
 		// debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
 		// Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
-	}
-
-	/// Chill a stash account.
-	fn chill_stash(stash: &T::AccountId) {
-		Self::do_remove_validator(stash);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1136,12 +936,6 @@ impl<T: Config> Pallet<T> {
 		// Insert current era staking information
 		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
 
-		// Collect the pref of all winners.
-		for stash in &elected_stashes {
-			let pref = Self::validators(stash);
-			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
-		}
-
 		if new_planned_era > 0 {
 			log!(
 				info,
@@ -1154,27 +948,9 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
-	/// Remove all associated data of a stash account from the staking system.
-	///
-	/// Assumes storage is upgraded before calling.
-	///
-	/// This is called:
-	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
-	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
-	fn kill_stash(controller: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
-		<Ledger<T>>::remove(&controller);
-
-		Self::do_remove_validator(controller);
-
-		// frame_system::Pallet::<T>::dec_consumers(stash);
-
-		Ok(())
-	}
-
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index, None);
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
@@ -1208,31 +984,6 @@ impl<T: Config> Pallet<T> {
 		match ForceEra::<T>::get() {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
 			_ => ForceEra::<T>::put(Forcing::ForceNew),
-		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn add_era_stakers(
-		current_era: EraIndex,
-		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, u128>,
-	) {
-		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
-	}
-
-	/// This function will add a validator to the `Validators` storage map,
-	/// and keep track of the `CounterForValidators`.
-	///
-	/// If the validator already exists, their preferences will be updated.
-	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		Validators::<T>::insert(who, prefs);
-	}
-
-	/// This function will remove a validator from the `Validators` storage map,
-	/// and keep track of the `CounterForValidators`.
-	pub fn do_remove_validator(who: &T::AccountId) {
-		if Validators::<T>::contains_key(who) {
-			Validators::<T>::remove(who);
 		}
 	}
 }
