@@ -13,30 +13,26 @@ mod tests;
 pub mod inflation;
 pub mod weights;
 
-use codec::{Decode, Encode, HasCompact};
-use frame_support::traits::SaturatingCurrencyToVote;
+use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
-	traits::{
-		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, OnUnbalanced, UnixTime,
-	},
-	weights::{Weight, WithPostDispatchInfo},
+	traits::{Currency, EstimateNextNewSession, Get, OnUnbalanced, UnixTime},
+	weights::Weight,
 };
-use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
+use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_appchain::traits::ValidatorsProvider;
 use pallet_session::historical;
 use sp_runtime::traits::ConvertInto;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
-	curve::PiecewiseLinear,
-	traits::{AtLeast32BitUnsigned, Convert, SaturatedConversion, StaticLookup, Zero},
-	DispatchError, Perbill, RuntimeDebug,
+	traits::{Convert, SaturatedConversion, StaticLookup},
+	Perbill, RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*, result};
+use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -67,9 +63,6 @@ pub type BalanceOf<T> =
 type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -164,52 +157,6 @@ where
 	}
 }
 
-/// Handler for determining how much of a balance should be paid out on the current era.
-pub trait EraPayout<Balance> {
-	/// Determine the payout for this era.
-	///
-	/// Returns the amount to be paid to stakers in this era, as well as whatever else should be
-	/// paid out ("the rest").
-	fn era_payout(
-		total_staked: Balance,
-		total_issuance: Balance,
-		era_duration_millis: u64,
-	) -> (Balance, Balance);
-}
-
-impl<Balance: Default> EraPayout<Balance> for () {
-	fn era_payout(
-		_total_staked: Balance,
-		_total_issuance: Balance,
-		_era_duration_millis: u64,
-	) -> (Balance, Balance) {
-		(Default::default(), Default::default())
-	}
-}
-
-/// Adaptor to turn a `PiecewiseLinear` curve definition into an `EraPayout` impl, used for
-/// backwards compatibility.
-pub struct ConvertCurve<T>(sp_std::marker::PhantomData<T>);
-impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'static>>>
-	EraPayout<Balance> for ConvertCurve<T>
-{
-	fn era_payout(
-		total_staked: Balance,
-		total_issuance: Balance,
-		era_duration_millis: u64,
-	) -> (Balance, Balance) {
-		let (validator_payout, max_payout) = inflation::compute_total_payout(
-			&T::get(),
-			total_staked,
-			total_issuance,
-			// Duration of era; more than u64::MAX is rewarded as u64::MAX.
-			era_duration_millis,
-		);
-		let rest = max_payout.saturating_sub(validator_payout.clone());
-		(validator_payout, rest)
-	}
-}
-
 impl<T: Config>
 	pallet_octopus_appchain::traits::LposInterface<<T as frame_system::Config>::AccountId>
 	for Pallet<T>
@@ -288,10 +235,6 @@ pub mod pallet {
 		/// Something that provides the election functionality.
 		type ValidatorsProvider: ValidatorsProvider<Self::AccountId>;
 
-		/// Tokens have been minted and are unused for validator-reward.
-		/// See [Era payout](./index.html#era-payout).
-		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -308,10 +251,6 @@ pub mod pallet {
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: self::SessionInterface<Self::AccountId>;
-
-		/// The payout for validators and the system for the current era.
-		/// See [Era payout](./index.html#era-payout).
-		type EraPayout: EraPayout<BalanceOf<Self>>;
 
 		/// Something that can estimate the next session change, accurately or as a best effort guess.
 		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
@@ -407,7 +346,7 @@ pub mod pallet {
 	/// Eras that haven't finished yet or has been removed doesn't have reward.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_reward)]
-	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>>;
+	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128>;
 
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
@@ -442,6 +381,11 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
+	/// The payout for validators and the system for the current era.
+	#[pallet::storage]
+	#[pallet::getter(fn era_payout)]
+	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
+
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
 	#[pallet::storage]
@@ -452,6 +396,7 @@ pub mod pallet {
 		pub history_depth: u32,
 		pub force_era: Forcing,
 		pub canceled_payout: BalanceOf<T>,
+		pub era_payout: u128,
 	}
 
 	#[cfg(feature = "std")]
@@ -461,6 +406,7 @@ pub mod pallet {
 				history_depth: 84u32,
 				force_era: Default::default(),
 				canceled_payout: Default::default(),
+				era_payout: 0,
 			}
 		}
 	}
@@ -470,6 +416,7 @@ pub mod pallet {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
 			ForceEra::<T>::put(self.force_era);
+			EraPayout::<T>::put(self.era_payout);
 			StorageVersion::<T>::put(Releases::V1_0_0);
 		}
 	}
@@ -481,7 +428,7 @@ pub mod pallet {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
 		/// \[era_index, validator_payout, remainder\]
-		EraPayout(EraIndex, BalanceOf<T>, BalanceOf<T>),
+		EraPayout(EraIndex, u128),
 		/// The staker has been rewarded by this amount. \[stash, amount\]
 		Reward(T::AccountId, BalanceOf<T>),
 		/// One validator (and its nominators) has been slashed by the given amount.
@@ -1110,21 +1057,16 @@ impl<T: Config> Pallet<T> {
 		if let Some(active_era_start) = active_era.start {
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 
-			let era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
-			let staked = Self::eras_total_stake(&active_era.index);
-			let issuance = T::Currency::total_issuance();
+			let _era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
+			let _staked = Self::eras_total_stake(&active_era.index);
+			let _issuance = T::Currency::total_issuance();
 
-			let (validator_payout, rest) = T::EraPayout::era_payout(
-				SaturatingCurrencyToVote::to_currency(staked, issuance),
-				issuance,
-				era_duration,
-			);
+			let validator_payout = Self::era_payout();
 
-			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout, rest));
+			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
-			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 		}
 	}
 
