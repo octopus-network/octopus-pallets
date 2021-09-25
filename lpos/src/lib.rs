@@ -21,10 +21,9 @@ use frame_support::{
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_appchain::traits::ValidatorsProvider;
 use pallet_session::historical;
-use sp_runtime::traits::ConvertInto;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
-	traits::{Convert, SaturatedConversion, StaticLookup},
+	traits::{Convert, SaturatedConversion},
 	Perbill, RuntimeDebug,
 };
 use sp_staking::{
@@ -107,10 +106,10 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
-	// T: pallet_session::historical::Config<
-	// 	FullIdentification = Exposure<<T as frame_system::Config>::AccountId, u128>,
-	// 	FullIdentificationOf = ExposureOf<T>,
-	// >,
+	T: pallet_session::historical::Config<
+		FullIdentification = u128,
+		FullIdentificationOf = ExposureOf<T>,
+	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 	T::ValidatorIdOf: Convert<
@@ -127,7 +126,7 @@ where
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
-		// <pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
+		<pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
 	}
 
 	fn in_current_validator_set(
@@ -1014,36 +1013,34 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, T::AccountId> for Pallet<T> {
-	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, T::AccountId)>> {
+impl<T: Config> historical::SessionManager<T::AccountId, u128> for Pallet<T> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
-			// let current_era = Self::current_era()
-			// 	// Must be some as a new era has been created.
-			// 	.unwrap_or(0);
+			let current_era = Self::current_era()
+				// Must be some as a new era has been created.
+				.unwrap_or(0);
 
 			validators
 				.into_iter()
 				.map(|v| {
-					// let exposure = Self::eras_stakers(current_era, &v);
-					// (v, exposure)
-					(v.clone(), v.clone())
+					let exposure = Self::eras_stakers(current_era, &v);
+					(v, exposure)
 				})
 				.collect()
 		})
 	}
-	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, T::AccountId)>> {
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
-				// let current_era = Self::current_era()
-				// 	// Must be some as a new era has been created.
-				// 	.unwrap_or(0);
+				let current_era = Self::current_era()
+					// Must be some as a new era has been created.
+					.unwrap_or(0);
 
 				validators
 					.into_iter()
 					.map(|v| {
-						// let exposure = Self::eras_stakers(current_era, &v);
-						// (v, exposure)
-						(v.clone(), v.clone())
+						let exposure = Self::eras_stakers(current_era, &v);
+						(v, exposure)
 					})
 					.collect()
 			},
@@ -1086,14 +1083,14 @@ where
 ///
 /// Active exposure is the exposure of the validator set currently validating, i.e. in
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
-// pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
-//
-// impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, u128>>> for ExposureOf<T> {
-// 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, u128>> {
-// 		<Pallet<T>>::active_era()
-// 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
-// 	}
-// }
+pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> Convert<T::AccountId, Option<u128>> for ExposureOf<T> {
+	fn convert(validator: T::AccountId) -> Option<u128> {
+		<Pallet<T>>::active_era()
+			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
+	}
+}
 
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl<T: Config>
@@ -1102,8 +1099,8 @@ impl<T: Config>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = <T as frame_system::Config>::AccountId,
-		FullIdentificationOf = ConvertInto,
+		FullIdentification = u128,
+		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
