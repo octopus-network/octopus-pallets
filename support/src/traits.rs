@@ -1,3 +1,4 @@
+use frame_support::dispatch::DispatchResult;
 use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
 
@@ -13,4 +14,12 @@ pub trait LposInterface<AccountId> {
 pub trait ValidatorsProvider<AccountId> {
 	/// A new set of validators.
 	fn validators() -> Vec<(AccountId, u128)>;
+}
+
+pub trait DownlinkInterface<AccountId> {
+	fn submit(
+		who: &AccountId,
+		payload_type: crate::types::PayloadType,
+		payload: &[u8],
+	) -> DispatchResult;
 }

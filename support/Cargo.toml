@@ -1,39 +1,29 @@
 [package]
-name = "pallet-octopus-downlink"
+name = "pallet-octopus-support"
 version = "3.0.0-pre.0"
 edition = "2018"
 authors = ["Octopus Network <hi@oct.network>"]
 license = "Apache-2.0"
 homepage = "https://oct.network"
 repository = "https://github.com/octopus-network/octopus-pallets.git"
-description = "FRAME pallet used to send messages from appchain to mainchain."
+description = "Support code for octopus pallets."
 readme = "README.md"
-documentation = "https://docs.rs/pallet-octopus-downlink"
+documentation = "https://docs.rs/pallet-octopus-support"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-log = { version = "0.4.0", default-features = false }
-frame-support = { default-features = false, version = "3.0.0" }
-frame-system = { default-features = false,  version = "3.0.0" }
-sp-core = { default-features = false, version = "3.0.0" }
+frame-support = { version = "3.0.0", default-features = false }
 sp-runtime = { default-features = false, version = "3.0.0" }
-sp-io = { default-features = false, version = "3.0.0" }
 sp-std = { default-features = false, version = "3.0.0" }
-pallet-octopus-support = { default-features = false, path = "../support" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"log/std",
 	"frame-support/std",
-	"frame-system/std",
-	"sp-core/std",
 	"sp-runtime/std",
-	"sp-io/std",
 	"sp-std/std",
-	"pallet-octopus-support/std",
 ]

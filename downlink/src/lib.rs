@@ -6,9 +6,15 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-use crate::traits::LposInterface;
 use codec::{Decode, Encode};
+use frame_support::dispatch::DispatchResult;
+use pallet_octopus_support::{traits::DownlinkInterface, types::PayloadType};
+use sp_core::H256;
 use sp_io::offchain_index;
+use sp_runtime::{
+	traits::{Hash, Keccak256},
+	DigestItem, RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 pub use pallet::*;
@@ -59,10 +65,21 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {}
+
+	// Errors inform users that something went wrong.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Nonce overflow.
+		NonceOverflow,
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Initialization
-		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
 			Self::commit()
 		}
 	}
@@ -74,27 +91,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	impl<T: Config> Pallet<T> {
-		fn submit(
-			_who: &T::AccountId,
-			payload_type: PayloadType,
-			payload: &[u8],
-		) -> DispatchResultWithPostInfo {
-			Nonce::<T>::try_mutate(|nonce| -> DispatchResultWithPostInfo {
-				if let Some(v) = nonce.checked_add(1) {
-					*nonce = v;
-				} else {
-					return Err(Error::<T>::NonceOverflow.into());
-				}
-
-				MessageQueue::<T>::append(Message {
-					nonce: *nonce,
-					payload_type,
-					payload: payload.to_vec(),
-				});
-				Ok(().into())
-			})
-		}
-
 		fn commit() -> Weight {
 			let messages: Vec<Message> = MessageQueue::<T>::take();
 			if messages.is_empty() {
@@ -125,5 +121,24 @@ pub mod pallet {
 		fn make_offchain_key(hash: H256) -> Vec<u8> {
 			(b"commitment", hash).encode()
 		}
+	}
+}
+
+impl<T: Config> DownlinkInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
+	fn submit(_who: &T::AccountId, payload_type: PayloadType, payload: &[u8]) -> DispatchResult {
+		Nonce::<T>::try_mutate(|nonce| -> DispatchResult {
+			if let Some(v) = nonce.checked_add(1) {
+				*nonce = v;
+			} else {
+				return Err(Error::<T>::NonceOverflow.into());
+			}
+
+			MessageQueue::<T>::append(Message {
+				nonce: *nonce,
+				payload_type,
+				payload: payload.to_vec(),
+			});
+			Ok(())
+		})
 	}
 }

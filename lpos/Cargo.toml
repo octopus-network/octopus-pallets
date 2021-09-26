@@ -27,7 +27,7 @@ pallet-authorship = { version = "3.0.0", default-features = false }
 sp-application-crypto = { version = "3.0.0", default-features = false }
 log = { version = "0.4.14", default-features = false }
 paste = "1.0"
-pallet-octopus-appchain = { default-features = false, path = "../appchain" }
+pallet-octopus-support = { default-features = false, path = "../support" }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "3.1.0", default-features = false, optional = true }
@@ -60,7 +60,7 @@ std = [
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
 	"log/std",
-	"pallet-octopus-appchain/std",
+	"pallet-octopus-support/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

@@ -19,7 +19,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_appchain::traits::ValidatorsProvider;
+use pallet_octopus_support::traits::{LposInterface, ValidatorsProvider};
 use pallet_session::historical;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
@@ -145,10 +145,7 @@ where
 	}
 }
 
-impl<T: Config>
-	pallet_octopus_appchain::traits::LposInterface<<T as frame_system::Config>::AccountId>
-	for Pallet<T>
-{
+impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
 	fn in_current_validator_set(
 		id: KeyTypeId,
 		key_data: &[u8],

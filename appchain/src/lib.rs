@@ -6,7 +6,6 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-use crate::traits::LposInterface;
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -23,9 +22,10 @@ use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
+use pallet_octopus_support::traits::{DownlinkInterface, LposInterface, ValidatorsProvider};
+use pallet_octopus_support::types::PayloadType;
 use serde::{de, Deserialize, Deserializer};
-use sp_core::{crypto::KeyTypeId, H256};
-use sp_io::offchain_index;
+use sp_core::crypto::KeyTypeId;
 use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
@@ -33,8 +33,8 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{CheckedConversion, Hash, IdentifyAccount, Keccak256, StaticLookup},
-	DigestItem, RuntimeDebug,
+	traits::{CheckedConversion, IdentifyAccount, StaticLookup},
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -54,7 +54,6 @@ macro_rules! log {
 }
 
 mod mainchain;
-pub mod traits;
 
 #[cfg(test)]
 mod mock;
@@ -224,19 +223,6 @@ pub struct BurnAssetPayload {
 	pub amount: u128,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum PayloadType {
-	Lock,
-	BurnAsset,
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Message {
-	nonce: u64,
-	payload_type: PayloadType,
-	payload: Vec<u8>,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -265,7 +251,8 @@ pub mod pallet {
 			Balance = AssetBalance,
 		>;
 
-		type LposInterface: traits::LposInterface<Self::AccountId>;
+		type LposInterface: LposInterface<Self::AccountId>;
+		type DownlinkInterface: DownlinkInterface<Self::AccountId>;
 
 		// Configuration parameters
 
@@ -327,12 +314,6 @@ pub mod pallet {
 	pub type AssetIdByName<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
 
-	#[pallet::storage]
-	pub type MessageQueue<T: Config> = StorageValue<_, Vec<Message>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
@@ -392,8 +373,6 @@ pub mod pallet {
 		WrongSetId,
 		/// Must be a validator.
 		NotValidator,
-		/// Nonce overflow.
-		NonceOverflow,
 		/// Amount overflow.
 		AmountOverflow,
 		/// Next fact sequence overflow.
@@ -404,11 +383,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Initialization
-		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
-			Self::commit()
-		}
-
 		/// Offchain Worker entry point.
 		///
 		/// By implementing `fn offchain_worker` you declare a new offchain worker.
@@ -576,7 +550,7 @@ pub mod pallet {
 				amount: amount_wrapped,
 			};
 
-			Self::submit(&who, PayloadType::Lock, &message.try_to_vec().unwrap())?;
+			T::DownlinkInterface::submit(&who, PayloadType::Lock, &message.try_to_vec().unwrap())?;
 			Self::deposit_event(Event::Locked(who, receiver_id, amount));
 
 			Ok(().into())
@@ -623,7 +597,11 @@ pub mod pallet {
 				amount,
 			};
 
-			Self::submit(&sender, PayloadType::BurnAsset, &message.try_to_vec().unwrap())?;
+			T::DownlinkInterface::submit(
+				&sender,
+				PayloadType::BurnAsset,
+				&message.try_to_vec().unwrap(),
+			)?;
 			Self::deposit_event(Event::AssetBurned(asset_id, sender, receiver_id, amount));
 
 			Ok(().into())
@@ -891,58 +869,6 @@ pub mod pallet {
 				.propagate(true)
 				.build()
 		}
-
-		fn submit(
-			_who: &T::AccountId,
-			payload_type: PayloadType,
-			payload: &[u8],
-		) -> DispatchResultWithPostInfo {
-			Nonce::<T>::try_mutate(|nonce| -> DispatchResultWithPostInfo {
-				if let Some(v) = nonce.checked_add(1) {
-					*nonce = v;
-				} else {
-					return Err(Error::<T>::NonceOverflow.into());
-				}
-
-				MessageQueue::<T>::append(Message {
-					nonce: *nonce,
-					payload_type,
-					payload: payload.to_vec(),
-				});
-				Ok(().into())
-			})
-		}
-
-		fn commit() -> Weight {
-			let messages: Vec<Message> = MessageQueue::<T>::take();
-			if messages.is_empty() {
-				return 0;
-			}
-
-			let commitment_hash = Self::make_commitment_hash(&messages);
-
-			<frame_system::Pallet<T>>::deposit_log(DigestItem::Other(
-				commitment_hash.as_bytes().to_vec(),
-			));
-
-			let key = Self::make_offchain_key(commitment_hash);
-			offchain_index::set(&*key, &messages.encode());
-
-			0
-		}
-
-		fn make_commitment_hash(messages: &[Message]) -> H256 {
-			let messages: Vec<_> = messages
-				.iter()
-				.map(|message| (message.nonce, message.payload.clone()))
-				.collect();
-			let input = messages.encode();
-			Keccak256::hash(&input)
-		}
-
-		fn make_offchain_key(hash: H256) -> Vec<u8> {
-			(b"commitment", hash).encode()
-		}
 	}
 
 	impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -971,7 +897,7 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> traits::ValidatorsProvider<T::AccountId> for Pallet<T> {
+	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
 		fn validators() -> Vec<(T::AccountId, u128)> {
 			let validators = <PlannedValidators<T>>::get();
 			let res = NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
