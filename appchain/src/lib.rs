@@ -379,6 +379,8 @@ pub mod pallet {
 		NextFactSequenceOverflow,
 		/// Wrong Asset Id.
 		WrongAssetId,
+		/// Invalid active total stake.
+		InvalidActiveTotalStake,
 	}
 
 	#[pallet::hooks]
@@ -412,7 +414,7 @@ pub mod pallet {
 					>>::GenericPublic::from(key);
 					let public: <T as SigningTypes>::Public = generic_public.into();
 
-					let val_id = T::LposInterface::in_current_validator_set(
+					let val_id = T::LposInterface::is_active_validator(
 						KEY_TYPE,
 						&public.clone().into_account().encode(),
 					);
@@ -491,7 +493,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
-			let val_id = T::LposInterface::in_current_validator_set(
+			let val_id = T::LposInterface::is_active_validator(
 				KEY_TYPE,
 				&payload.public.clone().into_account().encode(),
 			);
@@ -751,10 +753,11 @@ pub mod pallet {
 					log!(info, "{:?} submits a duplicate ocw tx", validator_id);
 				}
 			});
-			let total_stake: u128 = T::LposInterface::total_stake();
+			let total_stake: u128 = T::LposInterface::active_total_stake()
+				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
 			let stake: u128 = <Observing<T>>::get(&observation)
 				.iter()
-				.map(|v| T::LposInterface::stake_of(v))
+				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
 
 			//

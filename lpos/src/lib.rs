@@ -100,7 +100,7 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
 
-	fn in_current_validator_set(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
+	fn is_active_validator(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
 }
 
 impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
@@ -129,7 +129,7 @@ where
 		<pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
 	}
 
-	fn in_current_validator_set(
+	fn is_active_validator(
 		id: KeyTypeId,
 		key_data: &[u8],
 	) -> Option<<T as frame_system::Config>::AccountId> {
@@ -146,19 +146,21 @@ where
 }
 
 impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
-	fn in_current_validator_set(
+	fn is_active_validator(
 		id: KeyTypeId,
 		key_data: &[u8],
 	) -> Option<<T as frame_system::Config>::AccountId> {
-		T::SessionInterface::in_current_validator_set(id, key_data)
+		T::SessionInterface::is_active_validator(id, key_data)
 	}
 
-	fn stake_of(who: &<T as frame_system::Config>::AccountId) -> u128 {
-		Self::ledger(who).map_or(0, |v| v)
+	fn active_stake_of(who: &<T as frame_system::Config>::AccountId) -> u128 {
+		Self::active_era()
+			.map(|active_era| Self::eras_stakers(active_era.index, who))
+			.map_or(0, |v| v)
 	}
 
-	fn total_stake() -> u128 {
-		T::SessionInterface::validators().iter().map(|v| Self::stake_of(v)).sum()
+	fn active_total_stake() -> Option<u128> {
+		Self::active_era().map(|active_era| Self::eras_total_stake(active_era.index))
 	}
 }
 

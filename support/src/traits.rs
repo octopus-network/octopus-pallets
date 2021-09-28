@@ -3,11 +3,11 @@ use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
 
 pub trait LposInterface<AccountId> {
-	fn in_current_validator_set(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
+	fn is_active_validator(id: KeyTypeId, key_data: &[u8]) -> Option<AccountId>;
 
-	fn stake_of(who: &AccountId) -> u128;
+	fn active_stake_of(who: &AccountId) -> u128;
 
-	fn total_stake() -> u128;
+	fn active_total_stake() -> Option<u128>;
 }
 
 /// Something that can provide a set of validators for the next era.
