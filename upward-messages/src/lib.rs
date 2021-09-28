@@ -8,7 +8,7 @@ use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchResult;
-use pallet_octopus_support::{traits::DownlinkInterface, types::PayloadType};
+use pallet_octopus_support::{traits::UpwardMessagesInterface, types::PayloadType};
 use sp_core::H256;
 use sp_io::offchain_index;
 use sp_runtime::{
@@ -19,7 +19,7 @@ use sp_std::prelude::*;
 
 pub use pallet::*;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-downlink";
+pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -124,7 +124,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> DownlinkInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
+impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
 	fn submit(_who: &T::AccountId, payload_type: PayloadType, payload: &[u8]) -> DispatchResult {
 		Nonce::<T>::try_mutate(|nonce| -> DispatchResult {
 			if let Some(v) = nonce.checked_add(1) {

@@ -16,7 +16,7 @@ pub trait ValidatorsProvider<AccountId> {
 	fn validators() -> Vec<(AccountId, u128)>;
 }
 
-pub trait DownlinkInterface<AccountId> {
+pub trait UpwardMessagesInterface<AccountId> {
 	fn submit(
 		who: &AccountId,
 		payload_type: crate::types::PayloadType,

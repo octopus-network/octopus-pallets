@@ -22,7 +22,7 @@ use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
-use pallet_octopus_support::traits::{DownlinkInterface, LposInterface, ValidatorsProvider};
+use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
 use pallet_octopus_support::types::PayloadType;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
@@ -252,7 +252,7 @@ pub mod pallet {
 		>;
 
 		type LposInterface: LposInterface<Self::AccountId>;
-		type DownlinkInterface: DownlinkInterface<Self::AccountId>;
+		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		// Configuration parameters
 
@@ -552,7 +552,11 @@ pub mod pallet {
 				amount: amount_wrapped,
 			};
 
-			T::DownlinkInterface::submit(&who, PayloadType::Lock, &message.try_to_vec().unwrap())?;
+			T::UpwardMessagesInterface::submit(
+				&who,
+				PayloadType::Lock,
+				&message.try_to_vec().unwrap(),
+			)?;
 			Self::deposit_event(Event::Locked(who, receiver_id, amount));
 
 			Ok(().into())
@@ -599,7 +603,7 @@ pub mod pallet {
 				amount,
 			};
 
-			T::DownlinkInterface::submit(
+			T::UpwardMessagesInterface::submit(
 				&sender,
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),

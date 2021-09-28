@@ -3,8 +3,8 @@ resolver = "2"
 
 members = [
 	"appchain",
-	"downlink",
 	"ibc",
 	"lpos",
 	"support",
+	"upward-messages",
 ]
