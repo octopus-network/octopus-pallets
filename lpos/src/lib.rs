@@ -12,6 +12,7 @@ mod tests;
 
 pub mod weights;
 
+use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
@@ -19,7 +20,8 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_support::traits::{LposInterface, ValidatorsProvider};
+use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
+use pallet_octopus_support::types::{PayloadType, PlannedEraSwitchPayload};
 use pallet_session::historical;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
@@ -244,6 +246,8 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 	}
 
 	#[pallet::type_value]
@@ -322,11 +326,6 @@ pub mod pallet {
 	#[pallet::getter(fn eras_total_stake)]
 	pub type ErasTotalStake<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128, ValueQuery>;
 
-	/// Mode of era forcing.
-	#[pallet::storage]
-	#[pallet::getter(fn force_era)]
-	pub type ForceEra<T> = StorageValue<_, Forcing, ValueQuery>;
-
 	/// A mapping from still-bonded eras to the first session index of that era.
 	///
 	/// Must contains information for eras for the range:
@@ -353,30 +352,22 @@ pub mod pallet {
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
+	pub struct GenesisConfig {
 		pub history_depth: u32,
-		pub force_era: Forcing,
-		pub canceled_payout: BalanceOf<T>,
 		pub era_payout: u128,
 	}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
-			GenesisConfig {
-				history_depth: 84u32,
-				force_era: Default::default(),
-				canceled_payout: Default::default(),
-				era_payout: 0,
-			}
+			GenesisConfig { history_depth: 84u32, era_payout: 0 }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
-			ForceEra::<T>::put(self.force_era);
 			EraPayout::<T>::put(self.era_payout);
 			StorageVersion::<T>::put(Releases::V1_0_0);
 		}
@@ -502,72 +493,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Force there to be no new eras indefinitely.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # Warning
-		///
-		/// The election process starts multiple blocks before the end of the era.
-		/// Thus the election process may be ongoing when this is called. In this case the
-		/// election will continue until the next era is triggered.
-		///
-		/// # <weight>
-		/// - No arguments.
-		/// - Weight: O(1)
-		/// - Write: ForceEra
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::force_no_eras())]
-		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNone);
-			Ok(())
-		}
-
-		/// Force there to be a new era at the end of the next session. After this, it will be
-		/// reset to normal (non-forced) behaviour.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # Warning
-		///
-		/// The election process starts multiple blocks before the end of the era.
-		/// If this is called just before a new era is triggered, the election process may not
-		/// have enough blocks to get a result.
-		///
-		/// # <weight>
-		/// - No arguments.
-		/// - Weight: O(1)
-		/// - Write ForceEra
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::force_new_era())]
-		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceNew);
-			Ok(())
-		}
-
-		/// Force there to be a new era at the end of sessions indefinitely.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # Warning
-		///
-		/// The election process starts multiple blocks before the end of the era.
-		/// If this is called just before a new era is triggered, the election process may not
-		/// have enough blocks to get a result.
-		///
-		/// # <weight>
-		/// - Weight: O(1)
-		/// - Write: ForceEra
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::force_new_era_always())]
-		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
-			ensure_root(origin)?;
-			ForceEra::<T>::put(Forcing::ForceAlways);
-			Ok(())
-		}
-
 		/// Set `HistoryDepth` value. This function will delete any history information
 		/// when `HistoryDepth` is reduced.
 		///
@@ -753,29 +678,23 @@ impl<T: Config> Pallet<T> {
 			let era_length =
 				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
 
-			match ForceEra::<T>::get() {
-				// Will be set to `NotForcing` again if a new era has been triggered.
-				Forcing::ForceNew => (),
-				// Short circuit to `try_trigger_new_era`.
-				Forcing::ForceAlways => (),
-				// Only go to `try_trigger_new_era` if deadline reached.
-				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
-				_ => {
-					// Either `Forcing::ForceNone`,
-					// or `Forcing::NotForcing if era_length < T::SessionsPerEra::get()`.
-					return None;
+			log!(debug, "era_length: {:?}", era_length);
+			if era_length < T::SessionsPerEra::get() {
+				if era_length == T::SessionsPerEra::get() - 2 {
+					let message = PlannedEraSwitchPayload { era: current_era + 1 };
+
+					let res = T::UpwardMessagesInterface::submit(
+						&T::AccountId::default(),
+						PayloadType::PlannedEraSwitch,
+						&message.try_to_vec().unwrap(),
+					);
+					log!(debug, "planned era switch is sent: {:?}", res);
 				}
+				return None;
 			}
 
 			// New era.
-			let maybe_new_era_validators = Self::try_trigger_new_era(session_index);
-			if maybe_new_era_validators.is_some()
-				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
-			{
-				ForceEra::<T>::put(Forcing::NotForcing);
-			}
-
-			maybe_new_era_validators
+			Self::try_trigger_new_era(session_index)
 		} else {
 			// Set initial era.
 			log!(debug, "Starting the first era.");
@@ -911,7 +830,6 @@ impl<T: Config> Pallet<T> {
 			Self::bond_and_validate(who.clone(), *weight);
 		});
 
-		Self::deposit_event(Event::StakingElection);
 		Some(Self::trigger_new_era(start_session_index, validators))
 	}
 
@@ -974,14 +892,6 @@ impl<T: Config> Pallet<T> {
 					era_rewards.total += points;
 				}
 			});
-		}
-	}
-
-	/// Ensures that at the end of the current session there will be a new era.
-	fn ensure_new_era() {
-		match ForceEra::<T>::get() {
-			Forcing::ForceAlways | Forcing::ForceNew => (),
-			_ => ForceEra::<T>::put(Forcing::ForceNew),
 		}
 	}
 }

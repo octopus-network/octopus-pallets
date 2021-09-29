@@ -14,6 +14,7 @@ documentation = "https://docs.rs/pallet-octopus-support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+borsh = { default-features = false, version = "0.9.0" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "3.0.0", default-features = false }
 sp-runtime = { default-features = false, version = "3.0.0" }
@@ -22,6 +23,7 @@ sp-std = { default-features = false, version = "3.0.0" }
 [features]
 default = ["std"]
 std = [
+	"borsh/std",
 	"codec/std",
 	"frame-support/std",
 	"sp-runtime/std",

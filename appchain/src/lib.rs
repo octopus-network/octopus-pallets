@@ -6,7 +6,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
@@ -23,7 +23,7 @@ use frame_system::offchain::{
 	SigningTypes,
 };
 use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
-use pallet_octopus_support::types::PayloadType;
+use pallet_octopus_support::types::{BurnAssetPayload, LockPayload, PayloadType};
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::RuntimeAppPublic;
@@ -206,21 +206,6 @@ impl<T: SigningTypes> SignedPayload<T>
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct LockPayload {
-	pub sender: Vec<u8>,
-	pub receiver_id: Vec<u8>,
-	pub amount: u128,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct BurnAssetPayload {
-	pub token_id: Vec<u8>,
-	pub sender: Vec<u8>,
-	pub receiver_id: Vec<u8>,
-	pub amount: u128,
 }
 
 #[frame_support::pallet]

@@ -15,6 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 static_assertions = "1.1.0"
 serde = { version = "1.0.101", optional = true }
+borsh = { default-features = false, version = "0.9.0" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false }
 sp-io ={ version = "3.0.0", default-features = false }
@@ -49,6 +50,7 @@ hex = "0.4"
 default = ["std"]
 std = [
 	"serde",
+	"borsh/std",
 	"codec/std",
 	"sp-std/std",
 	"sp-io/std",
