@@ -891,17 +891,7 @@ pub mod pallet {
 
 	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
 		fn validators() -> Vec<(T::AccountId, u128)> {
-			let validators = <PlannedValidators<T>>::get();
-			let res = NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_seq.checked_add(1) {
-					*next_seq = v;
-				} else {
-					log!(info, "fact sequence overflow: {:?}", next_seq);
-					return Err(Error::<T>::NextFactSequenceOverflow.into());
-				}
-				Ok(().into())
-			});
-			validators
+			<PlannedValidators<T>>::get()
 		}
 	}
 }
