@@ -1,6 +1,12 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::string::{String, ToString};
+
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 #[cfg(test)]
@@ -21,8 +27,9 @@ use frame_support::{
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
-use pallet_octopus_support::types::{PayloadType, PlannedEraSwitchPayload};
+use pallet_octopus_support::types::{EraPayoutPayload, PayloadType, PlanNewEraPayload};
 use pallet_session::historical;
+use sp_runtime::traits::CheckedConversion;
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
 	traits::{Convert, SaturatedConversion},
@@ -233,6 +240,9 @@ pub mod pallet {
 		/// Number of sessions per era.
 		#[pallet::constant]
 		type SessionsPerEra: Get<SessionIndex>;
+
+		#[pallet::constant]
+		type BlocksPerEra: Get<u32>;
 
 		/// Number of eras that staked funds must remain bonded for.
 		#[pallet::constant]
@@ -459,6 +469,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// There are not claimed rewards for this validator.
 		NoClaimedRewards,
+		/// Amount overflow.
+		AmountOverflow,
 	}
 
 	#[pallet::hooks]
@@ -542,129 +554,6 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
 	}
 
-	fn do_payout_stakers(controller: T::AccountId, era: EraIndex) {
-		// // Validate input data
-		// let current_era = CurrentEra::<T>::get().ok_or(
-		// 	Error::<T>::InvalidEraToReward
-		// 		.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)),
-		// )?;
-		// let history_depth = Self::history_depth();
-		// ensure!(
-		// 	era <= current_era && era >= current_era.saturating_sub(history_depth),
-		// 	Error::<T>::InvalidEraToReward
-		// 		.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
-		// );
-
-		// // Note: if era has no reward to be claimed, era may be future. better not to update
-		// // `ledger.claimed_rewards` in this case.
-		// let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
-		// 	Error::<T>::InvalidEraToReward
-		// 		.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
-		// })?;
-
-		// let mut claimed_rewards =
-		// 	<ClaimedRewards<T>>::get(&controller).ok_or_else(|| Error::<T>::NoClaimedRewards)?;
-
-		// claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
-		// match claimed_rewards.binary_search(&era) {
-		// 	Ok(_) => Err(Error::<T>::AlreadyClaimed
-		// 		.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
-		// 	Err(pos) => claimed_rewards.insert(pos, era),
-		// }
-
-		// let exposure = <ErasStakersClipped<T>>::get(&era, &controller);
-
-		// /* Input data seems good, no errors allowed after this point */
-
-		// <ClaimedRewards<T>>::insert(&controller, claimed_rewards);
-
-		// // Get Era reward points. It has TOTAL and INDIVIDUAL
-		// // Find the fraction of the era reward that belongs to the validator
-		// // Take that fraction of the eras rewards to split to nominator and validator
-		// //
-		// // Then look at the validator, figure out the proportion of their reward
-		// // which goes to them and each of their nominators.
-
-		// let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		// let total_reward_points = era_reward_points.total;
-		// let validator_reward_points = era_reward_points
-		// 	.individual
-		// 	.get(&controller)
-		// 	.map(|points| *points)
-		// 	.unwrap_or_else(|| Zero::zero());
-
-		// // Nothing to do if they have no reward points.
-		// if validator_reward_points.is_zero() {
-		// 	return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
-		// }
-
-		// // This is the fraction of the total reward that the validator and the
-		// // nominators will get.
-		// let validator_total_reward_part =
-		// 	Perbill::from_rational(validator_reward_points, total_reward_points);
-
-		// // This is how much validator + nominators are entitled to.
-		// let validator_total_payout = validator_total_reward_part * era_payout;
-
-		// let validator_prefs = Self::eras_validator_prefs(&era, &controller);
-		// // Validator first gets a cut off the top.
-		// let validator_commission = COMMISSION;
-		// let validator_commission_payout = validator_commission * validator_total_payout;
-
-		// let validator_leftover_payout = validator_total_payout - validator_commission_payout;
-		// // Now let's calculate how this is split to the validator.
-		// let validator_exposure_part = Perbill::from_rational(exposure.own, exposure.total);
-		// let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
-
-		// // We can now make total validator payout:
-		// if let Some(imbalance) =
-		// 	Self::make_payout(&controller, validator_staking_payout + validator_commission_payout)
-		// {
-		// 	Self::deposit_event(Event::<T>::Reward(controller, imbalance.peek()));
-		// }
-
-		// // Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
-		// // always assumes at least a validator is paid out, so we do not need to count their payout op.
-		// let mut nominator_payout_count: u32 = 0;
-
-		// // Lets now calculate how this is split to the nominators.
-		// // Reward only the clipped exposures. Note this is not necessarily sorted.
-		// for nominator in exposure.others.iter() {
-		// 	let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure.total);
-
-		// 	let nominator_reward: BalanceOf<T> =
-		// 		nominator_exposure_part * validator_leftover_payout;
-		// 	// We can now make nominator payout:
-		// 	if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
-		// 		// Note: this logic does not count payouts for `RewardDestination::None`.
-		// 		nominator_payout_count += 1;
-		// 		Self::deposit_event(Event::<T>::Reward(nominator.who.clone(), imbalance.peek()));
-		// 	}
-		// }
-
-		// debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
-		// Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
-	}
-
-	/// Actually make a payment to a staker. This uses the currency's reward function
-	/// to pay the right payee for the given staker account.
-	fn make_payout(
-		controller: &T::AccountId,
-		amount: BalanceOf<T>,
-	) -> Option<PositiveImbalanceOf<T>> {
-		// let dest = Self::payee(controller);
-		// match dest {
-		// 	RewardDestination::Controller => {
-		// 		Some(T::Currency::deposit_creating(&controller, amount))
-		// 	}
-		// 	RewardDestination::Account(dest_account) => {
-		// 		Some(T::Currency::deposit_creating(&dest_account, amount))
-		// 	}
-		// 	RewardDestination::None => None,
-		// }
-		None
-	}
-
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
@@ -681,14 +570,14 @@ impl<T: Config> Pallet<T> {
 			log!(debug, "era_length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				if era_length == T::SessionsPerEra::get() - 2 {
-					let message = PlannedEraSwitchPayload { era: current_era + 1 };
+					let message = PlanNewEraPayload { new_planned_era: current_era + 1 };
 
 					let res = T::UpwardMessagesInterface::submit(
 						&T::AccountId::default(),
-						PayloadType::PlannedEraSwitch,
+						PayloadType::PlanNewEra,
 						&message.try_to_vec().unwrap(),
 					);
-					log!(debug, "planned era switch is sent: {:?}", res);
+					log!(debug, "plan new era is sent: {:?}", res);
 				}
 				return None;
 			}
@@ -784,6 +673,42 @@ impl<T: Config> Pallet<T> {
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
+			let validators = T::SessionInterface::validators();
+			// TODO
+			let expect_points = T::BlocksPerEra::get() * 20 / validators.len() as u32 * 70 / 100;
+
+			let era_reward_points = <ErasRewardPoints<T>>::get(&active_era.index);
+			let total_reward_points = era_reward_points.total;
+			let exclude_validators = era_reward_points
+				.individual
+				.into_iter()
+				.filter_map(|(validator, points)| {
+					if points < expect_points {
+						let prefix = String::from("0x");
+						let hex_validator = prefix + &hex::encode(validator.encode());
+						Some(hex_validator)
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<String>>();
+
+			// TODO
+			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			T::Currency::deposit_creating(&T::AccountId::default(), amount);
+
+			let message = EraPayoutPayload {
+				era: active_era.index,
+				payout: validator_payout,
+				exclude: exclude_validators,
+			};
+
+			let res = T::UpwardMessagesInterface::submit(
+				&T::AccountId::default(),
+				PayloadType::EraPayout,
+				&message.try_to_vec().unwrap(),
+			);
+			log!(debug, "era payout is sent: {:?}", res);
 		}
 	}
 
