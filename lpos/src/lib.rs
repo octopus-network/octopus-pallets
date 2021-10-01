@@ -171,27 +171,9 @@ impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet
 	fn active_total_stake() -> Option<u128> {
 		Self::active_era().map(|active_era| Self::eras_total_stake(active_era.index))
 	}
-}
 
-/// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub enum Forcing {
-	/// Not forcing anything - just let whatever happen.
-	NotForcing,
-	/// Force a new era, then reset to `NotForcing` as soon as it is done.
-	/// Note that this will force to trigger an election until a new era is triggered, if the
-	/// election failed, the next session end will trigger a new election again, until success.
-	ForceNew,
-	/// Avoid a new era indefinitely.
-	ForceNone,
-	/// Force a new era at the end of all sessions indefinitely.
-	ForceAlways,
-}
-
-impl Default for Forcing {
-	fn default() -> Self {
-		Forcing::NotForcing
+	fn current_era() -> u32 {
+		Self::current_era().map_or(0, |v| v)
 	}
 }
 
@@ -275,11 +257,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn history_depth)]
 	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
-
-	/// The ledger of a (bonded) stash.
-	#[pallet::storage]
-	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, u128>;
 
 	/// The current era index.
 	///
@@ -549,11 +526,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn bond_and_validate(controller: <T as frame_system::Config>::AccountId, value: u128) {
-		<Ledger<T>>::insert(&controller, value);
-		Self::deposit_event(Event::<T>::Bonded(controller.clone(), value));
-	}
-
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
@@ -662,11 +634,7 @@ impl<T: Config> Pallet<T> {
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
-
 			let _era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
-			let _staked = Self::eras_total_stake(&active_era.index);
-			let _issuance = T::Currency::total_issuance();
-
 			let validator_payout = Self::era_payout();
 
 			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
@@ -675,10 +643,9 @@ impl<T: Config> Pallet<T> {
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
 			let validators = T::SessionInterface::validators();
 			// TODO
-			let expect_points = T::BlocksPerEra::get() * 20 / validators.len() as u32 * 70 / 100;
+			let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
 
 			let era_reward_points = <ErasRewardPoints<T>>::get(&active_era.index);
-			let total_reward_points = era_reward_points.total;
 			let exclude_validators = era_reward_points
 				.individual
 				.into_iter()
@@ -749,11 +716,6 @@ impl<T: Config> Pallet<T> {
 	fn try_trigger_new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		let validators = T::ValidatorsProvider::validators();
 		log!(info, "Next validator set: {:?}", validators);
-
-		<Ledger<T>>::remove_all(None);
-		validators.iter().for_each(|(who, weight)| {
-			Self::bond_and_validate(who.clone(), *weight);
-		});
 
 		Some(Self::trigger_new_era(start_session_index, validators))
 	}
@@ -898,7 +860,7 @@ where
 {
 	fn note_author(author: T::AccountId) {
 		log!(info, "note_author: {:?}", author);
-		Self::reward_by_ids(vec![(author, 20)])
+		Self::reward_by_ids(vec![(author, 1)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		log!(
@@ -908,7 +870,7 @@ where
 			_age,
 			<pallet_authorship::Pallet<T>>::author()
 		);
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 1), (author, 1)])
 	}
 }
 
@@ -951,8 +913,7 @@ where
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) -> Weight {
-		let mut consumed_weight: Weight = 0;
-		consumed_weight
+		0
 	}
 }
 

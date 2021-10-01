@@ -8,6 +8,8 @@ pub trait LposInterface<AccountId> {
 	fn active_stake_of(who: &AccountId) -> u128;
 
 	fn active_total_stake() -> Option<u128>;
+
+	fn current_era() -> u32;
 }
 
 /// Something that can provide a set of validators for the next era.
