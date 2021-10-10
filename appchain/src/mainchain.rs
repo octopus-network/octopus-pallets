@@ -16,9 +16,9 @@ struct ResponseResult {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Fetch the facts of a specified appchain from relay contract.
+	/// Fetch the facts of a specified appchain from anchor contract.
 	pub(super) fn fetch_facts(
-		relay_contract: Vec<u8>,
+		anchor_contract: Vec<u8>,
 		appchain_id: Vec<u8>,
 		start: u32,
 		limit: u32,
@@ -48,7 +48,7 @@ impl<T: Config> Pallet<T> {
 				"finality": "final",
 				"account_id": ""#
 			.to_vec();
-		body.extend(&relay_contract);
+		body.extend(&anchor_contract);
 		body.extend(
 			br#"",
 				"method_name": "get_facts",
@@ -62,7 +62,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://near-rpc.testnet.octopus.network")
+			.url("https://rpc.testnet.near.org")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can

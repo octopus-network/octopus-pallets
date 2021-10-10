@@ -22,14 +22,15 @@ use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
-	traits::{Currency, EstimateNextNewSession, Get, OnUnbalanced, UnixTime},
+	traits::{Currency, Get, OnUnbalanced, UnixTime},
 	weights::Weight,
+	PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
 use pallet_octopus_support::types::{EraPayoutPayload, PayloadType, PlanNewEraPayload};
 use pallet_session::historical;
-use sp_runtime::traits::CheckedConversion;
+use sp_runtime::traits::{AccountIdConversion, CheckedConversion};
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
 	traits::{Convert, SaturatedConversion},
@@ -210,7 +211,7 @@ pub mod pallet {
 		/// is not used.
 		type UnixTime: UnixTime;
 
-		/// Something that provides the election functionality.
+		/// Something that provides the next validators.
 		type ValidatorsProvider: ValidatorsProvider<Self::AccountId>;
 
 		/// The overarching event type.
@@ -233,13 +234,12 @@ pub mod pallet {
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: self::SessionInterface<Self::AccountId>;
 
-		/// Something that can estimate the next session change, accurately or as a best effort guess.
-		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
-
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
+
+		type PalletId: Get<PalletId>;
 	}
 
 	#[pallet::type_value]
@@ -526,6 +526,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn account_id() -> T::AccountId {
+		T::PalletId::get().into_account()
+	}
+
 	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
@@ -662,7 +666,7 @@ impl<T: Config> Pallet<T> {
 
 			// TODO
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
-			T::Currency::deposit_creating(&T::AccountId::default(), amount);
+			T::Currency::deposit_creating(&Self::account_id(), amount);
 
 			let message = EraPayoutPayload {
 				era: active_era.index,
@@ -709,10 +713,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Potentially plan a new era.
 	///
-	/// Get election result from `T::ElectionProvider`.
-	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
-	///
-	/// In case a new era is planned, the new validator set is returned.
+	/// Get planned validator set from `T::ValidatorsProvider`.
 	fn try_trigger_new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		let validators = T::ValidatorsProvider::validators();
 		log!(info, "Next validator set: {:?}", validators);
@@ -720,7 +721,7 @@ impl<T: Config> Pallet<T> {
 		Some(Self::trigger_new_era(start_session_index, validators))
 	}
 
-	/// Process the output of the election.
+	/// Process the output of the validators provider.
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
@@ -729,7 +730,6 @@ impl<T: Config> Pallet<T> {
 	) -> Vec<T::AccountId> {
 		let elected_stashes = validators.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
-		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: u128 = 0;
 		validators.into_iter().for_each(|(who, weight)| {
 			total_stake = total_stake.saturating_add(weight);
@@ -760,15 +760,10 @@ impl<T: Config> Pallet<T> {
 		ErasStartSessionIndex::<T>::remove(era_index);
 	}
 
-	/// Add reward points to validators using their stash account ID.
-	///
-	/// Validators are keyed by stash account ID and must be in the current elected set.
+	/// Add reward points to validators.
 	///
 	/// For each element in the iterator the given number of points in u32 is added to the
 	/// validator, thus duplicates are handled.
-	///
-	/// At the end of the era each the total payout will be distributed among validator
-	/// relatively to their points.
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
@@ -851,8 +846,8 @@ impl<T: Config> historical::SessionManager<T::AccountId, u128> for Pallet<T> {
 }
 
 /// Add reward points to block authors:
-/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
-/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
+/// * 1 points to the block producer for producing a (non-uncle) block in the relay chain,
+/// * 1 points to the block producer for each reference to a previously unreferenced uncle, and
 /// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where

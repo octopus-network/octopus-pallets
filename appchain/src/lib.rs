@@ -15,8 +15,7 @@ use frame_support::{
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		OneSessionHandler,
 	},
-	transactional,
-	{sp_runtime::traits::AccountIdConversion, PalletId},
+	transactional, PalletId,
 };
 use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
@@ -33,7 +32,7 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{CheckedConversion, IdentifyAccount, StaticLookup},
+	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -267,8 +266,8 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForRelayContract() -> Vec<u8> {
-		b"octopus-relay.testnet".to_vec()
+	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
+		b"octopus-anchor.testnet".to_vec()
 	}
 
 	#[pallet::storage]
@@ -277,9 +276,9 @@ pub mod pallet {
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAppchainId>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn relay_contract)]
-	pub(super) type RelayContract<T: Config> =
-		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
+	#[pallet::getter(fn anchor_contract)]
+	pub(super) type AnchorContract<T: Config> =
+		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
 	#[pallet::storage]
 	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
@@ -302,7 +301,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
-		pub relay_contract: String,
+		pub anchor_contract: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 		pub validators: Vec<(T::AccountId, u128)>,
 	}
@@ -312,7 +311,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				appchain_id: String::new(),
-				relay_contract: String::new(),
+				anchor_contract: String::new(),
 				asset_id_by_name: Vec::new(),
 				validators: Vec::new(),
 			}
@@ -323,7 +322,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			<AppchainId<T>>::put(self.appchain_id.as_bytes());
-			<RelayContract<T>>::put(self.relay_contract.as_bytes());
+			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
@@ -340,9 +339,6 @@ pub mod pallet {
 	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event generated when a new voter votes on a validator set.
-		/// \[validator_set, voter\]
-		NewVoterFor(ValidatorSet<T::AccountId>, T::AccountId),
 		Locked(T::AccountId, Vec<u8>, BalanceOf<T>),
 		Unlocked(Vec<u8>, T::AccountId, BalanceOf<T>),
 		AssetMinted(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
@@ -352,8 +348,6 @@ pub mod pallet {
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// No CurrentValidatorSet.
-		NoCurrentValidatorSet,
 		/// The set id of new validator set was wrong.
 		WrongSetId,
 		/// Must be a validator.
@@ -416,12 +410,12 @@ pub mod pallet {
 					return;
 				}
 
-				let relay_contract = Self::relay_contract();
+				let anchor_contract = Self::anchor_contract();
 				// TODO: move limit to trait
 				let limit = 10;
 				if let Err(e) = Self::observing_mainchain(
 					block_number,
-					relay_contract,
+					anchor_contract,
 					appchain_id.clone(),
 					limit,
 				) {
@@ -632,12 +626,6 @@ pub mod pallet {
 					}
 				});
 
-			// The result of `mutate` call will give us a nested `Result` type.
-			// The first one matches the return of the closure passed to `mutate`, i.e.
-			// if we return `Err` from the closure, we get an `Err` here.
-			// In case we return `Ok`, here we will have another (inner) `Result` that indicates
-			// if the value has been set to the storage correctly - i.e. if it wasn't
-			// written to in the meantime.
 			match res {
 				// The value has been set correctly, which means we can safely send a transaction now.
 				Ok(_block_number) => true,
@@ -654,7 +642,7 @@ pub mod pallet {
 
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
-			relay_contract: Vec<u8>,
+			anchor_contract: Vec<u8>,
 			appchain_id: Vec<u8>,
 			limit: u32,
 		) -> Result<(), &'static str> {
@@ -666,8 +654,9 @@ pub mod pallet {
 			// Make an external HTTP request to fetch facts from main chain.
 			// Note this call will block until response is received.
 
-			let mut obs = Self::fetch_facts(relay_contract, appchain_id, next_fact_sequence, limit)
-				.map_err(|_| "Failed to fetch facts")?;
+			let mut obs =
+				Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
+					.map_err(|_| "Failed to fetch facts")?;
 
 			if obs.len() == 0 {
 				return Ok(());
