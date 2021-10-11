@@ -33,6 +33,8 @@ sp-core = { default-features = false, version = "3.0.0" }
 sp-io = { default-features = false, version = "3.0.0" }
 sp-runtime = { default-features = false, version = "3.0.0" }
 sp-std = { default-features = false, version = "3.0.0" }
+pallet-octopus-support = { default-features = false, path = "../support" }
+pallet-octopus-upward-messages = { default-features = false, path = "../upward-messages" }
 
 [dev-dependencies]
 sp-keystore = { default-features = false, version = "0.9.0" }
@@ -58,6 +60,8 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-octopus-support/std",
+	"pallet-octopus-upward-messages/std",
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]

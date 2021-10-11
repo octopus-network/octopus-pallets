@@ -1,0 +1,31 @@
+[package]
+name = "pallet-octopus-support"
+version = "3.0.0-pre.0"
+edition = "2018"
+authors = ["Octopus Network <hi@oct.network>"]
+license = "Apache-2.0"
+homepage = "https://oct.network"
+repository = "https://github.com/octopus-network/octopus-pallets.git"
+description = "Support code for octopus pallets."
+readme = "README.md"
+documentation = "https://docs.rs/pallet-octopus-support"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+borsh = { default-features = false, version = "0.9.0" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-support = { version = "3.0.0", default-features = false }
+sp-runtime = { default-features = false, version = "3.0.0" }
+sp-std = { default-features = false, version = "3.0.0" }
+
+[features]
+default = ["std"]
+std = [
+	"borsh/std",
+	"codec/std",
+	"frame-support/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]

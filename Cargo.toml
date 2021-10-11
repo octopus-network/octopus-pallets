@@ -5,6 +5,6 @@ members = [
 	"appchain",
 	"ibc",
 	"lpos",
-	"lpos/reward-curve",
-	"lpos/reward-fn",
+	"support",
+	"upward-messages",
 ]

@@ -6,8 +6,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-use crate::traits::LposInterface;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
@@ -16,16 +15,16 @@ use frame_support::{
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		OneSessionHandler,
 	},
-	transactional,
-	{sp_runtime::traits::AccountIdConversion, PalletId},
+	transactional, PalletId,
 };
 use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
+use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
+use pallet_octopus_support::types::{BurnAssetPayload, LockPayload, PayloadType};
 use serde::{de, Deserialize, Deserializer};
-use sp_core::{crypto::KeyTypeId, H256};
-use sp_io::offchain_index;
+use sp_core::crypto::KeyTypeId;
 use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
@@ -33,8 +32,8 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{CheckedConversion, Hash, IdentifyAccount, Keccak256, StaticLookup},
-	DigestItem, RuntimeDebug,
+	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -54,7 +53,6 @@ macro_rules! log {
 }
 
 mod mainchain;
-pub mod traits;
 
 #[cfg(test)]
 mod mock;
@@ -209,34 +207,6 @@ impl<T: SigningTypes> SignedPayload<T>
 	}
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct LockPayload {
-	pub sender: Vec<u8>,
-	pub receiver_id: Vec<u8>,
-	pub amount: u128,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct BurnAssetPayload {
-	pub token_id: Vec<u8>,
-	pub sender: Vec<u8>,
-	pub receiver_id: Vec<u8>,
-	pub amount: u128,
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum PayloadType {
-	Lock,
-	BurnAsset,
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Message {
-	nonce: u64,
-	payload_type: PayloadType,
-	payload: Vec<u8>,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -265,7 +235,8 @@ pub mod pallet {
 			Balance = AssetBalance,
 		>;
 
-		type LposInterface: traits::LposInterface<Self::AccountId>;
+		type LposInterface: LposInterface<Self::AccountId>;
+		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		// Configuration parameters
 
@@ -295,8 +266,8 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForRelayContract() -> Vec<u8> {
-		b"octopus-relay.testnet".to_vec()
+	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
+		b"octopus-anchor.testnet".to_vec()
 	}
 
 	#[pallet::storage]
@@ -305,13 +276,12 @@ pub mod pallet {
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAppchainId>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn relay_contract)]
-	pub(super) type RelayContract<T: Config> =
-		StorageValue<_, Vec<u8>, ValueQuery, DefaultForRelayContract>;
+	#[pallet::getter(fn anchor_contract)]
+	pub(super) type AnchorContract<T: Config> =
+		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
 	#[pallet::storage]
-	pub type PlannedValidatorSet<T: Config> =
-		StorageValue<_, ValidatorSet<T::AccountId>, OptionQuery>;
+	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -328,17 +298,12 @@ pub mod pallet {
 	pub type AssetIdByName<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
 
-	#[pallet::storage]
-	pub type MessageQueue<T: Config> = StorageValue<_, Vec<Message>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
-		pub relay_contract: String,
+		pub anchor_contract: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
+		pub validators: Vec<(T::AccountId, u128)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -346,8 +311,9 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				appchain_id: String::new(),
-				relay_contract: String::new(),
+				anchor_contract: String::new(),
 				asset_id_by_name: Vec::new(),
+				validators: Vec::new(),
 			}
 		}
 	}
@@ -356,11 +322,12 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			<AppchainId<T>>::put(self.appchain_id.as_bytes());
-			<RelayContract<T>>::put(self.relay_contract.as_bytes());
+			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
 			}
+			<PlannedValidators<T>>::put(self.validators.clone());
 		}
 	}
 
@@ -372,9 +339,6 @@ pub mod pallet {
 	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event generated when a new voter votes on a validator set.
-		/// \[validator_set, voter\]
-		NewVoterFor(ValidatorSet<T::AccountId>, T::AccountId),
 		Locked(T::AccountId, Vec<u8>, BalanceOf<T>),
 		Unlocked(Vec<u8>, T::AccountId, BalanceOf<T>),
 		AssetMinted(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
@@ -384,29 +348,22 @@ pub mod pallet {
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// No CurrentValidatorSet.
-		NoCurrentValidatorSet,
 		/// The set id of new validator set was wrong.
 		WrongSetId,
 		/// Must be a validator.
 		NotValidator,
-		/// Nonce overflow.
-		NonceOverflow,
 		/// Amount overflow.
 		AmountOverflow,
 		/// Next fact sequence overflow.
 		NextFactSequenceOverflow,
 		/// Wrong Asset Id.
 		WrongAssetId,
+		/// Invalid active total stake.
+		InvalidActiveTotalStake,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Initialization
-		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
-			Self::commit()
-		}
-
 		/// Offchain Worker entry point.
 		///
 		/// By implementing `fn offchain_worker` you declare a new offchain worker.
@@ -436,7 +393,7 @@ pub mod pallet {
 					>>::GenericPublic::from(key);
 					let public: <T as SigningTypes>::Public = generic_public.into();
 
-					let val_id = T::LposInterface::in_current_validator_set(
+					let val_id = T::LposInterface::is_active_validator(
 						KEY_TYPE,
 						&public.clone().into_account().encode(),
 					);
@@ -453,12 +410,12 @@ pub mod pallet {
 					return;
 				}
 
-				let relay_contract = Self::relay_contract();
+				let anchor_contract = Self::anchor_contract();
 				// TODO: move limit to trait
 				let limit = 10;
 				if let Err(e) = Self::observing_mainchain(
 					block_number,
-					relay_contract,
+					anchor_contract,
 					appchain_id.clone(),
 					limit,
 				) {
@@ -515,7 +472,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
-			let val_id = T::LposInterface::in_current_validator_set(
+			let val_id = T::LposInterface::is_active_validator(
 				KEY_TYPE,
 				&payload.public.clone().into_account().encode(),
 			);
@@ -574,7 +531,11 @@ pub mod pallet {
 				amount: amount_wrapped,
 			};
 
-			Self::submit(&who, PayloadType::Lock, &message.try_to_vec().unwrap())?;
+			T::UpwardMessagesInterface::submit(
+				&who,
+				PayloadType::Lock,
+				&message.try_to_vec().unwrap(),
+			)?;
 			Self::deposit_event(Event::Locked(who, receiver_id, amount));
 
 			Ok(().into())
@@ -621,7 +582,11 @@ pub mod pallet {
 				amount,
 			};
 
-			Self::submit(&sender, PayloadType::BurnAsset, &message.try_to_vec().unwrap())?;
+			T::UpwardMessagesInterface::submit(
+				&sender,
+				PayloadType::BurnAsset,
+				&message.try_to_vec().unwrap(),
+			)?;
 			Self::deposit_event(Event::AssetBurned(asset_id, sender, receiver_id, amount));
 
 			Ok(().into())
@@ -661,12 +626,6 @@ pub mod pallet {
 					}
 				});
 
-			// The result of `mutate` call will give us a nested `Result` type.
-			// The first one matches the return of the closure passed to `mutate`, i.e.
-			// if we return `Err` from the closure, we get an `Err` here.
-			// In case we return `Ok`, here we will have another (inner) `Result` that indicates
-			// if the value has been set to the storage correctly - i.e. if it wasn't
-			// written to in the meantime.
 			match res {
 				// The value has been set correctly, which means we can safely send a transaction now.
 				Ok(_block_number) => true,
@@ -683,7 +642,7 @@ pub mod pallet {
 
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
-			relay_contract: Vec<u8>,
+			anchor_contract: Vec<u8>,
 			appchain_id: Vec<u8>,
 			limit: u32,
 		) -> Result<(), &'static str> {
@@ -695,8 +654,9 @@ pub mod pallet {
 			// Make an external HTTP request to fetch facts from main chain.
 			// Note this call will block until response is received.
 
-			let mut obs = Self::fetch_facts(relay_contract, appchain_id, next_fact_sequence, limit)
-				.map_err(|_| "Failed to fetch facts")?;
+			let mut obs =
+				Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
+					.map_err(|_| "Failed to fetch facts")?;
 
 			if obs.len() == 0 {
 				return Ok(());
@@ -771,10 +731,11 @@ pub mod pallet {
 					log!(info, "{:?} submits a duplicate ocw tx", validator_id);
 				}
 			});
-			let total_stake: u128 = T::LposInterface::total_stake();
+			let total_stake: u128 = T::LposInterface::active_total_stake()
+				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
 			let stake: u128 = <Observing<T>>::get(&observation)
 				.iter()
-				.map(|v| T::LposInterface::stake_of(v))
+				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
 
 			//
@@ -792,7 +753,9 @@ pub mod pallet {
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
-						<PlannedValidatorSet<T>>::put(val_set);
+						let validators: Vec<(T::AccountId, u128)> =
+							val_set.validators.iter().map(|v| (v.id.clone(), v.weight)).collect();
+						<PlannedValidators<T>>::put(validators);
 					}
 					Observation::Burn(event) => {
 						if let Err(error) =
@@ -887,58 +850,6 @@ pub mod pallet {
 				.propagate(true)
 				.build()
 		}
-
-		fn submit(
-			_who: &T::AccountId,
-			payload_type: PayloadType,
-			payload: &[u8],
-		) -> DispatchResultWithPostInfo {
-			Nonce::<T>::try_mutate(|nonce| -> DispatchResultWithPostInfo {
-				if let Some(v) = nonce.checked_add(1) {
-					*nonce = v;
-				} else {
-					return Err(Error::<T>::NonceOverflow.into());
-				}
-
-				MessageQueue::<T>::append(Message {
-					nonce: *nonce,
-					payload_type,
-					payload: payload.to_vec(),
-				});
-				Ok(().into())
-			})
-		}
-
-		fn commit() -> Weight {
-			let messages: Vec<Message> = MessageQueue::<T>::take();
-			if messages.is_empty() {
-				return 0;
-			}
-
-			let commitment_hash = Self::make_commitment_hash(&messages);
-
-			<frame_system::Pallet<T>>::deposit_log(DigestItem::Other(
-				commitment_hash.as_bytes().to_vec(),
-			));
-
-			let key = Self::make_offchain_key(commitment_hash);
-			offchain_index::set(&*key, &messages.encode());
-
-			0
-		}
-
-		fn make_commitment_hash(messages: &[Message]) -> H256 {
-			let messages: Vec<_> = messages
-				.iter()
-				.map(|message| (message.nonce, message.payload.clone()))
-				.collect();
-			let input = messages.encode();
-			Keccak256::hash(&input)
-		}
-
-		fn make_offchain_key(hash: H256) -> Vec<u8> {
-			(b"commitment", hash).encode()
-		}
 	}
 
 	impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -967,48 +878,9 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> traits::StakersProvider<T::AccountId> for Pallet<T> {
-		// TODO: delegators
-		fn stakers() -> Vec<(T::AccountId, u128)> {
-			let mut staked = vec![];
-			let next_val_set = <PlannedValidatorSet<T>>::get();
-			match next_val_set {
-				Some(planned_validator_set) => {
-					// TODO
-					let res = NextFactSequence::<T>::try_mutate(
-						|next_seq| -> DispatchResultWithPostInfo {
-							if let Some(v) = next_seq.checked_add(1) {
-								*next_seq = v;
-							} else {
-								log!(info, "fact sequence overflow: {:?}", next_seq);
-								return Err(Error::<T>::NextFactSequenceOverflow.into());
-							}
-							Ok(().into())
-						},
-					);
-
-					// TODO: ugly
-					if let Ok(_) = res {
-						<PlannedValidatorSet<T>>::kill();
-						log!(
-							info,
-							"validator set changed to: {:#?}",
-							planned_validator_set.clone()
-						);
-						staked = planned_validator_set
-							.clone()
-							.validators
-							.into_iter()
-							.map(|vals| (vals.id, vals.weight))
-							.collect();
-					}
-				}
-				None => {
-					log!(info, "validator set has't changed");
-				}
-			}
-
-			staked
+	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
+		fn validators() -> Vec<(T::AccountId, u128)> {
+			<PlannedValidators<T>>::get()
 		}
 	}
 }
