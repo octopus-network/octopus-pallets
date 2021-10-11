@@ -298,12 +298,17 @@ pub mod pallet {
 	pub type AssetIdByName<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn premined_amount)]
+	pub type PreminedAmount<T> = StorageValue<_, u128, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
 		pub anchor_contract: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 		pub validators: Vec<(T::AccountId, u128)>,
+		pub premined_amount: u128,
 	}
 
 	#[cfg(feature = "std")]
@@ -314,6 +319,7 @@ pub mod pallet {
 				anchor_contract: String::new(),
 				asset_id_by_name: Vec::new(),
 				validators: Vec::new(),
+				premined_amount: 0,
 			}
 		}
 	}
@@ -328,6 +334,15 @@ pub mod pallet {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
 			}
 			<PlannedValidators<T>>::put(self.validators.clone());
+
+			let min = T::Currency::minimum_balance();
+			let amount =
+				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			if amount >= min {
+				let account_id = <Pallet<T>>::account_id();
+				T::Currency::make_free_balance_be(&account_id, amount);
+				<PreminedAmount<T>>::put(self.premined_amount);
+			}
 		}
 	}
 
