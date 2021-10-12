@@ -515,6 +515,14 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		// Force set planned validators with sudo permissions.
+		#[pallet::weight(0)]
+        pub fn force_set_planned_validators(origin: OriginFor<T>, validators: Vec<(T::AccountId, u128)>) -> DispatchResult {
+            ensure_root(origin)?;
+			<PlannedValidators<T>>::put(validators);
+            Ok(())
+        }
+
 		// cross chain transfer
 
 		// There are 2 kinds of assets:
