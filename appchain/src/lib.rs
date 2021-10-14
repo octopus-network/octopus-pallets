@@ -302,6 +302,10 @@ pub mod pallet {
 	#[pallet::getter(fn premined_amount)]
 	pub type PreminedAmount<T> = StorageValue<_, u128, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn pallet_account)]
+	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
@@ -335,14 +339,16 @@ pub mod pallet {
 			}
 			<PlannedValidators<T>>::put(self.validators.clone());
 
+			let account_id = <Pallet<T>>::account_id();
 			let min = T::Currency::minimum_balance();
 			let amount =
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			if amount >= min {
-				let account_id = <Pallet<T>>::account_id();
 				T::Currency::make_free_balance_be(&account_id, amount);
 				<PreminedAmount<T>>::put(self.premined_amount);
 			}
+
+			<PalletAccount<T>>::put(account_id);
 		}
 	}
 
