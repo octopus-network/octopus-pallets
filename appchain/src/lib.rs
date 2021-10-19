@@ -306,6 +306,12 @@ pub mod pallet {
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
+	#[pallet::storage]
+    pub type NextSubmitObsIndex<T> = StorageValue<_, u32>;
+
+	#[pallet::storage]
+    pub type SubmitSequenceNumber<T> = StorageValue<_, u32>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
@@ -400,6 +406,7 @@ pub mod pallet {
 
 			// Only communicate with mainchain if we are a potential validator and the appchain_id is not an empty string.
 			let appchain_id = Self::appchain_id();
+			let mut obser_id: Option<T::AccountId> = None;
 			if sp_io::offchain::is_validator() && appchain_id.len() > 0 {
 				let mut found = false;
 				for key in <T::AuthorityId as AppCrypto<
@@ -421,13 +428,15 @@ pub mod pallet {
 					log!(debug, "Check if in current set {:?}", val_id);
 					if val_id.is_some() {
 						found = true;
+						obser_id = val_id;
 					}
 				}
 				if !found {
 					log!(debug, "Skipping communication with mainchain. Not a validator.");
 					return;
 				}
-				if !Self::should_send(block_number) {
+				let obser_id = obser_id.unwrap();
+				if !Self::should_send(obser_id) {
 					return;
 				}
 
@@ -630,45 +639,33 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn should_send(block_number: T::BlockNumber) -> bool {
-			/// A friendlier name for the error that is going to be returned in case we are in the grace
-			/// period.
-			const RECENTLY_SENT: () = ();
+		fn should_send(val_id: T::AccountId) -> bool {
+			match <NextSubmitObsIndex<T>>::try_get() {
+				Ok(next_index) => {
+            		log!(debug, "next_index: {}, current_era: {}", next_index, T::LposInterface::current_era());
+            		if next_index > T::LposInterface::current_era() {
+            		    return false;
+            		}
+				},
+				Err(_) => { return true; },	
+			}
 
-			// Start off by creating a reference to Local Storage value.
-			// Since the local storage is common for all offchain workers, it's a good practice
-			// to prepend your entry with the module name.
-			let val = StorageValueRef::persistent(b"octopus_appchain::last_send");
-			// The Local Storage is persisted and shared between runs of the offchain workers,
-			// and offchain workers may run concurrently. We can use the `mutate` function, to
-			// write a storage entry in an atomic fashion. Under the hood it uses `compare_and_set`
-			// low-level method of local storage API, which means that only one worker
-			// will be able to "acquire a lock" and send a transaction if multiple workers
-			// happen to be executed concurrently.
-			let res =
-				val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
-					match last_send {
-						// If we already have a value in storage and the block number is recent enough
-						// we avoid sending another transaction at this time.
-						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
-							Err(RECENTLY_SENT)
+			match <SubmitSequenceNumber<T>>::try_get() {
+				Ok(sequence_number) => {
+					let observations = <Observations<T>>::get(sequence_number);
+            		log!(debug, "observations: {:#?},\n val_id: {:#?}", observations, val_id);
+
+					let mut found = false;
+					for observation in observations.iter() {
+						if <Observing<T>>::get(&observation).iter().any(|o| o == &val_id) {
+            				log!(debug, "obser: {:#?}", <Observing<T>>::get(&observation));
+							found = true;
+							break;
 						}
-						// In every other case we attempt to acquire the lock and send a transaction.
-						_ => Ok(block_number),
 					}
-				});
-
-			match res {
-				// The value has been set correctly, which means we can safely send a transaction now.
-				Ok(_block_number) => true,
-				// We are in the grace period, we should not send a transaction this time.
-				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
-				// We wanted to send a transaction, but failed to write the block number (acquire a
-				// lock). This indicates that another offchain worker that was running concurrently
-				// most likely executed the same logic and succeeded at writing to storage.
-				// Thus we don't really want to send the transaction, knowing that the other run
-				// already did.
-				Err(MutateStorageError::ConcurrentModification(_)) => false,
+					return !found;
+				},
+				Err(_) => { return true; }
 			}
 		}
 
@@ -781,6 +778,7 @@ pub mod pallet {
 			//
 
 			let seq_num = observation.sequence_number();
+    		<SubmitSequenceNumber<T>>::put(seq_num);
 
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
@@ -788,6 +786,7 @@ pub mod pallet {
 						let validators: Vec<(T::AccountId, u128)> =
 							val_set.validators.iter().map(|v| (v.id.clone(), v.weight)).collect();
 						<PlannedValidators<T>>::put(validators);
+						log!(debug, "️️️put validators to PlannedValidators, current era: {:?}", T::LposInterface::current_era());
 					}
 					Observation::Burn(event) => {
 						if let Err(error) =
@@ -821,6 +820,10 @@ pub mod pallet {
 						}
 					}
 				}
+
+				let next_index = T::LposInterface::current_era().checked_add(1).unwrap_or(0);
+                <NextSubmitObsIndex<T>>::put(next_index);
+    			<SubmitSequenceNumber<T>>::kill();
 
 				let obs = <Observations<T>>::get(seq_num);
 				for o in obs.iter() {
