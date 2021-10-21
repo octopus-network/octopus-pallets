@@ -100,12 +100,23 @@ type AssetIdOf<T> =
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Validator<AccountId> {
 	/// The validator's id.
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(deserialize_with = "deserialize_from_hex_str1")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	id: AccountId,
-	/// The weight of this validator in main chain's staking system.
+	validator_id: AccountId,
+	/// The total stake of this validator in mainchain's staking system.
 	#[serde(deserialize_with = "deserialize_from_str")]
-	weight: u128,
+	total_stake: u128,
+}
+
+fn deserialize_from_hex_str1<'de, S, D>(deserializer: D) -> Result<S, D::Error>
+where
+	S: Decode,
+	D: Deserializer<'de>,
+{
+	let account_id_str: String = Deserialize::deserialize(deserializer)?;
+	let account_id_hex =
+		hex::decode(&account_id_str[..]).map_err(|e| de::Error::custom(e.to_string()))?;
+	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -117,18 +128,6 @@ where
 	let account_id_hex =
 		hex::decode(&account_id_str[2..]).map_err(|e| de::Error::custom(e.to_string()))?;
 	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
-}
-
-/// The validator set of appchain.
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct ValidatorSet<AccountId> {
-	/// The sequence number of this fact on the mainchain.
-	#[serde(rename = "seq_num")]
-	sequence_number: u32,
-	set_id: u32,
-	/// Validators in this set.
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	validators: Vec<Validator<AccountId>>,
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -174,7 +173,7 @@ where
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum Observation<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	UpdateValidatorSet(ValidatorSet<AccountId>),
+	UpdateValidatorSet((u32, Vec<Validator<AccountId>>)),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
@@ -184,7 +183,7 @@ pub enum Observation<AccountId> {
 impl<AccountId> Observation<AccountId> {
 	fn sequence_number(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet(val_set) => val_set.sequence_number,
+			Observation::UpdateValidatorSet((next_era, _)) => next_era.clone(), // TODO: julian
 			Observation::LockAsset(event) => event.sequence_number,
 			Observation::Burn(event) => event.sequence_number,
 		}
@@ -427,16 +426,18 @@ pub mod pallet {
 					log!(debug, "Skipping communication with mainchain. Not a validator.");
 					return;
 				}
-				if !Self::should_send(block_number) {
-					return;
-				}
+				// if !Self::should_send(block_number) {
+				// 	return;
+				// }
 
 				let anchor_contract = Self::anchor_contract();
+				let current_era = T::LposInterface::current_era();
 				// TODO: move limit to trait
 				let limit = 10;
 				if let Err(e) = Self::observing_mainchain(
 					block_number,
 					anchor_contract,
+					current_era,
 					appchain_id.clone(),
 					limit,
 				) {
@@ -675,31 +676,33 @@ pub mod pallet {
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
 			anchor_contract: Vec<u8>,
+			current_era: u32,
 			appchain_id: Vec<u8>,
 			limit: u32,
 		) -> Result<(), &'static str> {
 			log!(info, "in observing_mainchain");
 
+			// Make an external HTTP request to fetch events from mainchain.
+			// Note this call will block until response is received.
+			let mut obs;
 			let next_fact_sequence = NextFactSequence::<T>::get();
 			log!(info, "next_fact_sequence: {}", next_fact_sequence);
+			let next_era = current_era + 1;
+			log!(info, "next_era: {}", next_era);
 
-			// Make an external HTTP request to fetch facts from main chain.
-			// Note this call will block until response is received.
+			// TODO: skip if already submitted in this era.
+			obs = Self::get_validator_list_of_era(anchor_contract.clone(), next_era)
+				.map_err(|_| "Failed to get_validator_list_of_era")?;
 
-			let mut obs =
-				Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
+			// check cross-chain transfers only if there isn't a validator_set update.
+			if obs.len() == 0 {
+				obs = Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
 					.map_err(|_| "Failed to fetch facts")?;
+			}
 
 			if obs.len() == 0 {
 				return Ok(());
 			}
-			// sort observations by sequence_number
-			obs.sort_by(|a, b| a.sequence_number().cmp(&b.sequence_number()));
-
-			// there can only be one update_validator_set at most
-			let mut iter =
-				obs.split_inclusive(|o| matches! {o, Observation::UpdateValidatorSet(_)});
-			let obs = iter.next().unwrap().to_vec();
 
 			// -- Sign using any account
 			let (_, result) = Signer::<T, T::AuthorityId>::any_account()
@@ -784,9 +787,9 @@ pub mod pallet {
 
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
-					Observation::UpdateValidatorSet(val_set) => {
+					Observation::UpdateValidatorSet((_, vals)) => {
 						let validators: Vec<(T::AccountId, u128)> =
-							val_set.validators.iter().map(|v| (v.id.clone(), v.weight)).collect();
+							vals.iter().map(|v| (v.validator_id.clone(), v.total_stake)).collect();
 						<PlannedValidators<T>>::put(validators);
 					}
 					Observation::Burn(event) => {
@@ -865,7 +868,7 @@ pub mod pallet {
 			ValidTransaction::with_tag_prefix("OctopusAppchain")
 				// We set base priority to 2**20 and hope it's included before any other
 				// transactions in the pool. Next we tweak the priority depending on the
-				// sequence of the fact that happened on main chain.
+				// sequence of the fact that happened on mainchain.
 				.priority(T::UnsignedPriority::get().saturating_add(next_fact_sequence as u64))
 				// This transaction does not require anything else to go before into the pool.
 				//.and_requires()
