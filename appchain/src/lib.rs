@@ -305,6 +305,12 @@ pub mod pallet {
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
+	#[pallet::storage]
+	pub type NextSubmitObsIndex<T> = StorageValue<_, u32>;
+
+	#[pallet::storage]
+	pub type SubmitSequenceNumber<T> = StorageValue<_, u32>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub appchain_id: String,
@@ -399,6 +405,7 @@ pub mod pallet {
 
 			// Only communicate with mainchain if we are a potential validator and the appchain_id is not an empty string.
 			let appchain_id = Self::appchain_id();
+			let mut obser_id: Option<T::AccountId> = None;
 			if sp_io::offchain::is_validator() && appchain_id.len() > 0 {
 				let mut found = false;
 				for key in <T::AuthorityId as AppCrypto<
@@ -420,16 +427,17 @@ pub mod pallet {
 					log!(debug, "Check if in current set {:?}", val_id);
 					if val_id.is_some() {
 						found = true;
+						obser_id = val_id;
 					}
 				}
 				if !found {
 					log!(debug, "Skipping communication with mainchain. Not a validator.");
 					return;
 				}
-				// if !Self::should_send(block_number) {
-				// 	return;
-				// }
-
+				if !Self::should_send(block_number) {
+					return;
+				}
+				let obser_id = obser_id.unwrap();
 				let anchor_contract = Self::anchor_contract();
 				let current_era = T::LposInterface::current_era();
 				// TODO: move limit to trait
@@ -440,6 +448,7 @@ pub mod pallet {
 					current_era,
 					appchain_id.clone(),
 					limit,
+					obser_id,
 				) {
 					log!(info, "observing_mainchain: Error: {}", e);
 				}
@@ -631,6 +640,45 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
+		fn should_get_validators(val_id: T::AccountId) -> bool {
+			match <NextSubmitObsIndex<T>>::try_get() {
+				Ok(next_index) => {
+					log!(
+						debug,
+						"next_index: {}, current_era: {}",
+						next_index,
+						T::LposInterface::current_era()
+					);
+					if next_index > T::LposInterface::current_era() {
+						return false;
+					}
+				}
+				Err(_) => {
+					return true;
+				}
+			}
+
+			match <SubmitSequenceNumber<T>>::try_get() {
+				Ok(sequence_number) => {
+					let observations = <Observations<T>>::get(sequence_number);
+					log!(debug, "observations: {:#?},\n val_id: {:#?}", observations, val_id);
+
+					let mut found = false;
+					for observation in observations.iter() {
+						if <Observing<T>>::get(&observation).iter().any(|o| o == &val_id) {
+							log!(debug, "obser: {:#?}", <Observing<T>>::get(&observation));
+							found = true;
+							break;
+						}
+					}
+					return !found;
+				}
+				Err(_) => {
+					return true;
+				}
+			}
+		}
+
 		fn should_send(block_number: T::BlockNumber) -> bool {
 			/// A friendlier name for the error that is going to be returned in case we are in the grace
 			/// period.
@@ -679,28 +727,42 @@ pub mod pallet {
 			current_era: u32,
 			appchain_id: Vec<u8>,
 			limit: u32,
+			val_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			log!(info, "in observing_mainchain");
 
 			// Make an external HTTP request to fetch events from mainchain.
 			// Note this call will block until response is received.
-			let mut obs;
+			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = Vec::new();
 			let next_fact_sequence = NextFactSequence::<T>::get();
 			log!(info, "next_fact_sequence: {}", next_fact_sequence);
 			let next_era = current_era + 1;
 			log!(info, "next_era: {}", next_era);
 
 			// TODO: skip if already submitted in this era.
-			obs = Self::get_validator_list_of_era(anchor_contract.clone(), next_era)
-				.map_err(|_| "Failed to get_validator_list_of_era")?;
+			let mut should_fetch_facts = false;
+			if Self::should_get_validators(val_id) {
+				obs = Self::get_validator_list_of_era(anchor_contract.clone(), next_era)
+					.map_err(|_| "Failed to get_validator_list_of_era")?;
 
+				if obs.len() == 0 {
+					log!(debug, "First, can't get validators message!");
+					should_fetch_facts = true;
+				}
 			// check cross-chain transfers only if there isn't a validator_set update.
-			if obs.len() == 0 {
+			} else {
+				should_fetch_facts = true;
+			}
+
+			should_fetch_facts = false; ////////// for test, should remove later
+			if should_fetch_facts {
+				// check cross-chain transfers only if there isn't a validator_set update.
 				obs = Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
 					.map_err(|_| "Failed to fetch facts")?;
 			}
 
 			if obs.len() == 0 {
+				log!(debug, "After, can't get any message!");
 				return Ok(());
 			}
 
@@ -784,6 +846,12 @@ pub mod pallet {
 			//
 
 			let seq_num = observation.sequence_number();
+			match observation {
+				Observation::UpdateValidatorSet((_, _)) => {
+					<SubmitSequenceNumber<T>>::put(seq_num);
+				}
+				_ => log!(debug, "️️️observation not include validator sets"),
+			}
 
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
@@ -791,6 +859,11 @@ pub mod pallet {
 						let validators: Vec<(T::AccountId, u128)> =
 							vals.iter().map(|v| (v.validator_id.clone(), v.total_stake)).collect();
 						<PlannedValidators<T>>::put(validators);
+						log!(debug, "set value to planned validators succeed");
+						let next_index =
+							T::LposInterface::current_era().checked_add(1).unwrap_or(0);
+						<NextSubmitObsIndex<T>>::put(next_index);
+						<SubmitSequenceNumber<T>>::kill();
 					}
 					Observation::Burn(event) => {
 						if let Err(error) =
