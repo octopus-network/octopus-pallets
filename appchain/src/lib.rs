@@ -120,6 +120,17 @@ where
 	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
 }
 
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct ValidatorSet<AccountId> {
+	/// The sequence number of this fact on the mainchain.
+	#[serde(rename = "seq_num")]
+	sequence_number: u32,
+
+	/// Validators in this set.
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	validators: Vec<Validator<AccountId>>,
+}
+
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnEvent<AccountId> {
 	/// The sequence number of this fact on the mainchain.
@@ -163,7 +174,7 @@ where
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum Observation<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	UpdateValidatorSet((u32, Vec<Validator<AccountId>>)),
+	UpdateValidatorSet(ValidatorSet<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
@@ -173,7 +184,7 @@ pub enum Observation<AccountId> {
 impl<AccountId> Observation<AccountId> {
 	fn sequence_number(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet((next_era, _)) => next_era.clone(), // TODO: julian
+			Observation::UpdateValidatorSet(val_set) => val_set.sequence_number,
 			Observation::LockAsset(event) => event.sequence_number,
 			Observation::Burn(event) => event.sequence_number,
 		}
@@ -832,7 +843,7 @@ pub mod pallet {
 
 			let seq_num = observation.sequence_number();
 			match observation {
-				Observation::UpdateValidatorSet((_, _)) => {
+				Observation::UpdateValidatorSet(_) => {
 					<SubmitSequenceNumber<T>>::put(seq_num);
 				}
 				_ => log!(debug, "️️️observation not include validator sets"),
@@ -840,9 +851,12 @@ pub mod pallet {
 
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
-					Observation::UpdateValidatorSet((_, vals)) => {
-						let validators: Vec<(T::AccountId, u128)> =
-							vals.iter().map(|v| (v.validator_id.clone(), v.total_stake)).collect();
+					Observation::UpdateValidatorSet(val_set) => {
+						let validators: Vec<(T::AccountId, u128)> = val_set
+							.validators
+							.iter()
+							.map(|v| (v.validator_id.clone(), v.total_stake))
+							.collect();
 						<PlannedValidators<T>>::put(validators);
 						log!(debug, "set value to planned validators succeed");
 						let next_index =

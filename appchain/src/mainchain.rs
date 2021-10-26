@@ -61,7 +61,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://rpc.testnet.near.org")
+			.url("http://127.0.0.1:8080/handler")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
@@ -96,7 +96,8 @@ impl<T: Config> Pallet<T> {
 		let validators: Vec<Validator<<T as frame_system::Config>::AccountId>> =
 			serde_json::from_slice(&json_response.result.result).unwrap();
 		if validators.len() > 0 {
-			obs.push(Observation::UpdateValidatorSet((era, validators)));
+			let val_set = ValidatorSet { sequence_number: era, validators };
+			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 
 		log!(info, "Got observations: {:?}", obs);
@@ -159,7 +160,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://rpc.testnet.near.org")
+			.url("http://127.0.0.1:8080/handler")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
