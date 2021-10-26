@@ -120,7 +120,7 @@ where
 	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
 }
 
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ValidatorSet<AccountId> {
 	/// The sequence number of this fact on the mainchain.
 	#[serde(rename = "seq_num")]
@@ -179,6 +179,13 @@ pub enum Observation<AccountId> {
 	Burn(BurnEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	LockAsset(LockEvent<AccountId>),
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum ObservationType {
+	UpdateValidatorSet,
+	Burn,
+	LockAsset,
 }
 
 impl<AccountId> Observation<AccountId> {
@@ -287,8 +294,15 @@ pub mod pallet {
 	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	pub type Observations<T: Config> =
-		StorageMap<_, Twox64Concat, u32, Vec<Observation<T::AccountId>>, ValueQuery>;
+	pub type Observations<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		ObservationType,
+		Twox64Concat,
+		u32,
+		Vec<Observation<T::AccountId>>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	pub type Observing<T: Config> =
@@ -656,7 +670,10 @@ pub mod pallet {
 
 			match <SubmitSequenceNumber<T>>::try_get() {
 				Ok(sequence_number) => {
-					let observations = <Observations<T>>::get(sequence_number);
+					let observations = <Observations<T>>::get(
+						ObservationType::UpdateValidatorSet,
+						sequence_number,
+					);
 					log!(debug, "observations: {:#?},\n val_id: {:#?}", observations, val_id);
 
 					let mut found = false;
@@ -810,7 +827,8 @@ pub mod pallet {
 			validator_id: &T::AccountId,
 			observation: Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			<Observations<T>>::mutate(observation.sequence_number(), |obs| {
+			let observation_type = Self::get_observation_type(&observation);
+			<Observations<T>>::mutate(observation_type, observation.sequence_number(), |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
 					obs.push(observation.clone())
@@ -832,10 +850,11 @@ pub mod pallet {
 				.sum();
 
 			//
+			log!(info, "observations type: {:#?}", observation_type);
 			log!(
 				info,
-				"️️️observations: {:#?}",
-				<Observations<T>>::get(observation.sequence_number())
+				"️️️observations content: {:#?}",
+				<Observations<T>>::get(observation_type, observation.sequence_number())
 			);
 			log!(info, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
 			log!(info, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
@@ -897,11 +916,11 @@ pub mod pallet {
 					}
 				}
 
-				let obs = <Observations<T>>::get(seq_num);
+				let obs = <Observations<T>>::get(observation_type, seq_num);
 				for o in obs.iter() {
 					<Observing<T>>::remove(o);
 				}
-				<Observations<T>>::remove(seq_num);
+				<Observations<T>>::remove(observation_type, seq_num);
 
 				if matches!(observation, Observation::LockAsset(_))
 					|| matches!(observation, Observation::Burn(_))
@@ -918,6 +937,20 @@ pub mod pallet {
 			}
 
 			Ok(().into())
+		}
+
+		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
+			match observation {
+				Observation::UpdateValidatorSet(_) => {
+					return ObservationType::UpdateValidatorSet;
+				}
+				Observation::Burn(_) => {
+					return ObservationType::Burn;
+				}
+				Observation::LockAsset(_) => {
+					return ObservationType::LockAsset;
+				}
+			}
 		}
 
 		fn validate_transaction_parameters(

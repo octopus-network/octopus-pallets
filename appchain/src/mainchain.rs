@@ -61,7 +61,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("http://127.0.0.1:8080/handler")
+			.url("https://rpc.testnet.near.org")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
@@ -160,7 +160,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("http://127.0.0.1:8080/handler")
+			.url("https://rpc.testnet.near.org")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
