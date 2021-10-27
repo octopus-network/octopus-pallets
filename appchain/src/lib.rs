@@ -23,6 +23,7 @@ use frame_system::offchain::{
 };
 use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
 use pallet_octopus_support::types::{BurnAssetPayload, LockPayload, PayloadType};
+use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::RuntimeAppPublic;
@@ -97,26 +98,15 @@ type AssetIdOf<T> =
 	<<T as Config>::Assets as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
 /// Validator of appchain.
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Validator<AccountId> {
 	/// The validator's id.
-	#[serde(deserialize_with = "deserialize_from_hex_str1")]
+	#[serde(deserialize_with = "deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	validator_id: AccountId,
 	/// The total stake of this validator in mainchain's staking system.
 	#[serde(deserialize_with = "deserialize_from_str")]
 	total_stake: u128,
-}
-
-fn deserialize_from_hex_str1<'de, S, D>(deserializer: D) -> Result<S, D::Error>
-where
-	S: Decode,
-	D: Deserializer<'de>,
-{
-	let account_id_str: String = Deserialize::deserialize(deserializer)?;
-	let account_id_hex =
-		hex::decode(&account_id_str[..]).map_err(|e| de::Error::custom(e.to_string()))?;
-	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -130,7 +120,7 @@ where
 	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
 }
 
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnEvent<AccountId> {
 	/// The sequence number of this fact on the mainchain.
 	#[serde(rename = "seq_num")]
@@ -144,7 +134,7 @@ pub struct BurnEvent<AccountId> {
 	amount: u128,
 }
 
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct LockEvent<AccountId> {
 	/// The sequence number of this fact on the mainchain.
 	#[serde(rename = "seq_num")]
@@ -170,7 +160,7 @@ where
 	amount_str.parse::<S>().map_err(|e| de::Error::custom(e.to_string()))
 }
 
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum Observation<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	UpdateValidatorSet((u32, Vec<Validator<AccountId>>)),
@@ -190,7 +180,7 @@ impl<AccountId> Observation<AccountId> {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ObservationsPayload<Public, BlockNumber, AccountId> {
 	public: Public,
 	block_number: BlockNumber,
@@ -358,11 +348,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		BalanceOfAsset<T> = "Balance",
-		AssetIdOfAsset<T> = "AssetId"
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		Locked(T::AccountId, Vec<u8>, BalanceOf<T>),
@@ -467,7 +452,7 @@ pub mod pallet {
 		/// are being whitelisted and marked as valid.
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			// Firstly let's check that we call the right function.
-			if let Call::submit_observations(ref payload, ref signature) = call {
+			if let Call::submit_observations { ref payload, ref signature } = call {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
@@ -775,7 +760,7 @@ pub mod pallet {
 						next_fact_sequence,
 						observations: obs.clone(),
 					},
-					|payload, signature| Call::submit_observations(payload, signature),
+					|payload, signature| Call::submit_observations { payload, signature },
 				)
 				.ok_or("No local accounts accounts available.")?;
 			result.map_err(|()| "Unable to submit transaction")?;
@@ -981,7 +966,7 @@ pub mod pallet {
 			// ignore
 		}
 
-		fn on_disabled(_i: usize) {
+		fn on_disabled(_i: u32) {
 			// ignore
 		}
 	}

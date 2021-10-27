@@ -1,6 +1,6 @@
 [package]
 name = "pallet-octopus-support"
-version = "3.0.0-pre.0"
+version = "4.0.0-pre.0"
 edition = "2018"
 authors = ["Octopus Network <hi@oct.network>"]
 license = "Apache-2.0"
@@ -14,17 +14,20 @@ documentation = "https://docs.rs/pallet-octopus-support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-borsh = { default-features = false, version = "0.9.0" }
+borsh = { version = "0.9.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-frame-support = { version = "3.0.0", default-features = false }
-sp-runtime = { default-features = false, version = "3.0.0" }
-sp-std = { default-features = false, version = "3.0.0" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+
+frame-support = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"borsh/std",
 	"codec/std",
+	"scale-info/std",
 	"frame-support/std",
 	"sp-runtime/std",
 	"sp-std/std",

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-octopus-lpos"
-version = "3.0.0-pre.0"
+version = "4.0.0-pre.0"
 edition = "2018"
 authors = ["Parity Technologies <admin@parity.io>", "Octopus Network <hi@oct.network>"]
 license = "Apache-2.0"
@@ -13,56 +13,54 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-static_assertions = "1.1.0"
-serde = { version = "1.0.101", optional = true }
-borsh = { default-features = false, version = "0.9.0" }
+borsh = { version = "0.9.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-hex = { default-features = false, version = "0.4", features = ["alloc"] }
-sp-std = { version = "3.0.0", default-features = false }
-sp-io ={ version = "3.0.0", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false }
-sp-staking = { version = "3.0.0", default-features = false }
-frame-support = { version = "3.0.0", default-features = false }
-frame-system = { version = "3.0.0", default-features = false }
-pallet-session = { version = "3.0.0", default-features = false }
-pallet-authorship = { version = "3.0.0", default-features = false }
-sp-application-crypto = { version = "3.0.0", default-features = false }
-log = { version = "0.4.14", default-features = false }
-paste = "1.0"
-pallet-octopus-support = { default-features = false, path = "../support" }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+log = { version = "0.4.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+
+frame-support = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-staking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+pallet-authorship = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+pallet-session = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false,  features = ["historical"] }
+
+pallet-octopus-support = { path = "../support", default-features = false }
 
 # Optional imports for benchmarking
-frame-benchmarking = { version = "3.1.0", default-features = false, optional = true }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false, optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-sp-storage = { version = "3.0.0" }
-sp-tracing = { version = "3.0.0" }
-sp-core = { version = "3.0.0" }
-pallet-balances = { version = "3.0.0" }
-pallet-timestamp = { version = "3.0.0" }
-substrate-test-utils = { version = "3.0.0" }
-frame-benchmarking = { version = "3.1.0" }
+sp-storage = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-tracing = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+pallet-timestamp = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+substrate-test-utils = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
 rand_chacha = { version = "0.2" }
 parking_lot = "0.11.1"
 
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"borsh/std",
 	"codec/std",
 	"hex/std",
-	"sp-std/std",
-	"sp-io/std",
+	"log/std",
+	"scale-info/std",
 	"frame-support/std",
+	"frame-system/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"pallet-session/std",
-	"frame-system/std",
+	"sp-std/std",
 	"pallet-authorship/std",
-	"sp-application-crypto/std",
-	"log/std",
+	"pallet-session/std",
 	"pallet-octopus-support/std",
 ]
 runtime-benchmarks = [

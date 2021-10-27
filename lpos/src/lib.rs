@@ -30,6 +30,7 @@ use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::
 use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
 use pallet_octopus_support::types::{EraPayoutPayload, PayloadType, PlanNewEraPayload};
 use pallet_session::historical;
+use scale_info::TypeInfo;
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion};
 use sp_runtime::KeyTypeId;
 use sp_runtime::{
@@ -73,7 +74,7 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::PositiveImbalance;
 
 /// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
@@ -87,7 +88,7 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
@@ -104,7 +105,7 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	/// Returns `true` if new era should be forced at the end of this session.
 	/// This allows preventing a situation where there is too many validators
 	/// disabled and block production stalls.
-	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
+	fn disable_validator(validator: &AccountId) -> bool;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -127,7 +128,7 @@ where
 		Option<<T as frame_system::Config>::AccountId>,
 	>,
 {
-	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
+	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> bool {
 		<pallet_session::Pallet<T>>::disable(validator)
 	}
 
@@ -181,7 +182,7 @@ impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet
 // A value placed in storage that represents the current version of the Staking storage. This value
 // is used by the `on_runtime_upgrade` logic to determine whether we run storage migration logic.
 // This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	V1_0_0,
 }
@@ -362,7 +363,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.

@@ -6,10 +6,11 @@ use alloc::string::{String, ToString};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum PayloadType {
 	Lock,
 	BurnAsset,

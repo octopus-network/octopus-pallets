@@ -9,6 +9,7 @@ use alloc::string::{String, ToString};
 use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchResult;
 use pallet_octopus_support::{traits::UpwardMessagesInterface, types::PayloadType};
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_io::offchain_index;
 use sp_runtime::{
@@ -32,7 +33,7 @@ macro_rules! log {
 	};
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Message {
 	nonce: u64,
 	payload_type: PayloadType,
