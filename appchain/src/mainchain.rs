@@ -96,7 +96,8 @@ impl<T: Config> Pallet<T> {
 		let validators: Vec<Validator<<T as frame_system::Config>::AccountId>> =
 			serde_json::from_slice(&json_response.result.result).unwrap();
 		if validators.len() > 0 {
-			obs.push(Observation::UpdateValidatorSet((era, validators)));
+			let val_set = ValidatorSet { sequence_number: era, validators };
+			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 
 		log!(info, "Got observations: {:?}", obs);
