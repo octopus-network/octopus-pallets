@@ -109,6 +109,40 @@ pub struct Validator<AccountId> {
 	total_stake: u128,
 }
 
+/// Appchain token burn event.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct TokenBurnt<AccountId> {
+	#[serde(with = "serde_bytes")]
+	sender_id_in_near: Vec<u8>,
+	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	receiver_id_in_appchain: AccountId,
+	#[serde(deserialize_with = "deserialize_from_str")]
+	amount: u128,
+}
+
+/// Token locked event.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct TokenLocked<AccountId> {
+	#[serde(with = "serde_bytes")]
+	symbol: Vec<u8>,
+	#[serde(with = "serde_bytes")]
+	sender_id_in_near: Vec<u8>,
+	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	receiver_id_in_appchain: AccountId,
+	#[serde(deserialize_with = "deserialize_from_str")]
+	amount: u128,
+}
+
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum Facts<AccountId> {
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	LockAsset(TokenLocked<AccountId>),
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	Burn(TokenBurnt<AccountId>),
+}
+
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
 where
 	S: Decode,
@@ -132,33 +166,14 @@ pub struct ValidatorSet<AccountId> {
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct BurnEvent<AccountId> {
+pub struct FactsHistory<AccountId> {
 	/// The sequence number of this fact on the mainchain.
 	#[serde(rename = "seq_num")]
-	sequence_number: u32,
-	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
-	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
-}
+	index: u32,
 
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct LockEvent<AccountId> {
-	/// The sequence number of this fact on the mainchain.
-	#[serde(rename = "seq_num")]
-	sequence_number: u32,
-	#[serde(with = "serde_bytes")]
-	token_id: Vec<u8>,
-	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	/// The appchain token burn event on the mainchain.
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
-	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
+	fact_event: Facts<AccountId>,
 }
 
 pub fn deserialize_from_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -176,9 +191,7 @@ pub enum Observation<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	UpdateValidatorSet(ValidatorSet<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	Burn(BurnEvent<AccountId>),
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	LockAsset(LockEvent<AccountId>),
+	FactEvents(FactsHistory<AccountId>),
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -192,8 +205,7 @@ impl<AccountId> Observation<AccountId> {
 	fn sequence_number(&self) -> u32 {
 		match self {
 			Observation::UpdateValidatorSet(val_set) => val_set.sequence_number,
-			Observation::LockAsset(event) => event.sequence_number,
-			Observation::Burn(event) => event.sequence_number,
+			Observation::FactEvents(event) => event.index,
 		}
 	}
 }
@@ -770,7 +782,7 @@ pub mod pallet {
 			should_fetch_facts = false; ////////// for test, should remove later
 			if should_fetch_facts {
 				// check cross-chain transfers only if there isn't a validator_set update.
-				obs = Self::fetch_facts(anchor_contract, appchain_id, next_fact_sequence, limit)
+				obs = Self::fetch_facts(anchor_contract, None)
 					.map_err(|_| "Failed to fetch facts")?;
 			}
 
@@ -883,37 +895,41 @@ pub mod pallet {
 						<NextSubmitObsIndex<T>>::put(next_index);
 						<SubmitSequenceNumber<T>>::kill();
 					}
-					Observation::Burn(event) => {
-						if let Err(error) =
-							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
-						{
-							log!(info, "️️️failed to unlock native token: {:?}", error);
-							return Err(error);
-						}
-					}
-					Observation::LockAsset(event) => {
-						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
-							log!(
-								info,
-								"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
-								asset_id,
-								event.sender_id,
-								event.receiver,
-								event.amount,
-							);
-							if let Err(error) = Self::mint_asset_inner(
-								asset_id,
-								event.sender_id,
-								event.receiver,
+					Observation::FactEvents(fact) => match fact.fact_event {
+						Facts::Burn(event) => {
+							if let Err(error) = Self::unlock_inner(
+								event.sender_id_in_near,
+								event.receiver_id_in_appchain,
 								event.amount,
 							) {
-								log!(info, "️️️failed to mint asset: {:?}", error);
+								log!(info, "️️️failed to unlock native token: {:?}", error);
 								return Err(error);
 							}
-						} else {
-							return Err(Error::<T>::WrongAssetId.into());
 						}
-					}
+						Facts::LockAsset(event) => {
+							if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.symbol) {
+								log!(
+									info,
+									"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
+									asset_id,
+									event.sender_id_in_near,
+									event.receiver_id_in_appchain,
+									event.amount,
+								);
+								if let Err(error) = Self::mint_asset_inner(
+									asset_id,
+									event.sender_id_in_near,
+									event.receiver_id_in_appchain,
+									event.amount,
+								) {
+									log!(info, "️️️failed to mint asset: {:?}", error);
+									return Err(error);
+								}
+							} else {
+								return Err(Error::<T>::WrongAssetId.into());
+							}
+						}
+					},
 				}
 
 				let obs = <Observations<T>>::get(observation_type, seq_num);
@@ -922,8 +938,8 @@ pub mod pallet {
 				}
 				<Observations<T>>::remove(observation_type, seq_num);
 
-				if matches!(observation, Observation::LockAsset(_))
-					|| matches!(observation, Observation::Burn(_))
+				if matches!(observation_type, ObservationType::LockAsset)
+					|| matches!(observation_type, ObservationType::Burn)
 				{
 					NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
 						if let Some(v) = next_seq.checked_add(1) {
@@ -940,16 +956,18 @@ pub mod pallet {
 		}
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
-			match observation {
+			match observation.clone() {
 				Observation::UpdateValidatorSet(_) => {
 					return ObservationType::UpdateValidatorSet;
 				}
-				Observation::Burn(_) => {
-					return ObservationType::Burn;
-				}
-				Observation::LockAsset(_) => {
-					return ObservationType::LockAsset;
-				}
+				Observation::FactEvents(event) => match event.fact_event {
+					Facts::Burn(_) => {
+						return ObservationType::Burn;
+					}
+					Facts::LockAsset(_) => {
+						return ObservationType::LockAsset;
+					}
+				},
 			}
 		}
 
