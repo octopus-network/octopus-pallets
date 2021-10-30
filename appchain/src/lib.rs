@@ -782,7 +782,7 @@ pub mod pallet {
 			should_fetch_facts = false; ////////// for test, should remove later
 			if should_fetch_facts {
 				// check cross-chain transfers only if there isn't a validator_set update.
-				obs = Self::fetch_facts(anchor_contract, None)
+				obs = Self::fetch_facts(anchor_contract, next_fact_sequence, limit)
 					.map_err(|_| "Failed to fetch facts")?;
 			}
 
