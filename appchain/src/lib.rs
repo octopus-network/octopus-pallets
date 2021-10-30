@@ -21,8 +21,11 @@ use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
-use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
-use pallet_octopus_support::types::{BurnAssetPayload, LockPayload, PayloadType};
+use pallet_octopus_support::{
+	log,
+	traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	types::{BurnAssetPayload, LockPayload, PayloadType},
+};
 use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
@@ -41,17 +44,6 @@ use sp_std::prelude::*;
 pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
-
-// syntactic sugar for logging.
-#[macro_export]
-macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		log::$level!(
-			target: crate::LOG_TARGET,
-			concat!("[{:?}] 🐙 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
-		)
-	};
-}
 
 mod mainchain;
 
@@ -103,7 +95,7 @@ pub struct Validator<AccountId> {
 	/// The validator's id.
 	#[serde(deserialize_with = "deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	validator_id: AccountId,
+	validator_id_in_appchain: AccountId,
 	/// The total stake of this validator in mainchain's staking system.
 	#[serde(deserialize_with = "deserialize_from_str")]
 	total_stake: u128,
@@ -411,7 +403,7 @@ pub mod pallet {
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
-			log!(info, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
+			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			// Only communicate with mainchain if we are a potential validator and the appchain_id is not an empty string.
 			let appchain_id = Self::appchain_id();
@@ -441,7 +433,7 @@ pub mod pallet {
 					}
 				}
 				if !found {
-					log!(debug, "Skipping communication with mainchain. Not a validator.");
+					log!(info, "Skipping communication with mainchain. Not a validator.");
 					return;
 				}
 				if !Self::should_send(block_number) {
@@ -460,7 +452,7 @@ pub mod pallet {
 					limit,
 					obser_id,
 				) {
-					log!(info, "observing_mainchain: Error: {}", e);
+					log!(warn, "observing_mainchain: Error: {}", e);
 				}
 			}
 		}
@@ -520,7 +512,7 @@ pub mod pallet {
 
 			if val_id.is_none() {
 				log!(
-					info,
+					warn,
 					"Not a validator in current validator set: {:?}",
 					payload.public.clone().into_account()
 				);
@@ -529,7 +521,7 @@ pub mod pallet {
 			let val_id = val_id.expect("Validator is valid; qed").clone();
 
 			//
-			log!(info, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
+			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
 			//
 
 			// TODO
@@ -742,21 +734,18 @@ pub mod pallet {
 			limit: u32,
 			val_id: T::AccountId,
 		) -> Result<(), &'static str> {
-			log!(info, "in observing_mainchain");
-
 			// Make an external HTTP request to fetch events from mainchain.
 			// Note this call will block until response is received.
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = Vec::new();
 			let next_fact_sequence = NextFactSequence::<T>::get();
-			log!(info, "next_fact_sequence: {}", next_fact_sequence);
+			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
 			let next_era = current_era + 1;
 			log!(info, "next_era: {}", next_era);
 
-			// TODO: skip if already submitted in this era.
 			let mut should_fetch_facts = false;
 			if Self::should_get_validators(val_id) {
-				obs = Self::get_validator_list_of_era(anchor_contract.clone(), next_era)
-					.map_err(|_| "Failed to get_validator_list_of_era")?;
+				obs = Self::get_validator_list_of(anchor_contract.clone(), next_era)
+					.map_err(|_| "Failed to get_validator_list_of")?;
 
 				if obs.len() == 0 {
 					log!(debug, "First, can't get validators message!");
@@ -839,7 +828,7 @@ pub mod pallet {
 				if !found {
 					vals.push(validator_id.clone());
 				} else {
-					log!(info, "{:?} submits a duplicate ocw tx", validator_id);
+					log!(warn, "{:?} submits a duplicate ocw tx", validator_id);
 				}
 			});
 			let total_stake: u128 = T::LposInterface::active_total_stake()
@@ -850,14 +839,14 @@ pub mod pallet {
 				.sum();
 
 			//
-			log!(info, "observations type: {:#?}", observation_type);
+			log!(debug, "observations type: {:#?}", observation_type);
 			log!(
-				info,
+				debug,
 				"️️️observations content: {:#?}",
 				<Observations<T>>::get(observation_type, observation.sequence_number())
 			);
-			log!(info, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
-			log!(info, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
+			log!(debug, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
+			log!(debug, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
 			//
 
 			let seq_num = observation.sequence_number();
@@ -874,7 +863,7 @@ pub mod pallet {
 						let validators: Vec<(T::AccountId, u128)> = val_set
 							.validators
 							.iter()
-							.map(|v| (v.validator_id.clone(), v.total_stake))
+							.map(|v| (v.validator_id_in_appchain.clone(), v.total_stake))
 							.collect();
 						<PlannedValidators<T>>::put(validators);
 						log!(debug, "set value to planned validators succeed");
@@ -887,7 +876,7 @@ pub mod pallet {
 						if let Err(error) =
 							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
 						{
-							log!(info, "️️️failed to unlock native token: {:?}", error);
+							log!(warn, "️️️failed to unlock native token: {:?}", error);
 							return Err(error);
 						}
 					}
@@ -907,7 +896,7 @@ pub mod pallet {
 								event.receiver,
 								event.amount,
 							) {
-								log!(info, "️️️failed to mint asset: {:?}", error);
+								log!(warn, "️️️failed to mint asset: {:?}", error);
 								return Err(error);
 							}
 						} else {
@@ -962,7 +951,7 @@ pub mod pallet {
 			let current_block = <frame_system::Pallet<T>>::block_number();
 			if &current_block < block_number {
 				log!(
-					info,
+					warn,
 					"InvalidTransaction => current_block: {:?}, block_number: {:?}",
 					current_block,
 					block_number

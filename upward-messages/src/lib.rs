@@ -8,7 +8,7 @@ use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchResult;
-use pallet_octopus_support::{traits::UpwardMessagesInterface, types::PayloadType};
+use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_io::offchain_index;
@@ -21,17 +21,6 @@ use sp_std::prelude::*;
 pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
-
-// syntactic sugar for logging.
-#[macro_export]
-macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		log::$level!(
-			target: crate::LOG_TARGET,
-			concat!("[{:?}] 🐙 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
-		)
-	};
-}
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Message {
@@ -105,6 +94,13 @@ pub mod pallet {
 			));
 
 			let key = Self::make_offchain_key(commitment_hash);
+			log!(
+				debug,
+				"commit cross-chain messages: hash: {:?}, key: {:?}, messages: {:?}",
+				commitment_hash,
+				key,
+				messages
+			);
 			offchain_index::set(&*key, &messages.encode());
 
 			0

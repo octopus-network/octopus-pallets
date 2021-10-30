@@ -27,8 +27,11 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
-use pallet_octopus_support::types::{EraPayoutPayload, PayloadType, PlanNewEraPayload};
+use pallet_octopus_support::{
+	log,
+	traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	types::{EraPayoutPayload, PayloadType, PlanNewEraPayload},
+};
 use pallet_session::historical;
 use scale_info::TypeInfo;
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion};
@@ -47,17 +50,6 @@ pub use weights::WeightInfo;
 pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-lpos";
-
-// syntactic sugar for logging.
-#[macro_export]
-macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		log::$level!(
-			target: crate::LOG_TARGET,
-			concat!("[{:?}] 🐙 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
-		)
-	};
-}
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
@@ -150,7 +142,7 @@ where
 		}
 
 		Self::validators().into_iter().find(|v| {
-			log!(info, "check {:#?} == {:#?}", v, who);
+			log!(debug, "check {:#?} == {:#?}", v, who);
 			T::ValidatorIdOf::convert(v.clone()) == who
 		})
 	}
@@ -679,7 +671,7 @@ impl<T: Config> Pallet<T> {
 				PayloadType::EraPayout,
 				&message.try_to_vec().unwrap(),
 			);
-			log!(debug, "era payout is sent: {:?}", res);
+			log!(info, "era payout is sent: {:?}", res);
 		}
 	}
 
@@ -854,12 +846,12 @@ where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
-		log!(info, "note_author: {:?}", author);
+		log!(debug, "note_author: {:?}", author);
 		Self::reward_by_ids(vec![(author, 1)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		log!(
-			info,
+			debug,
 			"note_uncle: {:?} {:?} - {:?}",
 			author,
 			_age,
