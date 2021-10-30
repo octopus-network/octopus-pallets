@@ -202,7 +202,7 @@ impl<T: Config> Pallet<T> {
 			log!(info, "json_response: {:#?}", response);
 		} else {
 			log!(info, "Err happened when decode from response");
-			return Ok(obs)
+			return Ok(obs);
 		}
 
 		let event_histories: Result<Vec<AnchorEventHistory>, _> =
@@ -213,11 +213,11 @@ impl<T: Config> Pallet<T> {
 			log!(info, "event_histories: {:#?}", events);
 		} else {
 			log!(info, "Err happened when decode from achor event history");
-			return Ok(obs)
+			return Ok(obs);
 		}
 
 		// Parse every event
-		for event_history  in events.iter() {
+		for event_history in events.iter() {
 			let facts: Result<Facts<<T as frame_system::Config>::AccountId>, _> =
 				serde_json::from_slice(&event_history.anchor_event);
 
