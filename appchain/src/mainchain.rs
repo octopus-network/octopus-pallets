@@ -236,13 +236,13 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	fn encode_get_facts_args(index: u32, limit: u32) -> Option<Vec<u8>> {
-		let a = String::from("{\"index\":\"");
-		let index = index.to_string();
-		let b = String::from(",\"limit\":");
-		let limit = limit.to_string();
+	fn encode_get_facts_args(start_index: u32, quantity: u32) -> Option<Vec<u8>> {
+		let a = String::from("{\"start_index\":\"");
+		let start_index = start_index.to_string();
+		let b = String::from(",\"quantity\":");
+		let quantity = quantity.to_string();
 		let c = String::from("}");
-		let json = a + &index + &b + &limit + &c;
+		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
 		Some(res)
 	}
