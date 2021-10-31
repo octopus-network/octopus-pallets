@@ -99,38 +99,54 @@ pub struct Validator<AccountId> {
 	total_stake: u128,
 }
 
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct ValidatorSet<AccountId> {
+	/// The era that this set belongs to.
+	era: u32,
+	/// Validators in this set.
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	validators: Vec<Validator<AccountId>>,
+}
+
 /// Appchain token burn event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct TokenBurnt<AccountId> {
+pub struct BurnEvent<AccountId> {
+	index: u32,
+	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
-	sender_id_in_near: Vec<u8>,
+	sender_id: Vec<u8>,
+	#[serde(rename = "receiver_id_in_appchain")]
 	#[serde(deserialize_with = "deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver_id_in_appchain: AccountId,
+	receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
 	amount: u128,
 }
 
 /// Token locked event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct TokenLocked<AccountId> {
+pub struct LockAssetEvent<AccountId> {
+	index: u32,
+	#[serde(rename = "symbol")]
 	#[serde(with = "serde_bytes")]
-	symbol: Vec<u8>,
+	token_id: Vec<u8>,
+	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
-	sender_id_in_near: Vec<u8>,
+	sender_id: Vec<u8>,
+	#[serde(rename = "receiver_id_in_appchain")]
 	#[serde(deserialize_with = "deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver_id_in_appchain: AccountId,
+	receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
 	amount: u128,
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum Facts<AccountId> {
+pub enum AnchorEvent<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	LockAsset(TokenLocked<AccountId>),
+	LockAsset(LockAssetEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	Burn(TokenBurnt<AccountId>),
+	Burn(BurnEvent<AccountId>),
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -142,28 +158,6 @@ where
 	let account_id_hex =
 		hex::decode(&account_id_str[2..]).map_err(|e| de::Error::custom(e.to_string()))?;
 	S::decode(&mut &account_id_hex[..]).map_err(|e| de::Error::custom(e.to_string()))
-}
-
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct ValidatorSet<AccountId> {
-	/// The sequence number of this fact on the mainchain.
-	#[serde(rename = "seq_num")]
-	sequence_number: u32,
-
-	/// Validators in this set.
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	validators: Vec<Validator<AccountId>>,
-}
-
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct FactsHistory<AccountId> {
-	/// The sequence number of this fact on the mainchain.
-	#[serde(rename = "seq_num")]
-	index: u32,
-
-	/// The appchain token burn event on the mainchain.
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	fact_event: Facts<AccountId>,
 }
 
 pub fn deserialize_from_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -181,7 +175,9 @@ pub enum Observation<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	UpdateValidatorSet(ValidatorSet<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	FactEvents(FactsHistory<AccountId>),
+	LockAsset(LockAssetEvent<AccountId>),
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	Burn(BurnEvent<AccountId>),
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -192,10 +188,11 @@ pub enum ObservationType {
 }
 
 impl<AccountId> Observation<AccountId> {
-	fn sequence_number(&self) -> u32 {
+	fn observation_index(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet(val_set) => val_set.sequence_number,
-			Observation::FactEvents(event) => event.index,
+			Observation::UpdateValidatorSet(set) => set.era,
+			Observation::LockAsset(event) => event.index,
+			Observation::Burn(event) => event.index,
 		}
 	}
 }
@@ -752,28 +749,20 @@ pub mod pallet {
 			let next_era = current_era + 1;
 			log!(debug, "next_era: {}", next_era);
 
-			let mut should_fetch_facts = false;
 			if Self::should_get_validators(val_id) {
 				obs = Self::get_validator_list_of(anchor_contract.clone(), next_era)
 					.map_err(|_| "Failed to get_validator_list_of")?;
-
-				if obs.len() == 0 {
-					log!(debug, "First, can't get validators message!");
-					should_fetch_facts = true;
-				}
-			// check cross-chain transfers only if there isn't a validator_set update.
-			} else {
-				should_fetch_facts = true;
-			}
-
-			if should_fetch_facts {
-				// check cross-chain transfers only if there isn't a validator_set update.
-				obs = Self::fetch_facts(anchor_contract, next_fact_sequence, limit)
-					.map_err(|_| "Failed to fetch facts")?;
 			}
 
 			if obs.len() == 0 {
-				log!(debug, "After, can't get any message!");
+				log!(debug, "No validat_set updates, try to get anchor events.");
+				// check cross-chain transfers only if there isn't a validator_set update.
+				obs = Self::get_anchor_event_histories(anchor_contract, next_fact_sequence, limit)
+					.map_err(|_| "Failed to get_anchor_event_histories")?;
+			}
+
+			if obs.len() == 0 {
+				log!(debug, "No messages from mainchain.");
 				return Ok(());
 			}
 
@@ -826,7 +815,7 @@ pub mod pallet {
 			observation: Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let observation_type = Self::get_observation_type(&observation);
-			<Observations<T>>::mutate(observation_type, observation.sequence_number(), |obs| {
+			<Observations<T>>::mutate(observation_type, observation.observation_index(), |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
 					obs.push(observation.clone())
@@ -847,21 +836,21 @@ pub mod pallet {
 				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
 
+			let obs_id = observation.observation_index();
 			//
 			log!(debug, "observations type: {:#?}", observation_type);
 			log!(
 				debug,
 				"️️️observations content: {:#?}",
-				<Observations<T>>::get(observation_type, observation.sequence_number())
+				<Observations<T>>::get(observation_type, obs_id)
 			);
 			log!(debug, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
 			log!(debug, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
 			//
 
-			let seq_num = observation.sequence_number();
 			match observation {
 				Observation::UpdateValidatorSet(_) => {
-					<SubmitSequenceNumber<T>>::put(seq_num);
+					<SubmitSequenceNumber<T>>::put(obs_id);
 				}
 				_ => log!(debug, "️️️observation not include validator sets"),
 			}
@@ -881,48 +870,44 @@ pub mod pallet {
 						<NextSubmitObsIndex<T>>::put(next_index);
 						<SubmitSequenceNumber<T>>::kill();
 					}
-					Observation::FactEvents(fact) => match fact.fact_event {
-						Facts::Burn(event) => {
-							if let Err(error) = Self::unlock_inner(
-								event.sender_id_in_near,
-								event.receiver_id_in_appchain,
+					Observation::Burn(event) => {
+						if let Err(error) =
+							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
+						{
+							log!(info, "️️️failed to unlock native token: {:?}", error);
+							return Err(error);
+						}
+					}
+					Observation::LockAsset(event) => {
+						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
+							log!(
+								info,
+								"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
+								asset_id,
+								event.sender_id,
+								event.receiver,
+								event.amount,
+							);
+							if let Err(error) = Self::mint_asset_inner(
+								asset_id,
+								event.sender_id,
+								event.receiver,
 								event.amount,
 							) {
-								log!(info, "️️️failed to unlock native token: {:?}", error);
+								log!(warn, "️️️failed to mint asset: {:?}", error);
 								return Err(error);
 							}
+						} else {
+							return Err(Error::<T>::WrongAssetId.into());
 						}
-						Facts::LockAsset(event) => {
-							if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.symbol) {
-								log!(
-									info,
-									"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
-									asset_id,
-									event.sender_id_in_near,
-									event.receiver_id_in_appchain,
-									event.amount,
-								);
-								if let Err(error) = Self::mint_asset_inner(
-									asset_id,
-									event.sender_id_in_near,
-									event.receiver_id_in_appchain,
-									event.amount,
-								) {
-									log!(info, "️️️failed to mint asset: {:?}", error);
-									return Err(error);
-								}
-							} else {
-								return Err(Error::<T>::WrongAssetId.into());
-							}
-						}
-					},
+					}
 				}
 
-				let obs = <Observations<T>>::get(observation_type, seq_num);
+				let obs = <Observations<T>>::get(observation_type, obs_id);
 				for o in obs.iter() {
 					<Observing<T>>::remove(o);
 				}
-				<Observations<T>>::remove(observation_type, seq_num);
+				<Observations<T>>::remove(observation_type, obs_id);
 
 				if matches!(observation_type, ObservationType::LockAsset)
 					|| matches!(observation_type, ObservationType::Burn)
@@ -946,14 +931,12 @@ pub mod pallet {
 				Observation::UpdateValidatorSet(_) => {
 					return ObservationType::UpdateValidatorSet;
 				}
-				Observation::FactEvents(event) => match event.fact_event {
-					Facts::Burn(_) => {
-						return ObservationType::Burn;
-					}
-					Facts::LockAsset(_) => {
-						return ObservationType::LockAsset;
-					}
-				},
+				Observation::Burn(_) => {
+					return ObservationType::Burn;
+				}
+				Observation::LockAsset(_) => {
+					return ObservationType::LockAsset;
+				}
 			}
 		}
 

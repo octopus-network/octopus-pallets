@@ -100,7 +100,7 @@ impl<T: Config> Pallet<T> {
 			log::warn!("Failed to decode http body");
 			http::Error::Unknown
 		})?;
-		log!(info, "json_response: {:?}", json_response);
+		log!(debug, "{:?}", json_response);
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
 		let validators: Vec<Validator<<T as frame_system::Config>::AccountId>> =
@@ -109,7 +109,7 @@ impl<T: Config> Pallet<T> {
 				http::Error::Unknown
 			})?;
 		if validators.len() > 0 {
-			let val_set = ValidatorSet { sequence_number: era, validators };
+			let val_set = ValidatorSet { era, validators };
 			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 
@@ -127,8 +127,8 @@ impl<T: Config> Pallet<T> {
 		Some(res)
 	}
 
-	/// Fetch the facts of a specified appchain from anchor contract.
-	pub(super) fn fetch_facts(
+	/// Fetch the anchor events from anchor contract.
+	pub(super) fn get_anchor_event_histories(
 		anchor_contract: Vec<u8>,
 		index: u32,
 		limit: u32,
@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_facts_args(index, limit).ok_or_else(|| {
+		let args = Self::encode_get_events_args(index, limit).ok_or_else(|| {
 			log!(info, "Encode args error");
 			http::Error::Unknown
 		})?;
@@ -223,13 +223,14 @@ impl<T: Config> Pallet<T> {
 
 		// Parse every event
 		for event_history in events.iter() {
-			let facts: Result<Facts<<T as frame_system::Config>::AccountId>, _> =
+			let event: Result<AnchorEvent<<T as frame_system::Config>::AccountId>, _> =
 				serde_json::from_slice(&event_history.anchor_event);
 
-			if let Ok(facts) = facts {
-				log!(info, "facts: {:#?}", facts);
-				let fact_history = FactsHistory { index: event_history.index, fact_event: facts };
-				obs.push(Observation::FactEvents(fact_history));
+			if let Ok(event) = event {
+				log!(info, "facts: {:#?}", event);
+			// TODO
+			// event.index = event_history.index;
+			// obs.push(Observation::FactEvents(fact_history));
 			} else {
 				log!(info, "Some err happened when decode from facts");
 				return Ok(obs);
@@ -241,11 +242,11 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	fn encode_get_facts_args(start_index: u32, quantity: u32) -> Option<Vec<u8>> {
+	fn encode_get_events_args(start: u32, limit: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"start_index\":\"");
-		let start_index = start_index.to_string();
+		let start_index = start.to_string();
 		let b = String::from(",\"quantity\":");
-		let quantity = quantity.to_string();
+		let quantity = limit.to_string();
 		let c = String::from("}");
 		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
