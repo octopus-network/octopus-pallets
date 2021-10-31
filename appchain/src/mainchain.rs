@@ -15,6 +15,14 @@ struct ResponseResult {
 	block_hash: String,
 }
 
+#[derive(Deserialize, RuntimeDebug)]
+pub struct AnchorEventHistory {
+	anchor_event: Vec<u8>,
+	block_height: u64,
+	timestamp: u64,
+	index: u32,
+}
+
 impl<T: Config> Pallet<T> {
 	/// Gets a validator set by the specified era number.
 	/// Returns an empty list if the validator set has not been generated.
@@ -92,7 +100,7 @@ impl<T: Config> Pallet<T> {
 			log::warn!("Failed to decode http body");
 			http::Error::Unknown
 		})?;
-		log!(info, "json_response: {:?}", json_response);
+		log!(debug, "{:?}", json_response);
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
 		let validators: Vec<Validator<<T as frame_system::Config>::AccountId>> =
@@ -101,7 +109,7 @@ impl<T: Config> Pallet<T> {
 				http::Error::Unknown
 			})?;
 		if validators.len() > 0 {
-			let val_set = ValidatorSet { sequence_number: era, validators };
+			let val_set = ValidatorSet { era, validators };
 			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 
@@ -119,11 +127,10 @@ impl<T: Config> Pallet<T> {
 		Some(res)
 	}
 
-	/// Fetch the facts of a specified appchain from anchor contract.
-	pub(super) fn fetch_facts(
+	/// Fetch the anchor events from anchor contract.
+	pub(super) fn get_anchor_event_histories(
 		anchor_contract: Vec<u8>,
-		appchain_id: Vec<u8>,
-		start: u32,
+		index: u32,
 		limit: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
@@ -136,8 +143,8 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_args(appchain_id, start, limit).ok_or_else(|| {
-			log!(warn, "Encode args error");
+		let args = Self::encode_get_events_args(index, limit).ok_or_else(|| {
+			log!(info, "Encode args error");
 			http::Error::Unknown
 		})?;
 
@@ -154,7 +161,7 @@ impl<T: Config> Pallet<T> {
 		body.extend(&anchor_contract);
 		body.extend(
 			br#"",
-				"method_name": "get_facts",
+				"method_name": "get_anchor_event_histories",
 				"args_base64": ""#,
 		);
 		body.extend(&args);
@@ -192,27 +199,56 @@ impl<T: Config> Pallet<T> {
 		let body = response.body().collect::<Vec<u8>>();
 		log!(debug, "body: {:?}", body);
 
-		// TODO
-		let json_response: Response = serde_json::from_slice(&body).unwrap();
-		log!(info, "{:?}", json_response);
+		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
+		let json_response: Result<Response, _> = serde_json::from_slice(&body);
+		let mut response: Response;
+		if let Ok(json_response) = json_response {
+			response = json_response;
+			log!(info, "json_response: {:#?}", response);
+		} else {
+			log!(info, "Err happened when decode from response");
+			return Ok(obs);
+		}
 
-		let obs: Vec<Observation<<T as frame_system::Config>::AccountId>> =
-			serde_json::from_slice(&json_response.result.result).unwrap();
+		let event_histories: Result<Vec<AnchorEventHistory>, _> =
+			serde_json::from_slice(&response.result.result);
+		let mut events: Vec<AnchorEventHistory>;
+		if let Ok(event_histories) = event_histories {
+			events = event_histories;
+			log!(info, "event_histories: {:#?}", events);
+		} else {
+			log!(info, "Err happened when decode from achor event history");
+			return Ok(obs);
+		}
+
+		// Parse every event
+		for event_history in events.iter() {
+			let event: Result<AnchorEvent<<T as frame_system::Config>::AccountId>, _> =
+				serde_json::from_slice(&event_history.anchor_event);
+
+			if let Ok(event) = event {
+				log!(info, "facts: {:#?}", event);
+			// TODO
+			// event.index = event_history.index;
+			// obs.push(Observation::FactEvents(fact_history));
+			} else {
+				log!(info, "Some err happened when decode from facts");
+				return Ok(obs);
+			}
+		}
 
 		log!(debug, "Got observations: {:?}", obs);
 
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_args(appchain_id: Vec<u8>, start: u32, limit: u32) -> Option<Vec<u8>> {
-		let a = String::from("{\"appchain_id\":\"");
-		let appchain_id = sp_std::str::from_utf8(&appchain_id).expect("octopus team will ensure that the appchain_id of a live appchain is a valid UTF8 string; qed");
-		let b = String::from("\",\"start\":");
-		let start = start.to_string();
-		let c = String::from(",\"limit\":");
-		let limit = limit.to_string();
-		let d = String::from("}");
-		let json = a + &appchain_id + &b + &start + &c + &limit + &d;
+	fn encode_get_events_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+		let a = String::from("{\"start_index\":\"");
+		let start_index = start.to_string();
+		let b = String::from(",\"quantity\":");
+		let quantity = limit.to_string();
+		let c = String::from("}");
+		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
 		Some(res)
 	}
