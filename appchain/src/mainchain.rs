@@ -26,7 +26,7 @@ pub struct AnchorEventHistory {
 impl<T: Config> Pallet<T> {
 	/// Gets a validator set by the specified era number.
 	/// Returns an empty list if the validator set has not been generated.
-	pub(super) fn get_validator_list_of_era(
+	pub(super) fn get_validator_list_of(
 		anchor_contract: Vec<u8>,
 		era: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
@@ -41,7 +41,7 @@ impl<T: Config> Pallet<T> {
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
 		let args = Self::encode_get_validator_args(era).ok_or_else(|| {
-			log!(info, "Encode get_validator_list_of_era args error");
+			log!(warn, "Encode get_validator_list_of args error");
 			http::Error::Unknown
 		})?;
 
@@ -58,7 +58,7 @@ impl<T: Config> Pallet<T> {
 		body.extend(&anchor_contract);
 		body.extend(
 			br#"",
-				"method_name": "get_validator_list_of_era",
+				"method_name": "get_validator_list_of",
 				"args_base64": ""#,
 		);
 		body.extend(&args);
@@ -86,7 +86,7 @@ impl<T: Config> Pallet<T> {
 		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			log!(info, "Unexpected status code: {}", response.code);
+			log!(warn, "Unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
 		}
 
@@ -94,21 +94,26 @@ impl<T: Config> Pallet<T> {
 		// Note that the return object allows you to read the body in chunks as well
 		// with a way to control the deadline.
 		let body = response.body().collect::<Vec<u8>>();
-		log!(info, "body: {:?}", body);
+		log!(debug, "body: {:?}", body);
 
-		// TODO
-		let json_response: Response = serde_json::from_slice(&body).unwrap();
+		let json_response: Response = serde_json::from_slice(&body).map_err(|_| {
+			log::warn!("Failed to decode http body");
+			http::Error::Unknown
+		})?;
 		log!(info, "json_response: {:?}", json_response);
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
 		let validators: Vec<Validator<<T as frame_system::Config>::AccountId>> =
-			serde_json::from_slice(&json_response.result.result).unwrap();
+			serde_json::from_slice(&json_response.result.result).map_err(|_| {
+				log!(warn, "Failed to decode validators");
+				http::Error::Unknown
+			})?;
 		if validators.len() > 0 {
 			let val_set = ValidatorSet { sequence_number: era, validators };
 			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 
-		log!(info, "Got observations: {:?}", obs);
+		log!(debug, "Got observations: {:?}", obs);
 
 		Ok(obs)
 	}
@@ -184,7 +189,7 @@ impl<T: Config> Pallet<T> {
 		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			log!(info, "Unexpected status code: {}", response.code);
+			log!(warn, "Unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
 		}
 
@@ -192,7 +197,7 @@ impl<T: Config> Pallet<T> {
 		// Note that the return object allows you to read the body in chunks as well
 		// with a way to control the deadline.
 		let body = response.body().collect::<Vec<u8>>();
-		log!(info, "body: {:?}", body);
+		log!(debug, "body: {:?}", body);
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
 		let json_response: Result<Response, _> = serde_json::from_slice(&body);
@@ -231,7 +236,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		log!(info, "Got observations: {:?}", obs);
+		log!(debug, "Got observations: {:?}", obs);
 
 		Ok(obs)
 	}

@@ -32,18 +32,6 @@ pallet-octopus-support = { path = "../support", default-features = false }
 
 # Optional imports for benchmarking
 frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false, optional = true }
-rand_chacha = { version = "0.2", default-features = false, optional = true }
-
-[dev-dependencies]
-sp-storage = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-sp-tracing = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-pallet-timestamp = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-substrate-test-utils = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-rand_chacha = { version = "0.2" }
-parking_lot = "0.11.1"
 
 [features]
 default = ["std"]
@@ -63,8 +51,5 @@ std = [
 	"pallet-session/std",
 	"pallet-octopus-support/std",
 ]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"rand_chacha",
-]
+runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

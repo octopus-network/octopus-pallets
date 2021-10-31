@@ -1,5 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod traits;
+pub mod types;
+
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-support";
 
 // syntactic sugar for logging.
@@ -12,6 +15,3 @@ macro_rules! log {
 		)
 	};
 }
-
-pub mod traits;
-pub mod types;

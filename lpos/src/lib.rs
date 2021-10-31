@@ -9,10 +9,7 @@ use alloc::string::{String, ToString};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
-#[cfg(test)]
-mod mock;
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod testing_utils;
+
 #[cfg(test)]
 mod tests;
 
@@ -27,8 +24,11 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_support::traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider};
-use pallet_octopus_support::types::{EraPayoutPayload, PayloadType, PlanNewEraPayload};
+use pallet_octopus_support::{
+	log,
+	traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	types::{EraPayoutPayload, PayloadType, PlanNewEraPayload},
+};
 use pallet_session::historical;
 use scale_info::TypeInfo;
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion};
@@ -47,17 +47,6 @@ pub use weights::WeightInfo;
 pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-lpos";
-
-// syntactic sugar for logging.
-#[macro_export]
-macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		log::$level!(
-			target: crate::LOG_TARGET,
-			concat!("[{:?}] 🐙 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
-		)
-	};
-}
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
@@ -150,7 +139,7 @@ where
 		}
 
 		Self::validators().into_iter().find(|v| {
-			log!(info, "check {:#?} == {:#?}", v, who);
+			log!(debug, "check {:#?} == {:#?}", v, who);
 			T::ValidatorIdOf::convert(v.clone()) == who
 		})
 	}
@@ -503,7 +492,7 @@ pub mod pallet {
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
+		#[pallet::weight(0)]
 		pub fn set_history_depth(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_history_depth: EraIndex,
@@ -543,7 +532,7 @@ impl<T: Config> Pallet<T> {
 			let era_length =
 				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
 
-			log!(debug, "era_length: {:?}", era_length);
+			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				if era_length == T::SessionsPerEra::get() - 2 {
 					let message = PlanNewEraPayload { new_planned_era: current_era + 1 };
@@ -553,7 +542,7 @@ impl<T: Config> Pallet<T> {
 						PayloadType::PlanNewEra,
 						&message.try_to_vec().unwrap(),
 					);
-					log!(debug, "plan new era is sent: {:?}", res);
+					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
 				}
 				return None;
 			}
@@ -668,18 +657,14 @@ impl<T: Config> Pallet<T> {
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 
-			let message = EraPayoutPayload {
-				era: active_era.index,
-				payout: validator_payout,
-				exclude: exclude_validators,
-			};
+			let message = EraPayoutPayload { era: active_era.index, exclude: exclude_validators };
 
 			let res = T::UpwardMessagesInterface::submit(
 				&T::AccountId::default(),
 				PayloadType::EraPayout,
 				&message.try_to_vec().unwrap(),
 			);
-			log!(debug, "era payout is sent: {:?}", res);
+			log!(info, "UpwardMessage::EraPayout: {:?}", res);
 		}
 	}
 
@@ -742,7 +727,7 @@ impl<T: Config> Pallet<T> {
 		if new_planned_era > 0 {
 			log!(
 				info,
-				"new validator set of size {:?} has been processed for era {:?}",
+				"New validator set of size {:?} has been processed for era {:?}",
 				elected_stashes.len(),
 				new_planned_era,
 			);
@@ -854,12 +839,12 @@ where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
-		log!(info, "note_author: {:?}", author);
+		log!(debug, "note_author: {:?}", author);
 		Self::reward_by_ids(vec![(author, 1)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		log!(
-			info,
+			debug,
 			"note_uncle: {:?} {:?} - {:?}",
 			author,
 			_age,
