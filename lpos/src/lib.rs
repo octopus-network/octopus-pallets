@@ -532,7 +532,7 @@ impl<T: Config> Pallet<T> {
 			let era_length =
 				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
 
-			log!(debug, "era_length: {:?}", era_length);
+			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				if era_length == T::SessionsPerEra::get() - 2 {
 					let message = PlanNewEraPayload { new_planned_era: current_era + 1 };
@@ -542,7 +542,7 @@ impl<T: Config> Pallet<T> {
 						PayloadType::PlanNewEra,
 						&message.try_to_vec().unwrap(),
 					);
-					log!(debug, "plan new era is sent: {:?}", res);
+					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
 				}
 				return None;
 			}
@@ -664,7 +664,7 @@ impl<T: Config> Pallet<T> {
 				PayloadType::EraPayout,
 				&message.try_to_vec().unwrap(),
 			);
-			log!(info, "era payout is sent: {:?}", res);
+			log!(info, "UpwardMessage::EraPayout: {:?}", res);
 		}
 	}
 
