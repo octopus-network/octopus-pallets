@@ -9,10 +9,7 @@ use alloc::string::{String, ToString};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
-#[cfg(test)]
-mod mock;
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod testing_utils;
+
 #[cfg(test)]
 mod tests;
 
@@ -495,7 +492,7 @@ pub mod pallet {
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
+		#[pallet::weight(0)]
 		pub fn set_history_depth(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_history_depth: EraIndex,
@@ -660,11 +657,7 @@ impl<T: Config> Pallet<T> {
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 
-			let message = EraPayoutPayload {
-				era: active_era.index,
-				payout: validator_payout,
-				exclude: exclude_validators,
-			};
+			let message = EraPayoutPayload { era: active_era.index, exclude: exclude_validators };
 
 			let res = T::UpwardMessagesInterface::submit(
 				&T::AccountId::default(),
@@ -734,7 +727,7 @@ impl<T: Config> Pallet<T> {
 		if new_planned_era > 0 {
 			log!(
 				info,
-				"new validator set of size {:?} has been processed for era {:?}",
+				"New validator set of size {:?} has been processed for era {:?}",
 				elected_stashes.len(),
 				new_planned_era,
 			);

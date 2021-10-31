@@ -34,9 +34,6 @@ sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkad
 
 pallet-octopus-support = { path = "../support", default-features = false }
 
-[dev-dependencies]
-sp-keystore = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-
 [features]
 default = ["std"]
 std = [

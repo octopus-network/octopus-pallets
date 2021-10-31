@@ -46,9 +46,7 @@ pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
-
-#[cfg(test)]
-mod mock;
+mod weights;
 
 #[cfg(test)]
 mod tests;
@@ -740,7 +738,7 @@ pub mod pallet {
 			let next_fact_sequence = NextFactSequence::<T>::get();
 			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
 			let next_era = current_era + 1;
-			log!(info, "next_era: {}", next_era);
+			log!(debug, "next_era: {}", next_era);
 
 			let mut should_fetch_facts = false;
 			if Self::should_get_validators(val_id) {
