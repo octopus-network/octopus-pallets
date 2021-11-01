@@ -16,10 +16,12 @@ struct ResponseResult {
 }
 
 #[derive(Deserialize, RuntimeDebug)]
-pub struct AnchorEventHistory {
-	anchor_event: Vec<u8>,
+pub struct AnchorEventHistory<AccountId> {
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	anchor_event: AnchorEvent<AccountId>,
 	block_height: u64,
 	timestamp: u64,
+	#[serde(deserialize_with = "deserialize_from_str")]
 	index: u32,
 }
 
@@ -175,6 +177,7 @@ impl<T: Config> Pallet<T> {
 			.url("https://rpc.testnet.near.org")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
+		log!(debug, "The request is: {:?}", request);
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
@@ -201,39 +204,42 @@ impl<T: Config> Pallet<T> {
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
 		let json_response: Result<Response, _> = serde_json::from_slice(&body);
-		let mut response: Response;
+		let response: Response;
 		if let Ok(json_response) = json_response {
 			response = json_response;
-			log!(info, "json_response: {:#?}", response);
+			log!(info, "json_response: {:?}", response);
 		} else {
 			log!(info, "Err happened when decode from response");
 			return Ok(obs);
 		}
 
-		let event_histories: Result<Vec<AnchorEventHistory>, _> =
-			serde_json::from_slice(&response.result.result);
-		let mut events: Vec<AnchorEventHistory>;
+		let event_histories: Result<
+			Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>>,
+			_,
+		> = serde_json::from_slice(&response.result.result);
+		let mut events: Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>> =
+			Vec::new();
 		if let Ok(event_histories) = event_histories {
 			events = event_histories;
 			log!(info, "event_histories: {:#?}", events);
-		} else {
-			log!(info, "Err happened when decode from achor event history");
-			return Ok(obs);
+		} else if let Err(e) = event_histories {
+			log!(debug, "Err happened when decode from achor event history, error {:?}", e);
 		}
 
 		// Parse every event
 		for event_history in events.iter() {
-			let event: Result<AnchorEvent<<T as frame_system::Config>::AccountId>, _> =
-				serde_json::from_slice(&event_history.anchor_event);
-
-			if let Ok(event) = event {
-				log!(info, "facts: {:#?}", event);
-			// TODO
-			// event.index = event_history.index;
-			// obs.push(Observation::FactEvents(fact_history));
-			} else {
-				log!(info, "Some err happened when decode from facts");
-				return Ok(obs);
+			match event_history.anchor_event.clone() {
+				AnchorEvent::Burn(mut e) => {
+					e.index = event_history.index;
+					obs.push(Observation::Burn(e));
+				}
+				AnchorEvent::LockAsset(mut e) => {
+					e.index = event_history.index;
+					obs.push(Observation::LockAsset(e));
+				}
+				_ => {
+					log!(debug, "Test ==== ");
+				}
 			}
 		}
 
@@ -245,9 +251,9 @@ impl<T: Config> Pallet<T> {
 	fn encode_get_events_args(start: u32, limit: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
-		let b = String::from(",\"quantity\":");
+		let b = String::from("\",\"quantity\":\"");
 		let quantity = limit.to_string();
-		let c = String::from("}");
+		let c = String::from("\"}");
 		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
 		Some(res)

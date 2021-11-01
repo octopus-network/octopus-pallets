@@ -111,6 +111,7 @@ pub struct ValidatorSet<AccountId> {
 /// Appchain token burn event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnEvent<AccountId> {
+	#[serde(default)]
 	index: u32,
 	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
@@ -126,6 +127,7 @@ pub struct BurnEvent<AccountId> {
 /// Token locked event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct LockAssetEvent<AccountId> {
+	#[serde(default)]
 	index: u32,
 	#[serde(rename = "symbol")]
 	#[serde(with = "serde_bytes")]
@@ -141,12 +143,31 @@ pub struct LockAssetEvent<AccountId> {
 	amount: u128,
 }
 
+// Begin: this is for test now, should remove later.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct FailedToMintWrappedAppchainToken {
+	#[serde(deserialize_with = "deserialize_from_str")]
+	amount: u128,
+}
+// End: this is for test now, should remove later.
+
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum AnchorEvent<AccountId> {
+	#[serde(rename = "NearFungibleTokenLocked")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	LockAsset(LockAssetEvent<AccountId>),
+	// Should use this code later.
+	// #[serde(rename = "WrappedAppchainTokenBurnt")]
+	// #[serde(bound(deserialize = "AccountId: Decode"))]
+	// Burn(BurnEvent<AccountId>),
+
+	// Begin: this is for test now, should remove later.
+	#[serde(rename = "FailedToMintWrappedAppchainToken")] //for test
+	LockAssert(FailedToMintWrappedAppchainToken), // for test
+	#[serde(rename = "FailedToBurnWrappedAppchainToken")] //for test
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+	// End: this is for test now, should remove later.
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
