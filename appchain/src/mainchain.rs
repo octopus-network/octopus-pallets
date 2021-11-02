@@ -177,7 +177,6 @@ impl<T: Config> Pallet<T> {
 			.url("https://rpc.testnet.near.org")
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
-		log!(debug, "The request is: {:?}", request);
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
@@ -202,31 +201,20 @@ impl<T: Config> Pallet<T> {
 		let body = response.body().collect::<Vec<u8>>();
 		log!(debug, "body: {:?}", body);
 
+		let json_response: Response = serde_json::from_slice(&body).map_err(|_| {
+			log::warn!("Failed to decode http body");
+			http::Error::Unknown
+		})?;
+		log!(debug, "{:?}", json_response);
+
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
-		let json_response: Result<Response, _> = serde_json::from_slice(&body);
-		let response: Response;
-		if let Ok(json_response) = json_response {
-			response = json_response;
-			log!(info, "json_response: {:?}", response);
-		} else {
-			log!(info, "Err happened when decode from response");
-			return Ok(obs);
-		}
+		let events: Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>> =
+			serde_json::from_slice(&json_response.result.result).map_err(|_| {
+				log!(warn, "Failed to decode anchor event history");
+				http::Error::Unknown
+			})?;
+		log!(debug, "event_histories: {:#?}", events);
 
-		let event_histories: Result<
-			Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>>,
-			_,
-		> = serde_json::from_slice(&response.result.result);
-		let mut events: Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>> =
-			Vec::new();
-		if let Ok(event_histories) = event_histories {
-			events = event_histories;
-			log!(info, "event_histories: {:#?}", events);
-		} else if let Err(e) = event_histories {
-			log!(debug, "Err happened when decode from achor event history, error {:?}", e);
-		}
-
-		// Parse every event
 		for event_history in events.iter() {
 			match event_history.anchor_event.clone() {
 				AnchorEvent::Burn(mut e) => {
