@@ -288,19 +288,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForAppchainId() -> Vec<u8> {
+	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
 		Vec::new()
 	}
-
-	#[pallet::type_value]
-	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
-		b"octopus-anchor.testnet".to_vec()
-	}
-
-	#[pallet::storage]
-	#[pallet::getter(fn appchain_id)]
-	pub(super) type AppchainId<T: Config> =
-		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAppchainId>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
@@ -348,7 +338,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub appchain_id: String,
 		pub anchor_contract: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 		pub validators: Vec<(T::AccountId, u128)>,
@@ -359,7 +348,6 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				appchain_id: String::new(),
 				anchor_contract: String::new(),
 				asset_id_by_name: Vec::new(),
 				validators: Vec::new(),
@@ -371,7 +359,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<AppchainId<T>>::put(self.appchain_id.as_bytes());
 			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
 			for (token_id, id) in self.asset_id_by_name.iter() {
@@ -433,10 +420,10 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			// Only communicate with mainchain if we are a potential validator and the appchain_id is not an empty string.
-			let appchain_id = Self::appchain_id();
+			// Only communicate with mainchain if we are a potential validator and the anchor contract is not an empty string.
+			let anchor_contract = Self::anchor_contract();
 			let mut obser_id: Option<T::AccountId> = None;
-			if sp_io::offchain::is_validator() && appchain_id.len() > 0 {
+			if sp_io::offchain::is_validator() && anchor_contract.len() > 0 {
 				let mut found = false;
 				for key in <T::AuthorityId as AppCrypto<
 					<T as SigningTypes>::Public,
@@ -476,7 +463,6 @@ pub mod pallet {
 					block_number,
 					anchor_contract,
 					current_era,
-					appchain_id.clone(),
 					limit,
 					obser_id,
 				) {
@@ -758,7 +744,6 @@ pub mod pallet {
 			block_number: T::BlockNumber,
 			anchor_contract: Vec<u8>,
 			current_era: u32,
-			appchain_id: Vec<u8>,
 			limit: u32,
 			val_id: T::AccountId,
 		) -> Result<(), &'static str> {

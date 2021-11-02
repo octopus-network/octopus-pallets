@@ -534,7 +534,8 @@ impl<T: Config> Pallet<T> {
 
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
-				if era_length == T::SessionsPerEra::get() - 2 {
+				// The 5th session of the era.
+				if era_length == T::SessionsPerEra::get() - 1 {
 					let message = PlanNewEraPayload { new_planned_era: current_era + 1 };
 
 					let res = T::UpwardMessagesInterface::submit(
