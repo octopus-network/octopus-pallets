@@ -456,13 +456,13 @@ pub mod pallet {
 				}
 				let obser_id = obser_id.unwrap();
 				let anchor_contract = Self::anchor_contract();
-				let current_era = T::LposInterface::current_era();
+				let active_era = T::LposInterface::active_era();
 				// TODO: move limit to trait
 				let limit = 10;
 				if let Err(e) = Self::observing_mainchain(
 					block_number,
 					anchor_contract,
-					current_era,
+					active_era,
 					limit,
 					obser_id,
 				) {
@@ -661,11 +661,11 @@ pub mod pallet {
 				Ok(next_index) => {
 					log!(
 						debug,
-						"next_index: {}, current_era: {}",
+						"next_index: {}, active_era: {}",
 						next_index,
-						T::LposInterface::current_era()
+						T::LposInterface::active_era()
 					);
-					if next_index > T::LposInterface::current_era() {
+					if next_index > T::LposInterface::active_era() {
 						return false;
 					}
 				}
@@ -743,7 +743,7 @@ pub mod pallet {
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
 			anchor_contract: Vec<u8>,
-			current_era: u32,
+			active_era: u32,
 			limit: u32,
 			val_id: T::AccountId,
 		) -> Result<(), &'static str> {
@@ -752,7 +752,7 @@ pub mod pallet {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = Vec::new();
 			let next_fact_sequence = NextFactSequence::<T>::get();
 			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
-			let next_era = current_era + 1;
+			let next_era = active_era + 1;
 			log!(debug, "next_era: {}", next_era);
 
 			if Self::should_get_validators(val_id) {
@@ -871,8 +871,7 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators);
 						log!(debug, "set value to planned validators succeed");
-						let next_index =
-							T::LposInterface::current_era().checked_add(1).unwrap_or(0);
+						let next_index = T::LposInterface::active_era().checked_add(1).unwrap_or(0); // TODO
 						<NextSubmitObsIndex<T>>::put(next_index);
 						<SubmitSequenceNumber<T>>::kill();
 					}

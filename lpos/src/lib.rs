@@ -163,8 +163,8 @@ impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet
 		Self::active_era().map(|active_era| Self::eras_total_stake(active_era.index))
 	}
 
-	fn current_era() -> u32 {
-		Self::current_era().map_or(0, |v| v)
+	fn active_era() -> u32 {
+		Self::active_era().map_or(0, |active_era| active_era.index)
 	}
 }
 
