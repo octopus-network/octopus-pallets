@@ -281,6 +281,9 @@ pub mod pallet {
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
+
+		#[pallet::constant]
+		type RequestEventLimit: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -457,15 +460,9 @@ pub mod pallet {
 				let obser_id = obser_id.unwrap();
 				let anchor_contract = Self::anchor_contract();
 				let active_era = T::LposInterface::active_era();
-				// TODO: move limit to trait
-				let limit = 10;
-				if let Err(e) = Self::observing_mainchain(
-					block_number,
-					anchor_contract,
-					active_era,
-					limit,
-					obser_id,
-				) {
+				if let Err(e) =
+					Self::observing_mainchain(block_number, anchor_contract, active_era, obser_id)
+				{
 					log!(warn, "observing_mainchain: Error: {}", e);
 				}
 			}
@@ -744,7 +741,6 @@ pub mod pallet {
 			block_number: T::BlockNumber,
 			anchor_contract: Vec<u8>,
 			active_era: u32,
-			limit: u32,
 			val_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			// Make an external HTTP request to fetch events from mainchain.
@@ -763,8 +759,12 @@ pub mod pallet {
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get anchor events.");
 				// check cross-chain transfers only if there isn't a validator_set update.
-				obs = Self::get_anchor_event_histories(anchor_contract, next_fact_sequence, limit)
-					.map_err(|_| "Failed to get_anchor_event_histories")?;
+				obs = Self::get_anchor_event_histories(
+					anchor_contract,
+					next_fact_sequence,
+					T::RequestEventLimit::get(),
+				)
+				.map_err(|_| "Failed to get_anchor_event_histories")?;
 			}
 
 			if obs.len() == 0 {
@@ -871,7 +871,9 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators);
 						log!(debug, "set value to planned validators succeed");
-						let next_index = T::LposInterface::active_era().checked_add(1).unwrap_or(0); // TODO
+						let next_index = T::LposInterface::active_era()
+							.checked_add(1)
+							.expect("Err happend: era number is overflow.");
 						<NextSubmitObsIndex<T>>::put(next_index);
 						<SubmitSequenceNumber<T>>::kill();
 					}
