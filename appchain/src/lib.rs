@@ -406,6 +406,8 @@ pub mod pallet {
 		WrongAssetId,
 		/// Invalid active total stake.
 		InvalidActiveTotalStake,
+		/// Next validators submit index overflow.
+		NextSubmitObsIndexOverflow,
 	}
 
 	#[pallet::hooks]
@@ -597,7 +599,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn mint_asset(
 			origin: OriginFor<T>,
 			asset_id: AssetIdOf<T>,
@@ -816,6 +817,7 @@ pub mod pallet {
 
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
+		#[transactional]
 		fn submit_observation(
 			validator_id: &T::AccountId,
 			observation: Observation<T::AccountId>,
@@ -873,7 +875,7 @@ pub mod pallet {
 						log!(debug, "set value to planned validators succeed");
 						let next_index = T::LposInterface::active_era()
 							.checked_add(1)
-							.expect("Err happend: era number is overflow.");
+							.ok_or(Error::<T>::NextSubmitObsIndexOverflow)?;
 						<NextSubmitObsIndex<T>>::put(next_index);
 						<SubmitSequenceNumber<T>>::kill();
 					}
