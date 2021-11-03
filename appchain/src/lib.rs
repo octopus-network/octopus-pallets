@@ -599,6 +599,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn mint_asset(
 			origin: OriginFor<T>,
 			asset_id: AssetIdOf<T>,
