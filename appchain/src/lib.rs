@@ -143,31 +143,15 @@ pub struct LockAssetEvent<AccountId> {
 	amount: u128,
 }
 
-// Begin: this is for test now, should remove later.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct FailedToMintWrappedAppchainToken {
-	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
-}
-// End: this is for test now, should remove later.
-
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum AnchorEvent<AccountId> {
+pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "NearFungibleTokenLocked")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	LockAsset(LockAssetEvent<AccountId>),
-	// Should use this code later.
-	// #[serde(rename = "WrappedAppchainTokenBurnt")]
-	// #[serde(bound(deserialize = "AccountId: Decode"))]
-	// Burn(BurnEvent<AccountId>),
 
-	// Begin: this is for test now, should remove later.
-	#[serde(rename = "FailedToMintWrappedAppchainToken")] //for test
-	LockAssert(FailedToMintWrappedAppchainToken), // for test
-	#[serde(rename = "FailedToBurnWrappedAppchainToken")] //for test
+	#[serde(rename = "WrappedAppchainTokenBurnt")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
-	// End: this is for test now, should remove later.
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -759,14 +743,14 @@ pub mod pallet {
 			}
 
 			if obs.len() == 0 {
-				log!(debug, "No validat_set updates, try to get anchor events.");
+				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// check cross-chain transfers only if there isn't a validator_set update.
-				obs = Self::get_anchor_event_histories(
+				obs = Self::get_appchain_notification_histories(
 					anchor_contract,
 					next_fact_sequence,
 					T::RequestEventLimit::get(),
 				)
-				.map_err(|_| "Failed to get_anchor_event_histories")?;
+				.map_err(|_| "Failed to get_appchain_notification_histories")?;
 			}
 
 			if obs.len() == 0 {
