@@ -226,7 +226,7 @@ impl<T: Config> Pallet<T> {
 					obs.push(Observation::LockAsset(e));
 				}
 				_ => {
-					log!(debug, "Test ==== ");
+					log!(debug, "Should never get here.");
 				}
 			}
 		}
