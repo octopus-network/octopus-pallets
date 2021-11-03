@@ -310,10 +310,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn premined_amount)]
-	pub type PreminedAmount<T> = StorageValue<_, u128, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
@@ -359,7 +355,6 @@ pub mod pallet {
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
-				<PreminedAmount<T>>::put(self.premined_amount);
 			}
 
 			<PalletAccount<T>>::put(account_id);
