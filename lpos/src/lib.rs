@@ -517,6 +517,7 @@ pub mod pallet {
 		pub fn force_set_era_payout(origin: OriginFor<T>, era_payout: u128) -> DispatchResult {
 			ensure_root(origin)?;
 			<EraPayout<T>>::put(era_payout);
+			log!(debug, "force set EraPayout: {:?}", era_payout);
 			Ok(())
 		}
 	}
@@ -673,6 +674,11 @@ impl<T: Config> Pallet<T> {
 					validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 				T::Currency::deposit_creating(&Self::account_id(), amount);
 				message.is_payout_created = true;
+				log!(
+					debug,
+					"Will send EraPayout message, era_payout is {:?}",
+					<EraPayout<T>>::get()
+				);
 			}
 
 			let res = T::UpwardMessagesInterface::submit(
