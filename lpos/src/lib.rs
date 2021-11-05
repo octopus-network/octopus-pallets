@@ -511,6 +511,14 @@ pub mod pallet {
 			}
 			Ok(())
 		}
+
+		// Force set era rewards with sudo permissions.
+		#[pallet::weight(0)]
+		pub fn force_set_era_payout(origin: OriginFor<T>, era_payout: u128) -> DispatchResult {
+			ensure_root(origin)?;
+			<EraPayout<T>>::put(era_payout);
+			Ok(())
+		}
 	}
 }
 
@@ -654,12 +662,18 @@ impl<T: Config> Pallet<T> {
 				})
 				.collect::<Vec<String>>();
 
-			// TODO
-			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
-			T::Currency::deposit_creating(&Self::account_id(), amount);
+			let mut message = EraPayoutPayload {
+				era: active_era.index,
+				is_payout_created: false,
+				exclude: exclude_validators,
+			};
 
-			let message =
-				EraPayoutPayload { era: active_era.index, payout: 0, exclude: exclude_validators };
+			if <EraPayout<T>>::get() > 0 {
+				let amount =
+					validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+				T::Currency::deposit_creating(&Self::account_id(), amount);
+				message.is_payout_created = true;
+			}
 
 			let res = T::UpwardMessagesInterface::submit(
 				&T::AccountId::default(),

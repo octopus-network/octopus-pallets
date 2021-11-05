@@ -740,20 +740,12 @@ pub mod pallet {
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// check cross-chain transfers only if there isn't a validator_set update.
-<<<<<<< HEAD
-				obs = Self::get_anchor_event_histories(
-=======
 				obs = Self::get_appchain_notification_histories(
->>>>>>> main
 					anchor_contract,
 					next_fact_sequence,
 					T::RequestEventLimit::get(),
 				)
-<<<<<<< HEAD
-				.map_err(|_| "Failed to get_anchor_event_histories")?;
-=======
 				.map_err(|_| "Failed to get_appchain_notification_histories")?;
->>>>>>> main
 			}
 
 			if obs.len() == 0 {

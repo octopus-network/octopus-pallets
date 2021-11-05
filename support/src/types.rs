@@ -41,6 +41,6 @@ pub struct PlanNewEraPayload {
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EraPayoutPayload {
 	pub era: u32,
-	pub payout: u128,
+	pub is_payout_created: bool,
 	pub exclude: Vec<String>,
 }
