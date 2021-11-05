@@ -29,6 +29,7 @@ impl<T: Config> Pallet<T> {
 	/// Gets a validator set by the specified era number.
 	/// Returns an empty list if the validator set has not been generated.
 	pub(super) fn get_validator_list_of(
+		rpc_url: &str,
 		anchor_contract: Vec<u8>,
 		era: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
@@ -71,7 +72,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://rpc.testnet.near.org")
+			.url(rpc_url)
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
@@ -131,6 +132,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Fetch the notifications from anchor contract.
 	pub(super) fn get_appchain_notification_histories(
+		rpc_url: &str,
 		anchor_contract: Vec<u8>,
 		index: u32,
 		limit: u32,
@@ -174,7 +176,7 @@ impl<T: Config> Pallet<T> {
 		);
 		let request = http::Request::default()
 			.method(http::Method::Post)
-			.url("https://rpc.testnet.near.org")
+			.url(rpc_url)
 			.body(vec![body])
 			.add_header("Content-Type", "application/json");
 		// We set the deadline for sending of the request, note that awaiting response can
