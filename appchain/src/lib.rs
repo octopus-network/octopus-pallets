@@ -143,31 +143,15 @@ pub struct LockAssetEvent<AccountId> {
 	amount: u128,
 }
 
-// Begin: this is for test now, should remove later.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct FailedToMintWrappedAppchainToken {
-	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
-}
-// End: this is for test now, should remove later.
-
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum AnchorEvent<AccountId> {
+pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "NearFungibleTokenLocked")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	LockAsset(LockAssetEvent<AccountId>),
-	// Should use this code later.
-	// #[serde(rename = "WrappedAppchainTokenBurnt")]
-	// #[serde(bound(deserialize = "AccountId: Decode"))]
-	// Burn(BurnEvent<AccountId>),
 
-	// Begin: this is for test now, should remove later.
-	#[serde(rename = "FailedToMintWrappedAppchainToken")] //for test
-	LockAssert(FailedToMintWrappedAppchainToken), // for test
-	#[serde(rename = "FailedToBurnWrappedAppchainToken")] //for test
+	#[serde(rename = "WrappedAppchainTokenBurnt")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
-	// End: this is for test now, should remove later.
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -326,10 +310,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn premined_amount)]
-	pub type PreminedAmount<T> = StorageValue<_, u128, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
@@ -375,7 +355,6 @@ pub mod pallet {
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
-				<PreminedAmount<T>>::put(self.premined_amount);
 			}
 
 			<PalletAccount<T>>::put(account_id);
@@ -759,14 +738,22 @@ pub mod pallet {
 			}
 
 			if obs.len() == 0 {
-				log!(debug, "No validat_set updates, try to get anchor events.");
+				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// check cross-chain transfers only if there isn't a validator_set update.
+<<<<<<< HEAD
 				obs = Self::get_anchor_event_histories(
+=======
+				obs = Self::get_appchain_notification_histories(
+>>>>>>> main
 					anchor_contract,
 					next_fact_sequence,
 					T::RequestEventLimit::get(),
 				)
+<<<<<<< HEAD
 				.map_err(|_| "Failed to get_anchor_event_histories")?;
+=======
+				.map_err(|_| "Failed to get_appchain_notification_histories")?;
+>>>>>>> main
 			}
 
 			if obs.len() == 0 {

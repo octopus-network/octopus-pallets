@@ -16,9 +16,9 @@ struct ResponseResult {
 }
 
 #[derive(Deserialize, RuntimeDebug)]
-pub struct AnchorEventHistory<AccountId> {
+pub struct AppchainNotificationHistory<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	anchor_event: AnchorEvent<AccountId>,
+	appchain_notification: AppchainNotification<AccountId>,
 	block_height: u64,
 	timestamp: u64,
 	#[serde(deserialize_with = "deserialize_from_str")]
@@ -129,8 +129,8 @@ impl<T: Config> Pallet<T> {
 		Some(res)
 	}
 
-	/// Fetch the anchor events from anchor contract.
-	pub(super) fn get_anchor_event_histories(
+	/// Fetch the notifications from anchor contract.
+	pub(super) fn get_appchain_notification_histories(
 		anchor_contract: Vec<u8>,
 		index: u32,
 		limit: u32,
@@ -145,8 +145,8 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_events_args(index, limit).ok_or_else(|| {
-			log!(info, "Encode args error");
+		let args = Self::encode_get_notification_args(index, limit).ok_or_else(|| {
+			log!(info, "Encode get_appchain_notification_histories args error");
 			http::Error::Unknown
 		})?;
 
@@ -163,7 +163,7 @@ impl<T: Config> Pallet<T> {
 		body.extend(&anchor_contract);
 		body.extend(
 			br#"",
-				"method_name": "get_anchor_event_histories",
+				"method_name": "get_appchain_notification_histories",
 				"args_base64": ""#,
 		);
 		body.extend(&args);
@@ -208,25 +208,23 @@ impl<T: Config> Pallet<T> {
 		log!(debug, "{:?}", json_response);
 
 		let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = vec![];
-		let events: Vec<AnchorEventHistory<<T as frame_system::Config>::AccountId>> =
-			serde_json::from_slice(&json_response.result.result).map_err(|_| {
-				log!(warn, "Failed to decode anchor event history");
-				http::Error::Unknown
-			})?;
-		log!(debug, "event_histories: {:#?}", events);
+		let notifications: Vec<
+			AppchainNotificationHistory<<T as frame_system::Config>::AccountId>,
+		> = serde_json::from_slice(&json_response.result.result).map_err(|_| {
+			log!(warn, "Failed to decode appchain notification histories");
+			http::Error::Unknown
+		})?;
+		log!(debug, "appchain notifications: {:#?}", notifications);
 
-		for event_history in events.iter() {
-			match event_history.anchor_event.clone() {
-				AnchorEvent::Burn(mut e) => {
-					e.index = event_history.index;
-					obs.push(Observation::Burn(e));
+		for n in notifications.iter() {
+			match n.appchain_notification.clone() {
+				AppchainNotification::Burn(mut event) => {
+					event.index = n.index;
+					obs.push(Observation::Burn(event));
 				}
-				AnchorEvent::LockAsset(mut e) => {
-					e.index = event_history.index;
-					obs.push(Observation::LockAsset(e));
-				}
-				_ => {
-					log!(debug, "Should never get here.");
+				AppchainNotification::LockAsset(mut event) => {
+					event.index = n.index;
+					obs.push(Observation::LockAsset(event));
 				}
 			}
 		}
@@ -236,7 +234,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	fn encode_get_events_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+	fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");

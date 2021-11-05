@@ -658,7 +658,8 @@ impl<T: Config> Pallet<T> {
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 
-			let message = EraPayoutPayload { era: active_era.index, exclude: exclude_validators };
+			let message =
+				EraPayoutPayload { era: active_era.index, payout: 0, exclude: exclude_validators };
 
 			let res = T::UpwardMessagesInterface::submit(
 				&T::AccountId::default(),
