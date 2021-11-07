@@ -35,12 +35,13 @@ pub struct BurnAssetPayload {
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PlanNewEraPayload {
-	pub new_planned_era: u32,
+	pub next_set_id: u32,
+	pub era: u32,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EraPayoutPayload {
+	pub current_set_id: u32,
+	pub excluded_validators: Vec<String>,
 	pub era: u32,
-	pub is_payout_created: bool,
-	pub exclude: Vec<String>,
 }
