@@ -670,23 +670,22 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn default_rpc_endpoint() -> Vec<u8> {
-			let kind = sp_core::offchain::StorageKind::PERSISTENT;
-			let mut default_rpc_point = "https://rpc.testnet.near.org".to_string();
-			if let Some(rpc_url) = sp_io::offchain::local_storage_get(kind, b"main_net") {
-				//Should use main net rpc address
-				default_rpc_point = "https://rpc.mainnet.near.org".to_string();
-			}
-			default_rpc_point.as_bytes().to_vec()
+		fn default_rpc_endpoint() -> String {
+			"https://rpc.testnet.near.org".to_string()
 		}
 
-		fn get_rpc_endpoint() -> Vec<u8> {
+		fn get_rpc_endpoint() -> String {
 			let kind = sp_core::offchain::StorageKind::PERSISTENT;
-			if let Some(rpc_url) = sp_io::offchain::local_storage_get(kind, b"rpc") {
-				log!(debug, "The configure url is {:?} ", rpc_url.clone());
-				return rpc_url;
+			if let Some(data) = sp_io::offchain::local_storage_get(kind, b"rpc") {
+				if let Ok(rpc_url) = String::from_utf8(data) {
+					log!(debug, "The configure url is {:?} ", rpc_url.clone());
+					return rpc_url;
+				} else {
+					log!(warn, "Parse configure url error, return default rpc url");
+					return Self::default_rpc_endpoint();
+				}
 			} else {
-				log!(debug, "Should return default rpc url");
+				log!(debug, "No configuration for rpc, return default rpc url");
 				return Self::default_rpc_endpoint();
 			}
 		}
@@ -784,10 +783,7 @@ pub mod pallet {
 			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
 			let next_set_id = NextSetId::<T>::get();
 			log!(debug, "next_set_id: {}", next_set_id);
-
-			let rpc_url = String::from_utf8(Self::get_rpc_endpoint()).map_err(|_| {
-				"Failed go get rpc url, please check the rpc point configured right."
-			})?;
+			let rpc_url = Self::get_rpc_endpoint();
 			log!(debug, "The current rpc_url is {:?}", rpc_url);
 
 			if Self::should_get_validators(val_id) {
