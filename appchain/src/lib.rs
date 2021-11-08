@@ -408,6 +408,10 @@ pub mod pallet {
 		NextSubmitObsIndexOverflow,
 		/// Appchain is not activated.
 		NotActivated,
+		/// ReceiverId is not a valid utf8 string.
+		InvalidReceiverId,
+		/// Token is not a valid utf8 string.
+		InvalidTokenId,
 	}
 
 	#[pallet::hooks]
@@ -593,6 +597,9 @@ pub mod pallet {
 			let next_set_id = NextSetId::<T>::get();
 			ensure!(next_set_id != 0, Error::<T>::NotActivated);
 
+			let receiver_id =
+				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
+
 			let current_set_id = next_set_id - 1;
 
 			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
@@ -612,7 +619,7 @@ pub mod pallet {
 				PayloadType::Lock,
 				&message.try_to_vec().unwrap(),
 			)?;
-			Self::deposit_event(Event::Locked(who, receiver_id, amount));
+			Self::deposit_event(Event::Locked(who, receiver_id.as_bytes().to_vec(), amount));
 
 			Ok(().into())
 		}
@@ -645,12 +652,17 @@ pub mod pallet {
 			let next_set_id = NextSetId::<T>::get();
 			ensure!(next_set_id != 0, Error::<T>::NotActivated);
 
+			let receiver_id =
+				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
+
 			let current_set_id = next_set_id - 1;
 
 			let token_id = <AssetIdByName<T>>::iter()
 				.find(|p| p.1 == asset_id)
 				.map(|p| p.0)
 				.ok_or(Error::<T>::WrongAssetId)?;
+
+			let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
 			<T::Assets as fungibles::Mutate<T::AccountId>>::burn_from(asset_id, &sender, amount)?;
 
@@ -669,7 +681,12 @@ pub mod pallet {
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
 			)?;
-			Self::deposit_event(Event::AssetBurned(asset_id, sender, receiver_id, amount));
+			Self::deposit_event(Event::AssetBurned(
+				asset_id,
+				sender,
+				receiver_id.as_bytes().to_vec(),
+				amount,
+			));
 
 			Ok(().into())
 		}
