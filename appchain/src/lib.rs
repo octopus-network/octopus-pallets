@@ -23,7 +23,7 @@ use frame_system::offchain::{
 };
 use pallet_octopus_support::{
 	log,
-	traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
 	types::{BurnAssetPayload, LockPayload, PayloadType},
 };
 use scale_info::TypeInfo;
@@ -104,8 +104,8 @@ pub struct Validator<AccountId> {
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ValidatorSet<AccountId> {
-	/// The era that this set belongs to.
-	era: u32,
+	/// The anchor era that this set belongs to.
+	set_id: u32,
 	/// Validators in this set.
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	validators: Vec<Validator<AccountId>>,
@@ -198,7 +198,7 @@ pub enum ObservationType {
 impl<AccountId> Observation<AccountId> {
 	fn observation_index(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet(set) => set.era,
+			Observation::UpdateValidatorSet(set) => set.set_id,
 			Observation::LockAsset(event) => event.index,
 			Observation::Burn(event) => event.index,
 		}
@@ -218,6 +218,16 @@ impl<T: SigningTypes> SignedPayload<T>
 {
 	fn public(&self) -> T::Public {
 		self.public.clone()
+	}
+}
+
+impl<T: Config> AppchainInterface for Pallet<T> {
+	fn is_activated() -> bool {
+		IsActivated::<T>::get()
+	}
+
+	fn next_set_id() -> u32 {
+		NextSetId::<T>::get()
 	}
 }
 
@@ -286,6 +296,15 @@ pub mod pallet {
 	#[pallet::getter(fn anchor_contract)]
 	pub(super) type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
+
+	/// Whether the appchain is activated.
+	///
+	/// Only an active appchain will communicate with the mainchain and pay block rewards.
+	#[pallet::storage]
+	pub(super) type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	#[pallet::storage]
+	pub type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn rpc_url)]
@@ -397,6 +416,8 @@ pub mod pallet {
 		InvalidActiveTotalStake,
 		/// Next validators submit index overflow.
 		NextSubmitObsIndexOverflow,
+		/// Appchain is not activated.
+		NotActivated,
 	}
 
 	#[pallet::hooks]
@@ -411,13 +432,16 @@ pub mod pallet {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
+			let anchor_contract = Self::anchor_contract();
+			if !IsActivated::<T>::get() || anchor_contract.is_empty() {
+				return;
+			}
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			// Only communicate with mainchain if we are a potential validator and the anchor contract is not an empty string.
-			let anchor_contract = Self::anchor_contract();
+			// Only communicate with mainchain if we are validators.
 			let mut obser_id: Option<T::AccountId> = None;
-			if sp_io::offchain::is_validator() && anchor_contract.len() > 0 {
+			if sp_io::offchain::is_validator() {
 				let mut found = false;
 				for key in <T::AuthorityId as AppCrypto<
 					<T as SigningTypes>::Public,
@@ -449,11 +473,7 @@ pub mod pallet {
 					return;
 				}
 				let obser_id = obser_id.unwrap();
-				let anchor_contract = Self::anchor_contract();
-				let active_era = T::LposInterface::active_era();
-				if let Err(e) =
-					Self::observing_mainchain(block_number, anchor_contract, active_era, obser_id)
-				{
+				if let Err(e) = Self::observing_mainchain(block_number, anchor_contract, obser_id) {
 					log!(warn, "observing_mainchain: Error: {}", e);
 				}
 			}
@@ -550,6 +570,20 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::weight(0)]
+		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
+			ensure_root(origin)?;
+			<IsActivated<T>>::put(is_activated);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
+			ensure_root(origin)?;
+			<NextSetId<T>>::put(next_set_id);
+			Ok(())
+		}
+
 		// Force set planned validators with sudo permissions.
 		#[pallet::weight(0)]
 		pub fn force_set_planned_validators(
@@ -580,6 +614,7 @@ pub mod pallet {
 			amount: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
 			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
 
@@ -626,6 +661,7 @@ pub mod pallet {
 			amount: AssetBalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
+			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
 			let token_id = <AssetIdByName<T>>::iter()
 				.find(|p| p.1 == asset_id)
@@ -677,16 +713,13 @@ pub mod pallet {
 			}
 		}
 
+		// TODO: hard to understand, need to simplify this code
 		fn should_get_validators(val_id: T::AccountId) -> bool {
+			let next_set_id = NextSetId::<T>::get();
 			match <NextSubmitObsIndex<T>>::try_get() {
 				Ok(next_index) => {
-					log!(
-						debug,
-						"next_index: {}, active_era: {}",
-						next_index,
-						T::LposInterface::active_era()
-					);
-					if next_index > T::LposInterface::active_era() {
+					log!(debug, "next_index: {}, next_set_id: {}", next_index, next_set_id);
+					if next_index > next_set_id - 1 {
 						return false;
 					}
 				}
@@ -764,7 +797,6 @@ pub mod pallet {
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
 			anchor_contract: Vec<u8>,
-			active_era: u32,
 			val_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			// Make an external HTTP request to fetch events from mainchain.
@@ -772,11 +804,11 @@ pub mod pallet {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = Vec::new();
 			let next_fact_sequence = NextFactSequence::<T>::get();
 			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
-			let next_era = active_era + 1;
-			log!(debug, "next_era: {}", next_era);
+			let next_set_id = NextSetId::<T>::get();
+			log!(debug, "next_set_id: {}", next_set_id);
+
 			let rpc_url = String::from_utf8(Self::get_rpc_endpoint(val_id.clone()))
 				.map_err(|_| "Failed go get rpc url")?;
-
 			log!(
 				debug,
 				"The current rpc_url is {:?}",
@@ -784,7 +816,7 @@ pub mod pallet {
 			);
 
 			if Self::should_get_validators(val_id) {
-				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_era)
+				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_set_id)
 					.map_err(|_| "Failed to get_validator_list_of")?;
 			}
 
@@ -903,12 +935,10 @@ pub mod pallet {
 							.iter()
 							.map(|v| (v.validator_id_in_appchain.clone(), v.total_stake))
 							.collect();
-						<PlannedValidators<T>>::put(validators);
-						log!(debug, "set value to planned validators succeed");
-						let next_index = T::LposInterface::active_era()
-							.checked_add(1)
-							.ok_or(Error::<T>::NextSubmitObsIndexOverflow)?;
-						<NextSubmitObsIndex<T>>::put(next_index);
+						<PlannedValidators<T>>::put(validators.clone());
+						log!(debug, "new PlannedValidators: {:?}", validators);
+						let next_set_id = NextSetId::<T>::get();
+						<NextSubmitObsIndex<T>>::put(next_set_id);
 						<SubmitSequenceNumber<T>>::kill();
 					}
 					Observation::Burn(event) => {

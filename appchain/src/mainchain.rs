@@ -31,7 +31,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn get_validator_list_of(
 		rpc_url: &str,
 		anchor_contract: Vec<u8>,
-		era: u32,
+		set_id: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
 		// deadline to 2s to complete the external call.
@@ -43,7 +43,7 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_validator_args(era).ok_or_else(|| {
+		let args = Self::encode_get_validator_args(set_id).ok_or_else(|| {
 			log!(warn, "Encode get_validator_list_of args error");
 			http::Error::Unknown
 		})?;
@@ -112,7 +112,7 @@ impl<T: Config> Pallet<T> {
 				http::Error::Unknown
 			})?;
 		if validators.len() > 0 {
-			let val_set = ValidatorSet { era, validators };
+			let val_set = ValidatorSet { set_id, validators };
 			obs.push(Observation::UpdateValidatorSet(val_set));
 		}
 

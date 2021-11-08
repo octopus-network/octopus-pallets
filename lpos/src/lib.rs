@@ -26,7 +26,7 @@ use frame_support::{
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::{
 	log,
-	traits::{LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
 	types::{EraPayoutPayload, PayloadType, PlanNewEraPayload},
 };
 use pallet_session::historical;
@@ -162,10 +162,6 @@ impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet
 	fn active_total_stake() -> Option<u128> {
 		Self::active_era().map(|active_era| Self::eras_total_stake(active_era.index))
 	}
-
-	fn active_era() -> u32 {
-		Self::active_era().map_or(0, |active_era| active_era.index)
-	}
 }
 
 // A value placed in storage that represents the current version of the Staking storage. This value
@@ -227,6 +223,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
+		type AppchainInterface: AppchainInterface;
+
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		type PalletId: Get<PalletId>;
@@ -282,13 +280,6 @@ pub mod pallet {
 	#[pallet::getter(fn eras_stakers)]
 	pub type ErasStakers<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, u128, ValueQuery>;
-
-	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
-	///
-	/// Eras that haven't finished yet or has been removed doesn't have reward.
-	#[pallet::storage]
-	#[pallet::getter(fn eras_validator_reward)]
-	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128>;
 
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
@@ -544,8 +535,13 @@ impl<T: Config> Pallet<T> {
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				// The 5th session of the era.
-				if era_length == T::SessionsPerEra::get() - 1 {
-					let message = PlanNewEraPayload { new_planned_era: current_era + 1 };
+				if T::AppchainInterface::is_activated()
+					&& (era_length == T::SessionsPerEra::get() - 1)
+				{
+					let message = PlanNewEraPayload {
+						next_set_id: T::AppchainInterface::next_set_id(),
+						era: current_era,
+					};
 
 					let res = T::UpwardMessagesInterface::submit(
 						&T::AccountId::default(),
@@ -634,6 +630,18 @@ impl<T: Config> Pallet<T> {
 
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
+		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
+			return;
+		}
+
+		let next_set_id = T::AppchainInterface::next_set_id();
+		if next_set_id == 0 {
+			log!(warn, "next_set_id cannot be 0 at end_ear()");
+			return;
+		}
+
+		let current_set_id = next_set_id - 1;
+
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -643,13 +651,12 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
 
 			// Set ending era reward.
-			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
 			let validators = T::SessionInterface::validators();
 			// TODO
 			let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
 
 			let era_reward_points = <ErasRewardPoints<T>>::get(&active_era.index);
-			let exclude_validators = era_reward_points
+			let excluded_validators = era_reward_points
 				.individual
 				.into_iter()
 				.filter_map(|(validator, points)| {
@@ -663,23 +670,12 @@ impl<T: Config> Pallet<T> {
 				})
 				.collect::<Vec<String>>();
 
-			let mut message = EraPayoutPayload {
-				era: active_era.index,
-				is_payout_created: false,
-				exclude: exclude_validators,
-			};
+			let message =
+				EraPayoutPayload { current_set_id, excluded_validators, era: active_era.index };
 
-			if <EraPayout<T>>::get() > 0 {
-				let amount =
-					validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
-				T::Currency::deposit_creating(&Self::account_id(), amount);
-				message.is_payout_created = true;
-				log!(
-					debug,
-					"Will send EraPayout message, era_payout is {:?}",
-					<EraPayout<T>>::get()
-				);
-			}
+			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			T::Currency::deposit_creating(&Self::account_id(), amount);
+			log!(debug, "Will send EraPayout message, era_payout is {:?}", <EraPayout<T>>::get());
 
 			let res = T::UpwardMessagesInterface::submit(
 				&T::AccountId::default(),
@@ -761,7 +757,6 @@ impl<T: Config> Pallet<T> {
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index, None);
-		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
 		ErasStartSessionIndex::<T>::remove(era_index);
