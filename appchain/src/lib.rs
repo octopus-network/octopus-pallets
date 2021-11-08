@@ -601,14 +601,14 @@ pub mod pallet {
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
 			let current_set_id = next_set_id - 1;
+			let amount_wrapped: u128 = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 
 			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
 
-			let amount_wrapped: u128 = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 			let prefix = String::from("0x");
 			let hex_sender = prefix + &hex::encode(who.encode());
 			let message = LockPayload {
-				sender: hex_sender.into_bytes(),
+				sender: hex_sender.clone(),
 				receiver_id: receiver_id.clone(),
 				amount: amount_wrapped,
 				era: current_set_id,
@@ -670,7 +670,7 @@ pub mod pallet {
 			let hex_sender = prefix + &hex::encode(sender.encode());
 			let message = BurnAssetPayload {
 				token_id,
-				sender: hex_sender.into_bytes(),
+				sender: hex_sender,
 				receiver_id: receiver_id.clone(),
 				amount,
 				era: current_set_id,

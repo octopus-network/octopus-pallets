@@ -20,7 +20,7 @@ pub enum PayloadType {
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct LockPayload {
-	pub sender: Vec<u8>,
+	pub sender: String,
 	pub receiver_id: String,
 	pub amount: u128,
 	pub era: u32, // the message is submitted in this anchor era.
@@ -29,7 +29,7 @@ pub struct LockPayload {
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BurnAssetPayload {
 	pub token_id: String,
-	pub sender: Vec<u8>,
+	pub sender: String,
 	pub receiver_id: String,
 	pub amount: u128,
 	pub era: u32, // the message is submitted in this anchor era.
