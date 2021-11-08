@@ -23,6 +23,7 @@ pub struct LockPayload {
 	pub sender: Vec<u8>,
 	pub receiver_id: Vec<u8>,
 	pub amount: u128,
+	pub era: u32, // the message is submitted in this anchor era.
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -31,17 +32,18 @@ pub struct BurnAssetPayload {
 	pub sender: Vec<u8>,
 	pub receiver_id: Vec<u8>,
 	pub amount: u128,
+	pub era: u32, // the message is submitted in this anchor era.
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PlanNewEraPayload {
 	pub next_set_id: u32,
-	pub era: u32,
+	pub era: u32, // the message is submitted in this anchor era.
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EraPayoutPayload {
 	pub current_set_id: u32,
 	pub excluded_validators: Vec<String>,
-	pub era: u32,
+	pub era: u32, // the message is submitted in this anchor era.
 }

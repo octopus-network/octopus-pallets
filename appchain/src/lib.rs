@@ -590,6 +590,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
+			let next_set_id = NextSetId::<T>::get();
+			ensure!(next_set_id != 0, Error::<T>::NotActivated);
+
+			let current_set_id = next_set_id - 1;
 
 			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
 
@@ -600,6 +604,7 @@ pub mod pallet {
 				sender: hex_sender.into_bytes(),
 				receiver_id: receiver_id.clone(),
 				amount: amount_wrapped,
+				era: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(
@@ -637,6 +642,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
+			let next_set_id = NextSetId::<T>::get();
+			ensure!(next_set_id != 0, Error::<T>::NotActivated);
+
+			let current_set_id = next_set_id - 1;
 
 			let token_id = <AssetIdByName<T>>::iter()
 				.find(|p| p.1 == asset_id)
@@ -652,6 +661,7 @@ pub mod pallet {
 				sender: hex_sender.into_bytes(),
 				receiver_id: receiver_id.clone(),
 				amount,
+				era: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(

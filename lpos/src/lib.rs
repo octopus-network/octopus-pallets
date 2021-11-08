@@ -538,10 +538,14 @@ impl<T: Config> Pallet<T> {
 				if T::AppchainInterface::is_activated()
 					&& (era_length == T::SessionsPerEra::get() - 1)
 				{
-					let message = PlanNewEraPayload {
-						next_set_id: T::AppchainInterface::next_set_id(),
-						era: current_era,
-					};
+					let next_set_id = T::AppchainInterface::next_set_id();
+					if next_set_id == 0 {
+						log!(warn, "next_set_id cannot be 0 at the 5th when chain is activated.");
+						return None;
+					}
+
+					let current_set_id = next_set_id - 1;
+					let message = PlanNewEraPayload { next_set_id, era: current_set_id };
 
 					let res = T::UpwardMessagesInterface::submit(
 						&T::AccountId::default(),
@@ -636,7 +640,7 @@ impl<T: Config> Pallet<T> {
 
 		let next_set_id = T::AppchainInterface::next_set_id();
 		if next_set_id == 0 {
-			log!(warn, "next_set_id cannot be 0 at end_ear()");
+			log!(warn, "next_set_id cannot be 0 at end_era()");
 			return;
 		}
 
@@ -671,7 +675,7 @@ impl<T: Config> Pallet<T> {
 				.collect::<Vec<String>>();
 
 			let message =
-				EraPayoutPayload { current_set_id, excluded_validators, era: active_era.index };
+				EraPayoutPayload { current_set_id, excluded_validators, era: current_set_id };
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
