@@ -670,6 +670,26 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
+		fn default_rpc_endpoint() -> String {
+			"https://rpc.testnet.near.org".to_string()
+		}
+
+		fn get_rpc_endpoint() -> String {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			if let Some(data) = sp_io::offchain::local_storage_get(kind, b"rpc") {
+				if let Ok(rpc_url) = String::from_utf8(data) {
+					log!(debug, "The configure url is {:?} ", rpc_url.clone());
+					return rpc_url;
+				} else {
+					log!(warn, "Parse configure url error, return default rpc url");
+					return Self::default_rpc_endpoint();
+				}
+			} else {
+				log!(debug, "No configuration for rpc, return default rpc url");
+				return Self::default_rpc_endpoint();
+			}
+		}
+
 		// TODO: hard to understand, need to simplify this code
 		fn should_get_validators(val_id: T::AccountId) -> bool {
 			let next_set_id = NextSetId::<T>::get();
@@ -763,9 +783,11 @@ pub mod pallet {
 			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
 			let next_set_id = NextSetId::<T>::get();
 			log!(debug, "next_set_id: {}", next_set_id);
+			let rpc_url = Self::get_rpc_endpoint();
+			log!(debug, "The current rpc_url is {:?}", rpc_url);
 
 			if Self::should_get_validators(val_id) {
-				obs = Self::get_validator_list_of(anchor_contract.clone(), next_set_id)
+				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_set_id)
 					.map_err(|_| "Failed to get_validator_list_of")?;
 			}
 
@@ -773,6 +795,7 @@ pub mod pallet {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// check cross-chain transfers only if there isn't a validator_set update.
 				obs = Self::get_appchain_notification_histories(
+					&rpc_url,
 					anchor_contract,
 					next_fact_sequence,
 					T::RequestEventLimit::get(),
