@@ -87,9 +87,6 @@ type AssetBalanceOf<T> =
 type AssetIdOf<T> =
 	<<T as Config>::Assets as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
-#[derive(Debug, Deserialize, Encode, Decode, Default)]
-struct IndexingRpcEndpoint(Vec<u8>, Vec<u8>);
-
 /// Validator of appchain.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Validator<AccountId> {
@@ -307,10 +304,6 @@ pub mod pallet {
 	pub type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn rpc_url)]
-	pub type RpcUrl<T: Config> = StorageValue<_, Vec<u8>, ValueQuery>;
-
-	#[pallet::storage]
 	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
@@ -348,7 +341,6 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
-		pub rpc_url: String,
 		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 		pub validators: Vec<(T::AccountId, u128)>,
 		pub premined_amount: u128,
@@ -359,7 +351,6 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				anchor_contract: String::new(),
-				rpc_url: String::new(),
 				asset_id_by_name: Vec::new(),
 				validators: Vec::new(),
 				premined_amount: 0,
@@ -371,7 +362,6 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
-			<RpcUrl<T>>::put(self.rpc_url.as_bytes());
 
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
@@ -513,21 +503,6 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Configure rpc endpoint.
-		#[pallet::weight(0)]
-		pub fn configure_rpc_endpoint(origin: OriginFor<T>, url: Vec<u8>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			log!(
-				debug,
-				"Configure rpc endpoint, who: {:?}, url: {:?}",
-				who.clone(), url.clone() 
-			);
-			let key = Self::derived_key(who);
-			let data = IndexingRpcEndpoint(key.clone(), url);
-			sp_io::offchain_index::set(&key, &data.encode());
-			Ok(())
-		}
-
 		/// Submit observations.
 		#[pallet::weight(0)]
 		pub fn submit_observations(
@@ -695,21 +670,24 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn derived_key(account_id: T::AccountId) -> Vec<u8> {
-			(b"rpc-end-point", account_id).encode()
+		fn default_rpc_endpoint() -> Vec<u8> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			let mut default_rpc_point = "https://rpc.testnet.near.org".to_string();
+			if let Some(rpc_url) = sp_io::offchain::local_storage_get(kind, b"main_net") {
+				//Should use main net rpc address
+				default_rpc_point = "https://rpc.mainnet.near.org".to_string();
+			}
+			default_rpc_point.as_bytes().to_vec()
 		}
 
-		fn get_rpc_endpoint(account_id: T::AccountId) -> Vec<u8> {
-			log!(debug, "AccountId: {:?} get rpc endpoint", account_id.clone());
-			let key = Self::derived_key(account_id);
-			let ocwm = StorageValueRef::persistent(&key);
-
-			if let Ok(Some(data)) = ocwm.get::<IndexingRpcEndpoint>() {
-				log!(debug, "The configure url is {:?} ", data.1.clone());
-				return data.1;
+		fn get_rpc_endpoint() -> Vec<u8> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			if let Some(rpc_url) = sp_io::offchain::local_storage_get(kind, b"rpc") {
+				log!(debug, "The configure url is {:?} ", rpc_url.clone());
+				return rpc_url;
 			} else {
 				log!(debug, "Should return default rpc url");
-				return Self::rpc_url();
+				return Self::default_rpc_endpoint();
 			}
 		}
 
@@ -807,13 +785,10 @@ pub mod pallet {
 			let next_set_id = NextSetId::<T>::get();
 			log!(debug, "next_set_id: {}", next_set_id);
 
-			let rpc_url = String::from_utf8(Self::get_rpc_endpoint(val_id.clone()))
-				.map_err(|_| "Failed go get rpc url")?;
-			log!(
-				debug,
-				"The current rpc_url is {:?}",
-				rpc_url
-			);
+			let rpc_url = String::from_utf8(Self::get_rpc_endpoint()).map_err(|_| {
+				"Failed go get rpc url, please check the rpc point configured right."
+			})?;
+			log!(debug, "The current rpc_url is {:?}", rpc_url);
 
 			if Self::should_get_validators(val_id) {
 				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_set_id)
