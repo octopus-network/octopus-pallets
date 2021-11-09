@@ -611,7 +611,7 @@ pub mod pallet {
 				sender: hex_sender.clone(),
 				receiver_id: receiver_id.clone(),
 				amount: amount_wrapped,
-				era: current_set_id,
+				current_era_number: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(
@@ -673,7 +673,7 @@ pub mod pallet {
 				sender: hex_sender,
 				receiver_id: receiver_id.clone(),
 				amount,
-				era: current_set_id,
+				current_era_number: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(

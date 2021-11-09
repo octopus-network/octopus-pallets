@@ -545,7 +545,10 @@ impl<T: Config> Pallet<T> {
 					}
 
 					let current_set_id = next_set_id - 1;
-					let message = PlanNewEraPayload { next_set_id, era: current_set_id };
+					let message = PlanNewEraPayload {
+						new_era: next_set_id,
+						current_era_number: current_set_id,
+					};
 
 					let res = T::UpwardMessagesInterface::submit(
 						&T::AccountId::default(),
@@ -674,8 +677,11 @@ impl<T: Config> Pallet<T> {
 				})
 				.collect::<Vec<String>>();
 
-			let message =
-				EraPayoutPayload { current_set_id, excluded_validators, era: current_set_id };
+			let message = EraPayoutPayload {
+				end_era: current_set_id,
+				excluded_validators,
+				current_era_number: current_set_id,
+			};
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
