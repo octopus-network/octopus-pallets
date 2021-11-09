@@ -27,5 +27,6 @@ pub trait UpwardMessagesInterface<AccountId> {
 		who: &AccountId,
 		payload_type: crate::types::PayloadType,
 		payload: &[u8],
+		check_queue_length: bool,
 	) -> DispatchResult;
 }

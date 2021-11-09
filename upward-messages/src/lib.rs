@@ -7,7 +7,7 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchResult;
+use frame_support::{dispatch::DispatchResult, traits::Get};
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -43,6 +43,10 @@ pub mod pallet {
 
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
+
+		/// The limit for submit messages.
+		#[pallet::constant]
+		type SubmitMessagesLimit: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -64,6 +68,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Nonce overflow.
 		NonceOverflow,
+		/// Queue size limit reached.
+		QueueSizeLimitReached,
 	}
 
 	#[pallet::hooks]
@@ -122,7 +128,18 @@ pub mod pallet {
 }
 
 impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
-	fn submit(_who: &T::AccountId, payload_type: PayloadType, payload: &[u8]) -> DispatchResult {
+	fn submit(
+		_who: &T::AccountId,
+		payload_type: PayloadType,
+		payload: &[u8],
+		check_queue_length: bool,
+	) -> DispatchResult {
+		if check_queue_length
+			&& MessageQueue::<T>::get().len() > T::SubmitMessagesLimit::get() as usize
+		{
+			return Err(Error::<T>::QueueSizeLimitReached.into());
+		}
+
 		Nonce::<T>::try_mutate(|nonce| -> DispatchResult {
 			if let Some(v) = nonce.checked_add(1) {
 				*nonce = v;

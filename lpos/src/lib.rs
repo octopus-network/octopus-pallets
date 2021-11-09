@@ -551,6 +551,7 @@ impl<T: Config> Pallet<T> {
 						&T::AccountId::default(),
 						PayloadType::PlanNewEra,
 						&message.try_to_vec().unwrap(),
+						false,
 					);
 					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
 				}
@@ -685,6 +686,7 @@ impl<T: Config> Pallet<T> {
 				&T::AccountId::default(),
 				PayloadType::EraPayout,
 				&message.try_to_vec().unwrap(),
+				false,
 			);
 			log!(info, "UpwardMessage::EraPayout: {:?}", res);
 		}
