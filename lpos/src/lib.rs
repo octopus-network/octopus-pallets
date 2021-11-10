@@ -539,15 +539,8 @@ impl<T: Config> Pallet<T> {
 					&& (era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
-					if next_set_id == 0 {
-						log!(warn, "next_set_id cannot be 0 at the 5th when chain is activated.");
-						return None;
-					}
-
-					let current_set_id = next_set_id - 1;
 					let message = PlanNewEraPayload {
 						new_era: next_set_id,
-						current_era_number: current_set_id,
 					};
 
 					let res = T::UpwardMessagesInterface::submit(
@@ -680,7 +673,6 @@ impl<T: Config> Pallet<T> {
 			let message = EraPayoutPayload {
 				end_era: current_set_id,
 				excluded_validators,
-				current_era_number: current_set_id,
 			};
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();

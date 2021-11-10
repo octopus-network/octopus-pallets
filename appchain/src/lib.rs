@@ -594,13 +594,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-			let next_set_id = NextSetId::<T>::get();
-			ensure!(next_set_id != 0, Error::<T>::NotActivated);
 
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-			let current_set_id = next_set_id - 1;
 			let amount_wrapped: u128 = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 
 			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
@@ -611,7 +608,6 @@ pub mod pallet {
 				sender: hex_sender.clone(),
 				receiver_id: receiver_id.clone(),
 				amount: amount_wrapped,
-				current_era_number: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(
@@ -649,13 +645,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-			let next_set_id = NextSetId::<T>::get();
-			ensure!(next_set_id != 0, Error::<T>::NotActivated);
 
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
-
-			let current_set_id = next_set_id - 1;
 
 			let token_id = <AssetIdByName<T>>::iter()
 				.find(|p| p.1 == asset_id)
@@ -673,7 +665,6 @@ pub mod pallet {
 				sender: hex_sender,
 				receiver_id: receiver_id.clone(),
 				amount,
-				current_era_number: current_set_id,
 			};
 
 			T::UpwardMessagesInterface::submit(
