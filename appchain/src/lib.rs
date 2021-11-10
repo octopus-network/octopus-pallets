@@ -618,7 +618,6 @@ pub mod pallet {
 				&who,
 				PayloadType::Lock,
 				&message.try_to_vec().unwrap(),
-				true,
 			)?;
 			Self::deposit_event(Event::Locked(who, receiver_id.as_bytes().to_vec(), amount));
 
@@ -681,7 +680,6 @@ pub mod pallet {
 				&sender,
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
-				true,
 			)?;
 			Self::deposit_event(Event::AssetBurned(
 				asset_id,
