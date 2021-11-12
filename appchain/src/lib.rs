@@ -206,7 +206,6 @@ impl<AccountId> Observation<AccountId> {
 pub struct ObservationsPayload<Public, BlockNumber, AccountId> {
 	public: Public,
 	block_number: BlockNumber,
-	next_fact_sequence: u32,
 	observations: Vec<Observation<AccountId>>,
 }
 
@@ -307,7 +306,7 @@ pub mod pallet {
 	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type NextFactSequence<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	pub type Observations<T: Config> = StorageDoubleMap<
@@ -341,9 +340,9 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
-		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 		pub validators: Vec<(T::AccountId, u128)>,
 		pub premined_amount: u128,
+		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -351,9 +350,9 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				anchor_contract: String::new(),
-				asset_id_by_name: Vec::new(),
 				validators: Vec::new(),
 				premined_amount: 0,
+				asset_id_by_name: Vec::new(),
 			}
 		}
 	}
@@ -363,9 +362,6 @@ pub mod pallet {
 		fn build(&self) {
 			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
-			for (token_id, id) in self.asset_id_by_name.iter() {
-				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
-			}
 			<PlannedValidators<T>>::put(self.validators.clone());
 
 			let account_id = <Pallet<T>>::account_id();
@@ -377,6 +373,10 @@ pub mod pallet {
 			}
 
 			<PalletAccount<T>>::put(account_id);
+
+			for (token_id, id) in self.asset_id_by_name.iter() {
+				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
+			}
 		}
 	}
 
@@ -398,8 +398,8 @@ pub mod pallet {
 		NotValidator,
 		/// Amount overflow.
 		AmountOverflow,
-		/// Next fact sequence overflow.
-		NextFactSequenceOverflow,
+		/// Next notification Id overflow.
+		NextNotificationIdOverflow,
 		/// Wrong Asset Id.
 		WrongAssetId,
 		/// Invalid active total stake.
@@ -412,7 +412,7 @@ pub mod pallet {
 		InvalidReceiverId,
 		/// Token is not a valid utf8 string.
 		InvalidTokenId,
-		/// Next set id overflow.
+		/// Next set Id overflow.
 		NextSetIdOverflow,
 	}
 
@@ -429,48 +429,36 @@ pub mod pallet {
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let anchor_contract = Self::anchor_contract();
-			if !IsActivated::<T>::get() || anchor_contract.is_empty() {
+			if !sp_io::offchain::is_validator()
+				|| !IsActivated::<T>::get()
+				|| anchor_contract.is_empty()
+			{
 				return;
 			}
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			// Only communicate with mainchain if we are validators.
-			let mut obser_id: Option<T::AccountId> = None;
-			if sp_io::offchain::is_validator() {
-				let mut found = false;
-				for key in <T::AuthorityId as AppCrypto<
-					<T as SigningTypes>::Public,
-					<T as SigningTypes>::Signature,
-				>>::RuntimeAppPublic::all()
-				.into_iter()
-				{
-					let generic_public = <T::AuthorityId as AppCrypto<
-						<T as SigningTypes>::Public,
-						<T as SigningTypes>::Signature,
-					>>::GenericPublic::from(key);
-					let public: <T as SigningTypes>::Public = generic_public.into();
+			if !Self::should_send(block_number) {
+				return;
+			}
 
-					let val_id = T::LposInterface::is_active_validator(
-						KEY_TYPE,
-						&public.clone().into_account().encode(),
-					);
-					log!(debug, "Check if in current set {:?}", val_id);
-					if val_id.is_some() {
-						found = true;
-						obser_id = val_id;
+			// Only communicate with mainchain if we are validators.
+			match Self::get_validator_id() {
+				Some(validator_id) => {
+					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint();
+					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
+
+					if let Err(e) = Self::observing_mainchain(
+						block_number,
+						&mainchain_rpc_endpoint,
+						anchor_contract,
+						validator_id,
+					) {
+						log!(warn, "observing_mainchain: Error: {}", e);
 					}
 				}
-				if !found {
-					log!(info, "Skipping communication with mainchain. Not a validator.");
-					return;
-				}
-				if !Self::should_send(block_number) {
-					return;
-				}
-				let obser_id = obser_id.unwrap();
-				if let Err(e) = Self::observing_mainchain(block_number, anchor_contract, obser_id) {
-					log!(warn, "observing_mainchain: Error: {}", e);
+				None => {
+					log!(warn, "Not a validator, skipping offchain worker");
 				}
 			}
 		}
@@ -495,7 +483,6 @@ pub mod pallet {
 				}
 				Self::validate_transaction_parameters(
 					&payload.block_number,
-					payload.next_fact_sequence,
 					payload.public.clone().into_account(),
 				)
 			} else {
@@ -694,9 +681,12 @@ pub mod pallet {
 			"https://rpc.testnet.near.org".to_string()
 		}
 
-		fn get_rpc_endpoint() -> String {
+		fn get_mainchain_rpc_endpoint() -> String {
 			let kind = sp_core::offchain::StorageKind::PERSISTENT;
-			if let Some(data) = sp_io::offchain::local_storage_get(kind, b"rpc") {
+			if let Some(data) = sp_io::offchain::local_storage_get(
+				kind,
+				b"octopus_appchain::mainchain_rpc_endpoint",
+			) {
 				if let Ok(rpc_url) = String::from_utf8(data) {
 					log!(debug, "The configure url is {:?} ", rpc_url.clone());
 					return rpc_url;
@@ -779,7 +769,7 @@ pub mod pallet {
 
 			match res {
 				// The value has been set correctly, which means we can safely send a transaction now.
-				Ok(_block_number) => true,
+				Ok(_) => true,
 				// We are in the grace period, we should not send a transaction this time.
 				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
 				// We wanted to send a transaction, but failed to write the block number (acquire a
@@ -791,34 +781,65 @@ pub mod pallet {
 			}
 		}
 
+		fn get_validator_id() -> Option<T::AccountId> {
+			for key in <T::AuthorityId as AppCrypto<
+				<T as SigningTypes>::Public,
+				<T as SigningTypes>::Signature,
+			>>::RuntimeAppPublic::all()
+			.into_iter()
+			{
+				let generic_public = <T::AuthorityId as AppCrypto<
+					<T as SigningTypes>::Public,
+					<T as SigningTypes>::Signature,
+				>>::GenericPublic::from(key);
+				let public: <T as SigningTypes>::Public = generic_public.into();
+
+				let val_id = T::LposInterface::is_active_validator(
+					KEY_TYPE,
+					&public.clone().into_account().encode(),
+				);
+
+				if val_id.is_none() {
+					continue;
+				}
+				return val_id;
+			}
+			None
+		}
+
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
+			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
-			val_id: T::AccountId,
+			validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
-			// Make an external HTTP request to fetch events from mainchain.
-			// Note this call will block until response is received.
-			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>> = Vec::new();
-			let next_fact_sequence = NextFactSequence::<T>::get();
-			log!(debug, "next_fact_sequence: {}", next_fact_sequence);
+			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
+			let next_notification_id = NextNotificationId::<T>::get();
+			log!(debug, "next_notification_id: {}", next_notification_id);
 			let next_set_id = NextSetId::<T>::get();
 			log!(debug, "next_set_id: {}", next_set_id);
-			let rpc_url = Self::get_rpc_endpoint();
-			log!(debug, "The current rpc_url is {:?}", rpc_url);
 
 			// if Self::should_get_validators(val_id)
 			{
-				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_set_id)
-					.map_err(|_| "Failed to get_validator_list_of")?;
+				// Make an external HTTP request to fetch the current price.
+				// Note this call will block until response is received.
+				obs = Self::get_validator_list_of(
+					mainchain_rpc_endpoint,
+					anchor_contract.clone(),
+					next_set_id,
+				)
+				.map_err(|_| "Failed to get_validator_list_of")?;
 			}
 
+			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
-				// check cross-chain transfers only if there isn't a validator_set update.
+				// Make an external HTTP request to fetch the current price.
+				// Note this call will block until response is received.
 				obs = Self::get_appchain_notification_histories(
-					&rpc_url,
+					mainchain_rpc_endpoint,
 					anchor_contract,
-					next_fact_sequence,
+					next_notification_id,
 					T::RequestEventLimit::get(),
 				)
 				.map_err(|_| "Failed to get_appchain_notification_histories")?;
@@ -835,7 +856,6 @@ pub mod pallet {
 					|account| ObservationsPayload {
 						public: account.public.clone(),
 						block_number,
-						next_fact_sequence,
 						observations: obs.clone(),
 					},
 					|payload, signature| Call::submit_observations { payload, signature },
@@ -871,22 +891,22 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		fn add_next_fact_sequence() -> DispatchResultWithPostInfo {
-			NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_seq.checked_add(1) {
-					*next_seq = v;
-					log!(debug, "️️️add next_fact sequence{:?} ", v);
+		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
+			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
+				if let Some(v) = next_id.checked_add(1) {
+					*next_id = v;
+					log!(debug, "️️️increase next_notification_id{:?} ", v);
 				} else {
-					return Err(Error::<T>::NextFactSequenceOverflow.into());
+					return Err(Error::<T>::NextNotificationIdOverflow.into());
 				}
 				Ok(().into())
 			})
 		}
 
-		fn add_next_set_id() -> DispatchResultWithPostInfo {
-			NextSetId::<T>::try_mutate(|next_set_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_set_id.checked_add(1) {
-					*next_set_id = v;
+		fn increase_next_set_id() -> DispatchResultWithPostInfo {
+			NextSetId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
+				if let Some(v) = next_id.checked_add(1) {
+					*next_id = v;
 				} else {
 					return Err(Error::<T>::NextSetIdOverflow.into());
 				}
@@ -952,21 +972,22 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
-						Self::add_next_set_id()?;
+						Self::increase_next_set_id()?; // TODO: check
 						let next_set_id = NextSetId::<T>::get();
 						<NextSubmitObsIndex<T>>::put(next_set_id);
 						<SubmitSequenceNumber<T>>::kill();
 					}
 					Observation::Burn(event) => {
+						Self::increase_next_notification_id()?;
 						if let Err(error) =
 							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
 						{
 							log!(info, "️️️failed to unlock native token: {:?}", error);
-							Self::add_next_fact_sequence()?;
 							return Err(error);
 						}
 					}
 					Observation::LockAsset(event) => {
+						Self::increase_next_notification_id()?;
 						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
 							log!(
 								info,
@@ -983,11 +1004,9 @@ pub mod pallet {
 								event.amount,
 							) {
 								log!(warn, "️️️failed to mint asset: {:?}", error);
-								Self::add_next_fact_sequence()?;
 								return Err(error);
 							}
 						} else {
-							Self::add_next_fact_sequence()?;
 							return Err(Error::<T>::WrongAssetId.into());
 						}
 					}
@@ -998,17 +1017,6 @@ pub mod pallet {
 					<Observing<T>>::remove(o);
 				}
 				<Observations<T>>::remove(observation_type, obs_id);
-
-				if matches!(observation_type, ObservationType::LockAsset)
-					|| matches!(observation_type, ObservationType::Burn)
-				{
-					log!(
-						debug,
-						"️️️Will add next_fact sequence: {:?} afer submit.",
-						NextFactSequence::<T>::get()
-					);
-					Self::add_next_fact_sequence()?;
-				}
 			}
 
 			Ok(().into())
@@ -1030,7 +1038,6 @@ pub mod pallet {
 
 		fn validate_transaction_parameters(
 			block_number: &T::BlockNumber,
-			next_fact_sequence: u32,
 			account_id: <T as frame_system::Config>::AccountId,
 		) -> TransactionValidity {
 			// Let's make sure to reject transactions from the future.
@@ -1046,14 +1053,17 @@ pub mod pallet {
 			}
 
 			ValidTransaction::with_tag_prefix("OctopusAppchain")
-				// We set base priority to 2**20 and hope it's included before any other
-				// transactions in the pool. Next we tweak the priority depending on the
-				// sequence of the fact that happened on mainchain.
-				.priority(T::UnsignedPriority::get().saturating_add(next_fact_sequence as u64))
+				// We set base priority to 2**21 and hope it's included before any other
+				// transactions in the pool.
+				.priority(T::UnsignedPriority::get())
 				// This transaction does not require anything else to go before into the pool.
 				//.and_requires()
-				// One can only vote on the validator set with the same seq_num once.
-				.and_provides((next_fact_sequence, account_id))
+				// We set the `provides` tag to `account_id`. This makes
+				// sure only one transaction produced by current validator will ever
+				// get to the transaction pool and will end up in the block.
+				// We can still have multiple transactions compete for the same "spot",
+				// and the one with higher priority will replace other one in the pool.
+				.and_provides(account_id)
 				// The transaction is only valid for next 5 blocks. After that it's
 				// going to be revalidated by the pool.
 				.longevity(5)
