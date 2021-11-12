@@ -412,6 +412,8 @@ pub mod pallet {
 		InvalidReceiverId,
 		/// Token is not a valid utf8 string.
 		InvalidTokenId,
+		/// Next set id overflow.
+		NextSetIdOverflow,
 	}
 
 	#[pallet::hooks]
@@ -804,7 +806,8 @@ pub mod pallet {
 			let rpc_url = Self::get_rpc_endpoint();
 			log!(debug, "The current rpc_url is {:?}", rpc_url);
 
-			if Self::should_get_validators(val_id) {
+			// if Self::should_get_validators(val_id)
+			{
 				obs = Self::get_validator_list_of(&rpc_url, anchor_contract.clone(), next_set_id)
 					.map_err(|_| "Failed to get_validator_list_of")?;
 			}
@@ -868,6 +871,29 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		fn add_next_fact_sequence() -> DispatchResultWithPostInfo {
+			NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
+				if let Some(v) = next_seq.checked_add(1) {
+					*next_seq = v;
+					log!(debug, "️️️add next_fact sequence{:?} ", v);
+				} else {
+					return Err(Error::<T>::NextFactSequenceOverflow.into());
+				}
+				Ok(().into())
+			})
+		}
+
+		fn add_next_set_id() -> DispatchResultWithPostInfo {
+			NextSetId::<T>::try_mutate(|next_set_id| -> DispatchResultWithPostInfo {
+				if let Some(v) = next_set_id.checked_add(1) {
+					*next_set_id = v;
+				} else {
+					return Err(Error::<T>::NextSetIdOverflow.into());
+				}
+				Ok(().into())
+			})
+		}
+
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
 		#[transactional]
@@ -926,6 +952,7 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
+						Self::add_next_set_id()?;
 						let next_set_id = NextSetId::<T>::get();
 						<NextSubmitObsIndex<T>>::put(next_set_id);
 						<SubmitSequenceNumber<T>>::kill();
@@ -935,6 +962,7 @@ pub mod pallet {
 							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
 						{
 							log!(info, "️️️failed to unlock native token: {:?}", error);
+							Self::add_next_fact_sequence()?;
 							return Err(error);
 						}
 					}
@@ -955,9 +983,11 @@ pub mod pallet {
 								event.amount,
 							) {
 								log!(warn, "️️️failed to mint asset: {:?}", error);
+								Self::add_next_fact_sequence()?;
 								return Err(error);
 							}
 						} else {
+							Self::add_next_fact_sequence()?;
 							return Err(Error::<T>::WrongAssetId.into());
 						}
 					}
@@ -972,14 +1002,12 @@ pub mod pallet {
 				if matches!(observation_type, ObservationType::LockAsset)
 					|| matches!(observation_type, ObservationType::Burn)
 				{
-					NextFactSequence::<T>::try_mutate(|next_seq| -> DispatchResultWithPostInfo {
-						if let Some(v) = next_seq.checked_add(1) {
-							*next_seq = v;
-						} else {
-							return Err(Error::<T>::NextFactSequenceOverflow.into());
-						}
-						Ok(().into())
-					})?;
+					log!(
+						debug,
+						"️️️Will add next_fact sequence: {:?} afer submit.",
+						NextFactSequence::<T>::get()
+					);
+					Self::add_next_fact_sequence()?;
 				}
 			}
 
