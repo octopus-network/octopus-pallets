@@ -539,9 +539,7 @@ impl<T: Config> Pallet<T> {
 					&& (era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
-					let message = PlanNewEraPayload {
-						new_era: next_set_id,
-					};
+					let message = PlanNewEraPayload { new_era: next_set_id };
 
 					let res = T::UpwardMessagesInterface::submit(
 						&T::AccountId::default(),
@@ -628,6 +626,41 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	/// Get exclude validators.
+	fn get_exclude_validators(index: EraIndex) -> Vec<String> {
+		let mut validators = T::SessionInterface::validators();
+		log!(debug, "All validators: {:?}", validators.clone());
+		let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
+		let era_reward_points = <ErasRewardPoints<T>>::get(index);
+		let ok_validators = era_reward_points
+			.individual
+			.into_iter()
+			.filter_map(
+				|(validator, points)| {
+					if points >= expect_points {
+						Some(validator)
+					} else {
+						None
+					}
+				},
+			)
+			.collect::<Vec<T::AccountId>>();
+
+		validators.retain(|v| !(ok_validators.iter().any(|val| val == v)));
+
+		let excluded_validators = validators
+			.iter()
+			.map(|validator| {
+				let prefix = String::from("0x");
+				let hex_validator = prefix + &hex::encode(validator.encode());
+				hex_validator
+			})
+			.collect::<Vec<String>>();
+
+		log!(debug, "Exclude validators: {:?}", excluded_validators.clone());
+		excluded_validators
+	}
+
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
@@ -651,29 +684,10 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
 
 			// Set ending era reward.
-			let validators = T::SessionInterface::validators();
-			// TODO
-			let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
+			let excluded_validators = Self::get_exclude_validators(active_era.index);
+			log!(debug, "exclude validators: {:?}", excluded_validators.clone());
 
-			let era_reward_points = <ErasRewardPoints<T>>::get(&active_era.index);
-			let excluded_validators = era_reward_points
-				.individual
-				.into_iter()
-				.filter_map(|(validator, points)| {
-					if points < expect_points {
-						let prefix = String::from("0x");
-						let hex_validator = prefix + &hex::encode(validator.encode());
-						Some(hex_validator)
-					} else {
-						None
-					}
-				})
-				.collect::<Vec<String>>();
-
-			let message = EraPayoutPayload {
-				end_era: current_set_id,
-				excluded_validators,
-			};
+			let message = EraPayoutPayload { end_era: current_set_id, excluded_validators };
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
