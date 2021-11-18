@@ -387,6 +387,9 @@ pub mod pallet {
 		Unlocked(Vec<u8>, T::AccountId, BalanceOf<T>),
 		AssetMinted(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
 		AssetBurned(AssetIdOf<T>, T::AccountId, Vec<u8>, AssetBalanceOf<T>),
+		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
+		AssetMintFailed(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
+		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -979,11 +982,20 @@ pub mod pallet {
 					}
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
-						if let Err(error) =
-							Self::unlock_inner(event.sender_id, event.receiver, event.amount)
-						{
+						if let Err(error) = Self::unlock_inner(
+							event.sender_id.clone(),
+							event.receiver.clone(),
+							event.amount,
+						) {
 							log!(info, "️️️failed to unlock native token: {:?}", error);
-							return Err(error);
+							let min = T::Currency::minimum_balance();
+							let amount_unwrapped = event.amount.checked_into().unwrap_or(min); //Check: should not return error.
+							Self::deposit_event(Event::UnlockFailed(
+								event.sender_id,
+								event.receiver,
+								amount_unwrapped,
+							));
+							return Ok(().into());
 						}
 					}
 					Observation::LockAsset(event) => {
@@ -999,15 +1011,27 @@ pub mod pallet {
 							);
 							if let Err(error) = Self::mint_asset_inner(
 								asset_id,
-								event.sender_id,
-								event.receiver,
+								event.sender_id.clone(),
+								event.receiver.clone(),
 								event.amount,
 							) {
 								log!(warn, "️️️failed to mint asset: {:?}", error);
-								return Err(error);
+								Self::deposit_event(Event::AssetMintFailed(
+									asset_id,
+									event.sender_id,
+									event.receiver,
+									event.amount,
+								));
+								return Ok(().into());
 							}
 						} else {
-							return Err(Error::<T>::WrongAssetId.into());
+							Self::deposit_event(Event::AssetIdGetFailed(
+								event.token_id,
+								event.sender_id,
+								event.receiver,
+								event.amount,
+							));
+							return Ok(().into());
 						}
 					}
 				}
