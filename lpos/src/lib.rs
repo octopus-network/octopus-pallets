@@ -628,11 +628,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Get exclude validators.
 	fn get_exclude_validators(index: EraIndex) -> Vec<String> {
-		let mut validators = T::SessionInterface::validators();
+		let mut validators = <ErasStakers<T>>::iter_prefix(index)
+			.map(|(k, _)| k)
+			.collect::<Vec<T::AccountId>>();
+
 		log!(debug, "All validators: {:?}", validators.clone());
 		let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
 		let era_reward_points = <ErasRewardPoints<T>>::get(index);
-		let ok_validators = era_reward_points
+		let qualified_validators = era_reward_points
 			.individual
 			.into_iter()
 			.filter_map(
@@ -646,7 +649,7 @@ impl<T: Config> Pallet<T> {
 			)
 			.collect::<Vec<T::AccountId>>();
 
-		validators.retain(|v| !(ok_validators.iter().any(|val| val == v)));
+		validators.retain(|v| !(qualified_validators.iter().any(|val| val == v)));
 
 		let excluded_validators = validators
 			.iter()
