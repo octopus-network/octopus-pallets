@@ -93,7 +93,8 @@ pub mod pallet {
 				return 0;
 			}
 
-			let commitment_hash = Self::make_commitment_hash(&messages);
+			let encoded_messages = messages.encode();
+			let commitment_hash = Keccak256::hash(&encoded_messages);
 
 			<frame_system::Pallet<T>>::deposit_log(DigestItem::Other(
 				commitment_hash.as_bytes().to_vec(),
@@ -110,15 +111,6 @@ pub mod pallet {
 			offchain_index::set(&*key, &messages.encode());
 
 			0
-		}
-
-		fn make_commitment_hash(messages: &[Message]) -> H256 {
-			let messages: Vec<_> = messages
-				.iter()
-				.map(|message| (message.nonce, message.payload.clone()))
-				.collect();
-			let input = messages.encode();
-			Keccak256::hash(&input)
 		}
 
 		fn make_offchain_key(hash: H256) -> Vec<u8> {
