@@ -681,7 +681,7 @@ pub mod pallet {
 		}
 
 		fn default_rpc_endpoint() -> String {
-			"https://rpc.testnet.near.org".to_string()
+			"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc".to_string()
 		}
 
 		fn get_mainchain_rpc_endpoint() -> String {
