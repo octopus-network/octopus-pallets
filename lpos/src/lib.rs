@@ -875,17 +875,9 @@ where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
-		log!(debug, "note_author: {:?}", author);
 		Self::reward_by_ids(vec![(author, 1)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		log!(
-			debug,
-			"note_uncle: {:?} {:?} - {:?}",
-			author,
-			_age,
-			<pallet_authorship::Pallet<T>>::author()
-		);
 		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 1), (author, 1)])
 	}
 }
