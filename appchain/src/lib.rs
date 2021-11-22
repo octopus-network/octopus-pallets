@@ -917,6 +917,20 @@ pub mod pallet {
 			})
 		}
 
+		fn delete_old_observations(observation_type: ObservationType, obs_id: u32) {
+			let prune_obs = <Observations<T>>::iter_prefix(observation_type)
+				.filter(|(index, _)| *index <= obs_id)
+				.collect::<Vec<(u32, Vec<Observation<T::AccountId>>)>>();
+
+			log!(debug, "will delete old observations: {:#?}", prune_obs.clone());
+			let _ = prune_obs.iter().map(|(index, obs)| {
+				for o in obs.iter() {
+					<Observing<T>>::remove(o);
+				}
+				<Observations<T>>::remove(observation_type, index);
+			}).collect::<Vec<_>>();
+		}
+
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
 		#[transactional]
@@ -1036,11 +1050,7 @@ pub mod pallet {
 					}
 				}
 
-				let obs = <Observations<T>>::get(observation_type, obs_id);
-				for o in obs.iter() {
-					<Observing<T>>::remove(o);
-				}
-				<Observations<T>>::remove(observation_type, obs_id);
+				Self::delete_old_observations(observation_type, obs_id);
 			}
 
 			Ok(().into())
