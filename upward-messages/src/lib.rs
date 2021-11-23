@@ -22,6 +22,9 @@ pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Message {
 	nonce: u64,
