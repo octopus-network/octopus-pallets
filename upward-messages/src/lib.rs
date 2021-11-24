@@ -7,7 +7,11 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_support::{
+	dispatch::DispatchResult,
+	ensure,
+	traits::{Get, StorageVersion},
+};
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -28,6 +32,9 @@ pub struct Message {
 	payload_type: PayloadType,
 	payload: Vec<u8>,
 }
+
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,6 +58,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]

@@ -13,7 +13,7 @@ use frame_support::{
 		tokens::fungibles,
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		OneSessionHandler,
+		OneSessionHandler, StorageVersion,
 	},
 	transactional, PalletId,
 };
@@ -227,6 +227,9 @@ impl<T: Config> AppchainInterface for Pallet<T> {
 	}
 }
 
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -281,6 +284,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
