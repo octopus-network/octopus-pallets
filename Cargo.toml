@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+
+members = [
+	"appchain",
+	"ibc",
+	"lpos",
+	"support",
+	"upward-messages",
+]
