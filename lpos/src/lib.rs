@@ -19,7 +19,7 @@ use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
-	traits::{Currency, Get, OnUnbalanced, UnixTime},
+	traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
 	weights::Weight,
 	PalletId,
 };
@@ -164,19 +164,8 @@ impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet
 	}
 }
 
-// A value placed in storage that represents the current version of the Staking storage. This value
-// is used by the `on_runtime_upgrade` logic to determine whether we run storage migration logic.
-// This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-enum Releases {
-	V1_0_0,
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V1_0_0
-	}
-}
+/// The current storage version.
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -184,6 +173,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -314,11 +304,6 @@ pub mod pallet {
 	#[pallet::getter(fn era_payout)]
 	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
 
-	/// True if network has been upgraded to this version.
-	/// Storage version of the pallet.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub history_depth: u32,
@@ -337,7 +322,6 @@ pub mod pallet {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
 			EraPayout::<T>::put(self.era_payout);
-			StorageVersion::<T>::put(Releases::V1_0_0);
 		}
 	}
 
@@ -432,20 +416,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			T::DbWeight::get().reads(1)
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			Ok(())
-		}
-
-		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
-			// just return the weight of the on_finalize.
-			T::DbWeight::get().reads(1)
-		}
-
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
