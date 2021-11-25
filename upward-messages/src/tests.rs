@@ -104,3 +104,16 @@ fn test_submit_exceeds_queue_limit() {
 		);
 	})
 }
+
+#[test]
+fn test_submit_fails_on_nonce_overflow() {
+	new_tester().execute_with(|| {
+		let who: AccountId = AccountKeyring::Bob.into();
+
+		<Nonce<Test>>::set(u64::MAX);
+		assert_noop!(
+			OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]),
+			Error::<Test>::NonceOverflow,
+		);
+	});
+}

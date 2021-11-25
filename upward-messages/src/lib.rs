@@ -22,8 +22,13 @@ pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
+pub mod weights;
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Message {
