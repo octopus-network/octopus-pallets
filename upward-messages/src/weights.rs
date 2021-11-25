@@ -63,11 +63,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: OctopusUpwardMessages MessageQueue (r:1 w:1)
 	// Storage: System Digest (r:1 w:1)
 	fn on_initialize(m: u32, p: u32, ) -> Weight {
-		(256_999_000 as Weight)
-			// Standard Error: 713_000
-			.saturating_add((23_634_000 as Weight).saturating_mul(m as Weight))
-			// Standard Error: 43_000
-			.saturating_add((1_387_000 as Weight).saturating_mul(p as Weight))
+		(107_697_000 as Weight)
+			// Standard Error: 723_000
+			.saturating_add((37_406_000 as Weight).saturating_mul(m as Weight))
+			// Standard Error: 21_000
+			.saturating_add((1_204_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -78,11 +78,11 @@ impl WeightInfo for () {
 	// Storage: OctopusUpwardMessages MessageQueue (r:1 w:1)
 	// Storage: System Digest (r:1 w:1)
 	fn on_initialize(m: u32, p: u32, ) -> Weight {
-		(256_999_000 as Weight)
-			// Standard Error: 713_000
-			.saturating_add((23_634_000 as Weight).saturating_mul(m as Weight))
-			// Standard Error: 43_000
-			.saturating_add((1_387_000 as Weight).saturating_mul(p as Weight))
+		(107_697_000 as Weight)
+			// Standard Error: 723_000
+			.saturating_add((37_406_000 as Weight).saturating_mul(m as Weight))
+			// Standard Error: 21_000
+			.saturating_add((1_204_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}

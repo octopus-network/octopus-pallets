@@ -8,6 +8,7 @@ use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+pub use pallet::*;
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -17,8 +18,7 @@ use sp_runtime::{
 	DigestItem, RuntimeDebug,
 };
 use sp_std::prelude::*;
-
-pub use pallet::*;
+pub use weights::WeightInfo;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
@@ -55,6 +55,9 @@ pub mod pallet {
 		/// The limit for submit messages.
 		#[pallet::constant]
 		type UpwardMessagesLimit: Get<u32>;
+
+		/// Weight information for extrinsics in this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -103,6 +106,7 @@ pub mod pallet {
 
 			let encoded_messages = messages.encode();
 			let commitment_hash = Keccak256::hash(&encoded_messages);
+			let average_payload_size = Self::average_payload_size(&messages);
 
 			<frame_system::Pallet<T>>::deposit_log(DigestItem::Other(
 				commitment_hash.as_bytes().to_vec(),
@@ -118,11 +122,16 @@ pub mod pallet {
 			);
 			offchain_index::set(&*key, &messages.encode());
 
-			0
+			T::WeightInfo::on_initialize(messages.len() as u32, average_payload_size as u32)
 		}
 
 		fn make_offchain_key(hash: H256) -> Vec<u8> {
 			(b"commitment", hash).encode()
+		}
+
+		fn average_payload_size(messages: &[Message]) -> usize {
+			let sum: usize = messages.iter().fold(0, |acc, x| acc + x.payload.len());
+			(sum / messages.len()).saturating_add(1)
 		}
 	}
 }
