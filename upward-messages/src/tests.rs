@@ -67,6 +67,7 @@ impl Config for Test {
 	type Call = Call;
 	type Event = Event;
 	type UpwardMessagesLimit = UpwardMessagesLimit;
+	type WeightInfo = ();
 }
 
 pub fn new_tester() -> sp_io::TestExternalities {

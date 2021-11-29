@@ -48,6 +48,9 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 mod mainchain;
 mod weights;
 
+#[cfg(all(test))]
+mod mock;
+
 #[cfg(test)]
 mod tests;
 

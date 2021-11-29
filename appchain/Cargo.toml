@@ -31,8 +31,31 @@ sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polka
 sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", optional = true }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../../primitives/consensus/babe" }
 
 pallet-octopus-support = { path = "../support", default-features = false }
+pallet-octopus-lpos = { path = "../lpos", default-features = false }
+pallet-octopus-upward-messages = { path = "../upward-messages", default-features = false }
+
+pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/assets" }
+pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/staking" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/timestamp" }
+pallet-session = { version = "4.0.0-dev", features = [
+	"historical",
+], path = "../../../../frame/session", default-features = false }
+pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/im-online" }
+pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/grandpa" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/transaction-payment" }
+
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/beefy" }
+pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/beefy" }
+pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/babe" }
+pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/authorship" }
+pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/sudo" }
+pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/randomness-collective-flip" }
 
 [features]
 default = ["std"]
@@ -53,7 +76,25 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-api/std",
+	"sp-consensus-babe/std",
 	"pallet-octopus-support/std",
+	"pallet-octopus-lpos/std",
+	"pallet-octopus-upward-messages/std",
+	"pallet-balances/std",
+	"pallet-assets/std",
+	"pallet-im-online/std",
+	"pallet-timestamp/std",
+	"pallet-session/std",
+	"pallet-transaction-payment/std",
+	"sp-keyring",
+	"pallet-grandpa/std",
+	"beefy-primitives/std",
+	"pallet-beefy/std",
+	"pallet-babe/std",
+	"pallet-authorship/std",
+	"pallet-sudo/std",
+	"pallet-randomness-collective-flip/std",
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]
