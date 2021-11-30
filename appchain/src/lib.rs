@@ -830,12 +830,30 @@ pub mod pallet {
 			{
 				// Make an external HTTP request to fetch the current price.
 				// Note this call will block until response is received.
-				obs = Self::get_validator_list_of(
+				let ret = Self::get_validator_list_of(
 					mainchain_rpc_endpoint,
 					anchor_contract.clone(),
 					next_set_id,
-				)
-				.map_err(|_| "Failed to get_validator_list_of")?;
+				);
+
+				match ret {
+					Ok(observations) => {
+						obs = observations;
+					}
+					Err(error) => {
+						if error != http::Error::Unknown {
+							log!(debug, "switch rpc end point to get validators");
+							obs = Self::get_validator_list_of(
+								"https://rpc.testnet.near.org",
+								anchor_contract.clone(),
+								next_set_id,
+							)
+							.map_err(|_| "Failed to get_validator_list_of")?;
+						} else {
+							return Err("Failed to get_validator_list_of");
+						}
+					}
+				}
 			}
 
 			// check cross-chain transfers only if there isn't a validator_set update.
@@ -843,13 +861,32 @@ pub mod pallet {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// Make an external HTTP request to fetch the current price.
 				// Note this call will block until response is received.
-				obs = Self::get_appchain_notification_histories(
+				let ret = Self::get_appchain_notification_histories(
 					mainchain_rpc_endpoint,
-					anchor_contract,
+					anchor_contract.clone(),
 					next_notification_id,
 					T::RequestEventLimit::get(),
-				)
-				.map_err(|_| "Failed to get_appchain_notification_histories")?;
+				);
+
+				match ret {
+					Ok(observations) => {
+						obs = observations;
+					}
+					Err(error) => {
+						if error != http::Error::Unknown {
+							log!(debug, "switch rpc end point go get notify");
+							obs = Self::get_appchain_notification_histories(
+								"https://rpc.testnet.near.org",
+								anchor_contract,
+								next_notification_id,
+								T::RequestEventLimit::get(),
+							)
+							.map_err(|_| "Failed to get_appchain_notification_histories")?;
+						} else {
+							return Err("Failed to get_appchain_notification_histories");
+						}
+					}
+				}
 			}
 
 			if obs.len() == 0 {
