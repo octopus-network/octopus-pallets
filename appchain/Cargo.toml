@@ -40,16 +40,13 @@ pallet-octopus-lpos = { path = "../lpos", default-features = false }
 pallet-octopus-upward-messages = { path = "../upward-messages", default-features = false }
 
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/assets" }
-pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/balances" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/staking" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/timestamp" }
-pallet-session = { version = "4.0.0-dev", features = [
-	"historical",
-], path = "../../../../frame/session", default-features = false }
+pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../../frame/session", default-features = false }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/im-online" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/grandpa" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/transaction-payment" }
-
 beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/beefy" }
 pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/beefy" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/babe" }
@@ -82,6 +79,7 @@ std = [
 	"pallet-octopus-lpos/std",
 	"pallet-octopus-upward-messages/std",
 	"pallet-balances/std",
+	"sp-staking/std",
 	"pallet-assets/std",
 	"pallet-im-online/std",
 	"pallet-timestamp/std",

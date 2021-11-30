@@ -433,17 +433,19 @@ impl Config for Test {
 pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_octopus_appchain::GenesisConfig::<Test> {
+
+	let config: pallet_octopus_appchain::GenesisConfig::<Test> = pallet_octopus_appchain::GenesisConfig {
 		anchor_contract: "oct-test".to_string(),
 		validators: vec![
 			(AccountKeyring::Alice.into(), stash),
 			(AccountKeyring::Bob.into(), stash),
 		],
 		premined_amount: 1024 * DOLLARS,
-		asset_id_by_name: vec![("usdc.testnet".to_string(), 0)],
-	}
-	.assimilate_storage(&mut storage)
-	.unwrap();
+		asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
+	};
+	config.assimilate_storage(&mut storage).unwrap();
 
-	storage.into()
+	let mut ext: sp_io::TestExternalities = storage.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
