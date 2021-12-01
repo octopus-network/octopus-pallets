@@ -1,8 +1,10 @@
 use crate::mock::*;
 use crate::Error;
+use crate::*;
 use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
+use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keyring::AccountKeyring;
 use sp_runtime::traits::BadOrigin;
 
@@ -77,7 +79,7 @@ fn test_mint_asset() {
 		// 	0,
 		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
 		// 	sp_runtime::MultiAddress::Id(ferdie.clone()),
-		// 	10000000000
+		// 	1000000000
 		// ));
 
 		assert_noop!(
@@ -86,7 +88,7 @@ fn test_mint_asset() {
 				1,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
 				sp_runtime::MultiAddress::Id(ferdie.clone()),
-				10000000000
+				1000000000
 			),
 			BadOrigin,
 		);
@@ -97,7 +99,7 @@ fn test_mint_asset() {
 				1,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
 				sp_runtime::MultiAddress::Index(()),
-				10000000000
+				1000000000
 			),
 			sp_runtime::DispatchError::CannotLookup,
 		);
@@ -108,7 +110,7 @@ fn test_mint_asset() {
 				1,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
 				sp_runtime::MultiAddress::Id(ferdie),
-				10000000000
+				1000000000
 			),
 			sp_runtime::TokenError::UnknownAsset,
 		);
@@ -150,22 +152,32 @@ fn test_lock() {
 			OctopusAppchain::lock(
 				origin.clone(),
 				"test-account.testnet".to_string().as_bytes().to_vec(),
-				10000000000
+				1000000000
 			),
 			Error::<Test>::NotActivated
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 		assert_noop!(
-			OctopusAppchain::lock(origin.clone(), vec![0, 159], 10000000000),
+			OctopusAppchain::lock(origin.clone(), vec![0, 159], 1000000000),
 			Error::<Test>::InvalidReceiverId
 		);
+
+		// TODO:
+		// assert_noop!(
+		// 	OctopusAppchain::lock(
+		// 		origin.clone(),
+		// 		"test-account.testnet".to_string().as_bytes().to_vec(),
+		// 		100000000000000000000000000000
+		// 	),
+		// 	Error::<Test>::AmountOverflow
+		// );
 
 		assert_noop!(
 			OctopusAppchain::lock(
 				origin.clone(),
 				"test-account.testnet".to_string().as_bytes().to_vec(),
-				10000000000
+				1000000000
 			),
 			BalancesError::<Test>::InsufficientBalance
 		);
@@ -180,10 +192,180 @@ fn test_lock() {
 	});
 }
 
-#[test]
-fn test_unlock_inner() {
-    
+fn expected_val_set() -> Observation<AccountId> {
+	let id = hex::decode("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d")
+		.map(|b| AccountId::decode(&mut &b[..]))
+		.unwrap()
+		.unwrap();
+	let alice = Validator { validator_id_in_appchain: id, total_stake: 10000000000 };
+
+	let id = hex::decode("8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48")
+		.map(|b| AccountId::decode(&mut &b[..]))
+		.unwrap()
+		.unwrap();
+	let bob = Validator { validator_id_in_appchain: id, total_stake: 10000000000 };
+
+	let id = hex::decode("90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22")
+		.map(|b| AccountId::decode(&mut &b[..]))
+		.unwrap()
+		.unwrap();
+	let charlie = Validator { validator_id_in_appchain: id, total_stake: 100000000000 };
+
+	let id = hex::decode("306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20")
+		.map(|b| AccountId::decode(&mut &b[..]))
+		.unwrap()
+		.unwrap();
+	let dave = Validator { validator_id_in_appchain: id, total_stake: 10000000000 };
+
+	Observation::UpdateValidatorSet(ValidatorSet {
+		set_id: 1,
+		validators: vec![alice, bob, charlie, dave],
+	})
+}
+
+fn validator_set_1_response(state: &mut testing::OffchainState) {
+	state.expect_request(testing::PendingRequest {
+		method: "POST".into(),
+		uri: "https://rpc.testnet.near.org".into(),
+		headers: vec![("Content-Type".into(), "application/json".into())],
+		body: br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "query",
+			"params": {
+				"request_type": "call_function",
+				"finality": "final",
+				"account_id": "oct-test.testnet",
+				"method_name": "get_validator_list_of",
+				"args_base64": "eyJlcmFfbnVtYmVyIjoiMSJ9"
+			}
+		}"#.to_vec(),
+		response: Some(br#"
+		{
+			"jsonrpc": "2.0",
+			"result": {
+				"block_hash": "EczErquQLMpUvTQpKupoQp5yNkgNbniMSHq1gVvhAf84",
+				"block_height": 1,
+				"logs": [],
+		 		"result": [
+					91,123,34,118,97,108,105,100,97,116,111,114,95,105,100,95,105,110,95,97,112,112,99,104,97,105,110,34,58,34,48,120,100,52,51,53,57,51,99,55,49,53,102,100,100,51,49,99,54,49,49,52,49,97,98,100,48,52,97,57,57,102,100,54,56,50,50,99,56,53,53,56,56,53,52,99,99,100,101,51,57,97,53,54,56,52,101,55,97,53,54,100,97,50,55,100,34,44,34,116,111,116,97,108,95,115,116,97,107,101,34,58,34,49,48,48,48,48,48,48,48,48,48,48,34,125,44,123,34,118,97,108,105,100,97,116,111,114,95,105,100,95,105,110,95,97,112,
+					112,99,104,97,105,110,34,58,34,48,120,56,101,97,102,48,52,49,53,49,54,56,55,55,51,54,51,50,54,99,57,102,101,97,49,55,101,50,53,102,99,53,50,56,55,54,49,51,54,57,51,99,57,49,50,57,48,57,99,98,50,50,54,97,97,52,55,57,52,102,50,54,97,52,56,34,44,34,116,111,116,97,108,95,115,116,97,107,101,34,58,34,49,48,48,48,48,48,48,48,48,48,48,34,125,44,123,34,118,97,108,105,100,97,116,111,114,95,105,100,95,105,110,95,97,112,112,99,104,97,105,110,34,58,34,48,120,57,48,98,53,97,98,50,48,53,99,54,57,55,52,99,
+					57,101,97,56,52,49,98,101,54,56,56,56,54,52,54,51,51,100,99,57,99,97,56,97,51,53,55,56,52,51,101,101,97,99,102,50,51,49,52,54,52,57,57,54,53,102,101,50,50,34,44,34,116,111,116,97,108,95,115,116,97,107,101,34,58,34,49,48,48,48,48,48,48,48,48,48,48,48,34,125,44,123,34,118,97,108,105,100,97,116,111,114,95,105,100,95,105,110,95,97,112,112,99,104,97,105,110,34,58,34,48,120,51,48,54,55,50,49,50,49,49,100,53,52,48,52,98,100,57,100,97,56,56,101,48,50,48,52,51,54,48,97,49,97,57,97,98,56,98,56,55,99,
+					54,54,99,49,98,99,50,102,99,100,100,51,55,102,51,99,50,50,50,50,99,99,50,48,34,44,34,116,111,116,97,108,95,115,116,97,107,101,34,58,34,49,48,48,48,48,48,48,48,48,48,48,34,125,93
+				]
+			},
+			"id": "dontcare"
+		}
+			"#.to_vec()),
+		sent: true,
+		..Default::default()
+	});
+}
+
+fn expected_burn_notify() -> Observation<AccountId> {
+	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
+		.map(|b| AccountId::decode(&mut &b[..]))
+		.unwrap()
+		.unwrap();
+
+	Observation::Burn(BurnEvent {
+		index: 0,
+		sender_id: "andy-pallet-test.testnet".to_string().as_bytes().to_vec(),
+		receiver,
+		amount: 100000,
+	})
+}
+
+fn burn_notify_response(state: &mut testing::OffchainState) {
+	state.expect_request(testing::PendingRequest {
+		method: "POST".into(),
+		uri: "https://rpc.testnet.near.org".into(),
+		headers: vec![("Content-Type".into(), "application/json".into())],
+		body: br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "query",
+			"params": {
+				"request_type": "call_function",
+				"finality": "final",
+				"account_id": "oct-test.testnet",
+				"method_name": "get_appchain_notification_histories",
+				"args_base64": "eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEifQ=="
+			}
+		}"#
+		.to_vec(),
+		response: Some(br#"
+		{
+			"jsonrpc": "2.0",
+    		"result": {
+        		"result": [91,123,34,97,112,112,99,104,97,105,110,95,110,111,116,105,102,105,99,97,116,105,111,110,34,58,123,34,87,114,97,112,112,101,100,65,112,112,99,104,97,105,110,84,111,107,101,110,66,117,114,110,116,34,58,123,34,115,101,110,100,101,114,95,105,100,95,105,110,95,110,101,97,114,34,58,34,97,110,100,121,45,112,97,108,108,101,116,45,116,101,115,116,46,116,101,115,116,110,101,116,34,44,34,114,101,99,101,105,118,101,114,95,105,100,95,105,110,95,97,112,112,99,104,97,105,110,34,58,34,48,120,57,52,102,49,51,
+				53,53,50,54,101,99,53,102,101,56,51,48,101,48,99,98,99,54,102,100,53,56,54,56,51,99,98,50,100,57,101,101,48,54,53,50,50,99,100,57,97,50,99,48,52,56,49,50,54,56,99,53,99,55,51,54,55,52,102,34,44,34,97,109,111,117,110,116,34,58,34,49,48,48,48,48,48,34,125,125,44,34,98,108,111,99,107,95,104,101,105,103,104,116,34,58,55,49,53,56,57,49,56,54,44,34,116,105,109,101,115,116,97,109,112,34,58,49,54,51,55,48,55,50,53,50,50,50,49,50,54,51,53,51,50,57,44,34,105,110,100,101,120,34,58,34,48,34,125,93],
+        		"logs": [],
+        		"block_height": 73434388,
+        		"block_hash": "9VhYFRLCvQfSz6TRrjnb8MvEtRQ46w4d5PDMRijZSzWj"
+    		},
+    		"id": "dontcare"
+		}
+			"#
+			.to_vec(),
+		),
+		sent: true,
+		..Default::default()
+	});
 }
 
 #[test]
-fn test_submit_observations() {}
+fn test_make_http_call_and_parse_result() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let mut t = new_tester();
+	t.register_extension(OffchainWorkerExt::new(offchain));
+
+	validator_set_1_response(&mut state.write());
+	burn_notify_response(&mut state.write());
+	validator_set_1_response(&mut state.write());
+	burn_notify_response(&mut state.write());
+
+	t.execute_with(|| {
+		let val_set = OctopusAppchain::get_validator_list_of(
+			"https://rpc.testnet.near.org",
+			b"oct-test.testnet".to_vec(),
+			1,
+		)
+		.ok();
+		assert_eq!(val_set, Some(vec![expected_val_set()]));
+
+		let burn_notify = OctopusAppchain::get_appchain_notification_histories(
+			"https://rpc.testnet.near.org",
+			b"oct-test.testnet".to_vec(),
+			0,
+			1,
+		)
+		.ok();
+		assert_eq!(burn_notify, Some(vec![expected_burn_notify()]));
+
+		let val_set = OctopusAppchain::get_validator_list_of(
+			"https://rpc.testnet.near.org",
+			b"oct-test.testnet".to_vec(),
+			1,
+		)
+		.ok();
+		assert_eq!(val_set, Some(vec![expected_val_set()]));
+
+		let burn_notify = OctopusAppchain::get_appchain_notification_histories(
+			"https://rpc.testnet.near.org",
+			b"oct-test.testnet".to_vec(),
+			0,
+			1,
+		)
+		.ok();
+		assert_eq!(burn_notify, Some(vec![expected_burn_notify()]));
+	});
+}
+
+#[test]
+fn test_submit_validators_set() {}
+
+#[test]
+fn test_submit_burn_notify() {}

@@ -435,7 +435,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	let config: pallet_octopus_appchain::GenesisConfig::<Test> = pallet_octopus_appchain::GenesisConfig {
-		anchor_contract: "oct-test".to_string(),
+		anchor_contract: "oct-test.testnet".to_string(),
 		validators: vec![
 			(AccountKeyring::Alice.into(), stash),
 			(AccountKeyring::Bob.into(), stash),
