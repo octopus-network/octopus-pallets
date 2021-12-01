@@ -452,7 +452,9 @@ pub mod pallet {
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
 				Some(validator_id) => {
-					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint();
+					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint(
+						anchor_contract[anchor_contract.len() - 1] == 116,
+					); // last byte is 't'
 					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
 
 					if let Err(e) = Self::observing_mainchain(
@@ -684,11 +686,23 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn default_rpc_endpoint() -> String {
-			"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc".to_string()
+		fn default_rpc_endpoint(is_testnet: bool) -> String {
+			if is_testnet {
+				"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc".to_string()
+			} else {
+				"https://ca.bsngate.com/api/edc6aab2f13e1dc049fab8b4bcae29cdae53ce84df2d8b352f9497f290a697e2/Near-Mainnet/rpc".to_string()
+			}
 		}
 
-		fn get_mainchain_rpc_endpoint() -> String {
+		fn official_rpc_endpoint(is_testnet: bool) -> String {
+			if is_testnet {
+				"https://rpc.testnet.near.org".to_string()
+			} else {
+				"https://rpc.mainnet.near.org".to_string()
+			}
+		}
+
+		fn get_mainchain_rpc_endpoint(is_testnet: bool) -> String {
 			let kind = sp_core::offchain::StorageKind::PERSISTENT;
 			if let Some(data) = sp_io::offchain::local_storage_get(
 				kind,
@@ -699,11 +713,11 @@ pub mod pallet {
 					return rpc_url;
 				} else {
 					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::default_rpc_endpoint();
+					return Self::default_rpc_endpoint(is_testnet);
 				}
 			} else {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::default_rpc_endpoint();
+				return Self::default_rpc_endpoint(is_testnet);
 			}
 		}
 
@@ -830,12 +844,28 @@ pub mod pallet {
 			{
 				// Make an external HTTP request to fetch the current price.
 				// Note this call will block until response is received.
-				obs = Self::get_validator_list_of(
+				let ret = Self::get_validator_list_of(
 					mainchain_rpc_endpoint,
 					anchor_contract.clone(),
 					next_set_id,
-				)
-				.map_err(|_| "Failed to get_validator_list_of")?;
+				);
+
+				match ret {
+					Ok(observations) => {
+						obs = observations;
+					}
+					Err(_) => {
+						log!(debug, "retry with failsafe endpoint to get validators");
+						obs = Self::get_validator_list_of(
+							&Self::official_rpc_endpoint(
+								anchor_contract[anchor_contract.len() - 1] == 116,
+							), // last byte is 't'
+							anchor_contract.clone(),
+							next_set_id,
+						)
+						.map_err(|_| "Failed to get_validator_list_of")?;
+					}
+				}
 			}
 
 			// check cross-chain transfers only if there isn't a validator_set update.
@@ -843,13 +873,30 @@ pub mod pallet {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// Make an external HTTP request to fetch the current price.
 				// Note this call will block until response is received.
-				obs = Self::get_appchain_notification_histories(
+				let ret = Self::get_appchain_notification_histories(
 					mainchain_rpc_endpoint,
-					anchor_contract,
+					anchor_contract.clone(),
 					next_notification_id,
 					T::RequestEventLimit::get(),
-				)
-				.map_err(|_| "Failed to get_appchain_notification_histories")?;
+				);
+
+				match ret {
+					Ok(observations) => {
+						obs = observations;
+					}
+					Err(_) => {
+						log!(debug, "retry with failsafe endpoint to get notify");
+						obs = Self::get_appchain_notification_histories(
+							&Self::official_rpc_endpoint(
+								anchor_contract[anchor_contract.len() - 1] == 116,
+							), // last byte is 't'
+							anchor_contract,
+							next_notification_id,
+							T::RequestEventLimit::get(),
+						)
+						.map_err(|_| "Failed to get_appchain_notification_histories")?;
+					}
+				}
 			}
 
 			if obs.len() == 0 {
