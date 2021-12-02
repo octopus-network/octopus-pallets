@@ -198,6 +198,41 @@ fn test_lock() {
 	});
 }
 
+#[test]
+fn test_encode_args_works() {
+	let test_get_validators_data = vec![
+		(
+			0u32,
+			Some(b"eyJlcmFfbnVtYmVyIjoiMCJ9".to_vec()),
+		),
+		(
+			4294967295u32,
+			Some(b"eyJlcmFfbnVtYmVyIjoiNDI5NDk2NzI5NSJ9".to_vec()),
+		)
+	];
+
+	for (set_id, expected) in test_get_validators_data {
+		assert_eq!(expected, OctopusAppchain::encode_get_validator_args(set_id));
+	}
+
+	let test_get_notify_data = vec![
+		(
+			0u32,
+			0u32,
+			Some(b"eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjAifQ==".to_vec()),
+		),
+		(
+			4294967295u32,
+			4294967295u32,
+			Some(b"eyJzdGFydF9pbmRleCI6IjQyOTQ5NjcyOTUiLCJxdWFudGl0eSI6IjQyOTQ5NjcyOTUifQ==".to_vec()),
+		)
+	];
+
+	for (start, limit, expected) in test_get_notify_data {
+		assert_eq!(expected, OctopusAppchain::encode_get_notification_args(start, limit));
+	}
+}
+
 fn expected_val_set() -> Observation<AccountId> {
 	let id = hex::decode("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d")
 		.map(|b| AccountId::decode(&mut &b[..]))

@@ -121,7 +121,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"era_number\":\"");
 		let era = era.to_string();
 		let b = String::from("\"}");
@@ -236,7 +236,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");
