@@ -269,6 +269,40 @@ fn validator_set_1_response(state: &mut testing::OffchainState) {
 	});
 }
 
+fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
+	state.expect_request(testing::PendingRequest {
+		method: "POST".into(),
+		uri: "https://rpc.testnet.near.org".into(),
+		headers: vec![("Content-Type".into(), "application/json".into())],
+		body: br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "query",
+			"params": {
+				"request_type": "call_function",
+				"finality": "final",
+				"account_id": "oct-test.testnet",
+				"method_name": "get_validator_list_of",
+				"args_base64": "eyJlcmFfbnVtYmVyIjoiMSJ9"
+			}
+		}"#.to_vec(),
+		response: Some(br#"
+		{
+			"jsonrpc": "2.0",
+			"result": {
+				"block_hash": "EczErquQLMpUvTQpKupoQp5yNkgNbniMSHq1gVvhAf84",
+				"block_height": 1,
+				"logs": [],
+		 		"result": [91,93]
+			},
+			"id": "dontcare"
+		}
+			"#.to_vec()),
+		sent: true,
+		..Default::default()
+	});
+}
 fn expected_burn_notify() -> Observation<AccountId> {
 	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
 		.map(|b| AccountId::decode(&mut &b[..]))
@@ -298,7 +332,7 @@ fn burn_notify_response(state: &mut testing::OffchainState) {
 				"finality": "final",
 				"account_id": "oct-test.testnet",
 				"method_name": "get_appchain_notification_histories",
-				"args_base64": "eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEifQ=="
+				"args_base64": "eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEwIn0="
 			}
 		}"#
 		.to_vec(),
@@ -346,7 +380,7 @@ fn test_make_http_call_and_parse_result() {
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
 			0,
-			1,
+			10,
 		)
 		.ok();
 		assert_eq!(burn_notify, Some(vec![expected_burn_notify()]));
@@ -363,7 +397,7 @@ fn test_make_http_call_and_parse_result() {
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
 			0,
-			1,
+			10,
 		)
 		.ok();
 		assert_eq!(burn_notify, Some(vec![expected_burn_notify()]));
@@ -371,7 +405,7 @@ fn test_make_http_call_and_parse_result() {
 }
 
 #[test]
-fn test_submit_unsigned_transaction_on_chain() {
+fn test_submit_validator_sets_on_chain() {
 	const PHRASE: &str =
 		"news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
@@ -404,11 +438,79 @@ fn test_submit_unsigned_transaction_on_chain() {
 		ObservationsPayload { public, block_number: 2, observations: vec![expected_val_set()] };
 
 	t.execute_with(|| {
+		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
 		OctopusAppchain::observing_mainchain(
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
 			account,
+		)
+		.unwrap();
+
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.signature, None);
+		if let mock::Call::OctopusAppchain(crate::Call::submit_observations {
+			payload: body,
+			signature,
+		}) = tx.call
+		{
+			assert_eq!(body, obs_payload);
+
+			let signature_valid = <ObservationsPayload<
+				<Test as SigningTypes>::Public,
+				<Test as frame_system::Config>::BlockNumber,
+				<Test as frame_system::Config>::AccountId,
+			> as SignedPayload<Test>>::verify::<<Test as Config>::AuthorityId>(
+				&obs_payload, signature
+			);
+
+			assert!(signature_valid);
+		}
+	});
+}
+
+#[test]
+fn test_submit_notifies_on_chain() {
+	const PHRASE: &str =
+		"news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	let keystore = KeyStore::new();
+
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		crate::crypto::Public::ID,
+		Some(&format!("{}/hunter1", PHRASE)),
+	)
+	.unwrap();
+
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	let mut t = new_tester();
+	t.register_extension(OffchainWorkerExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
+
+	empty_validator_set_1_response(&mut offchain_state.write());
+	burn_notify_response(&mut offchain_state.write());
+
+	let public = <Test as SigningTypes>::Public::from(public_key);
+	let account = public.clone().into_account();
+	let obs_payload =
+		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+
+	t.execute_with(|| {
+		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
+		OctopusAppchain::observing_mainchain(
+			2,
+			"https://rpc.testnet.near.org",
+			b"oct-test.testnet".to_vec(),
+			account.clone(),
 		)
 		.unwrap();
 
