@@ -1,64 +1,34 @@
 use super::*;
 use crate as pallet_octopus_appchain;
-
-use pallet_grandpa::AuthorityId as GrandpaId;
-use sp_core::crypto::KeyTypeId;
-use sp_runtime::{
-	generic, impl_opaque_keys,
-	traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
-	MultiSignature,
-};
+use sp_core::crypto::{key_types, KeyTypeId};
 use sp_keyring::AccountKeyring;
+use sp_runtime::{
+	generic,
+	testing::{TestXt, UintAuthorityId},
+	traits::{
+		AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
+		OpaqueKeys, Verify,
+	},
+	MultiSignature,
+	// transaction_validity::TransactionPriority,
+};
 
 pub use frame_support::{
-	construct_runtime,
+	construct_runtime,parameter_types,
 	pallet_prelude::GenesisBuild,
-	parameter_types,
-	traits::OnInitialize,
-	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
+	traits::{OnInitialize, KeyOwnerProofSystem, Randomness, StorageInfo},
 	weights::{IdentityFee, Weight},
-	StorageValue,
+	StorageValue, PalletId,
 };
-pub use pallet_balances::Call as BalancesCall;
-pub use pallet_timestamp::Call as TimestampCall;
-use pallet_transaction_payment::CurrencyAdapter;
 
 use frame_system::EnsureRoot;
-use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_session::historical as pallet_session_historical;
-use sp_runtime::{
-	generic::Era,
-	traits::{self, OpaqueKeys, SaturatedConversion, StaticLookup},
-	transaction_validity::TransactionPriority,
-};
-
-use beefy_primitives::crypto::AuthorityId as BeefyId;
-use frame_support::PalletId;
-use sp_runtime::traits::ConvertInto;
 
 pub type BlockNumber = u32;
 pub type Signature = MultiSignature;
-pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 pub type Balance = u128;
 pub type Moment = u64;
-pub type Index = u32;
+pub type Index = u64;
 pub type Hash = sp_core::H256;
-
-pub mod opaque {
-	use super::*;
-	pub use sp_runtime::OpaqueExtrinsic as UncheckedExtrinsic;
-	pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-	impl_opaque_keys! {
-		pub struct SessionKeys {
-			pub babe: Babe,
-			pub grandpa: Grandpa,
-			pub im_online: ImOnline,
-			pub beefy: Beefy,
-			pub octopus: OctopusAppchain,
-		}
-	}
-}
 
 pub const MILLICENTS: Balance = 10_000_000_000;
 pub const CENTS: Balance = 1_000 * MILLICENTS;
@@ -66,20 +36,8 @@ pub const DOLLARS: Balance = 100 * CENTS;
 pub const MILLISECS_PER_BLOCK: Moment = 3000;
 pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
 pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
-// pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 1 * MINUTES;
-pub const EPOCH_DURATION_IN_SLOTS: u64 = {
-	const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
-	(EPOCH_DURATION_IN_BLOCKS as f64 * SLOT_FILL_RATE) as u64
-};
 pub const MINUTES: BlockNumber = 60 / (SECS_PER_BLOCK as BlockNumber);
-// pub const HOURS: BlockNumber = MINUTES * 60;
-// pub const DAYS: BlockNumber = HOURS * 24;
-// pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
-// 	sp_consensus_babe::BabeEpochConfiguration {
-// 		c: PRIMARY_PROBABILITY,
-// 		allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
-// 	};
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -111,57 +69,12 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-impl pallet_randomness_collective_flip::Config for Test {}
-
-parameter_types! {
-	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
-	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
-	pub const ReportLongevity: u64 =
-		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
-}
-impl pallet_babe::Config for Test {
-	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ExpectedBlockTime;
-	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
-	type DisabledValidators = Session;
-	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		pallet_babe::AuthorityId,
-	)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		pallet_babe::AuthorityId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation =
-		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, (), ReportLongevity>;
-	// type WeightInfo = pallet_babe::weights::SubstrateWeight<Test>;
-	type WeightInfo = ();
-	type MaxAuthorities = MaxAuthorities;
-}
-
-impl pallet_grandpa::Config for Test {
-	type Event = Event;
-	type Call = Call;
-	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation =
-		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, (), ReportLongevity>;
-	type WeightInfo = ();
-	type MaxAuthorities = MaxAuthorities;
-}
-
 parameter_types! {
 	pub const MinimumPeriod: Moment = SLOT_DURATION / 2;
 }
 impl pallet_timestamp::Config for Test {
 	type Moment = Moment;
-	type OnTimestampSet = Babe;
+	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 	// type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Test>;
 	type WeightInfo = ();
@@ -185,37 +98,35 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	pub OperationalFeeMultiplier: u8 = 5;
-}
-impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
-	type TransactionByteFee = TransactionByteFee;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
-	type WeightToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ();
+pub struct TestSessionHandler;
+impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
+
+	fn on_new_session<Ks: OpaqueKeys>(
+		_changed: bool,
+		_validators: &[(AccountId, Ks)],
+		_queued_validators: &[(AccountId, Ks)],
+	) {
+	}
+
+	fn on_disabled(_validator_index: u32) {}
+
+	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 }
 
 parameter_types! {
-	pub const UncleGenerations: BlockNumber = 0;
+	pub const Period: u32 = 1;
+	pub const Offset: u32 = 0;
 }
-impl pallet_authorship::Config for Test {
-	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
-	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
-	type EventHandler = (OctopusLpos, ImOnline);
-}
-
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = ConvertInto;
-	type ShouldEndSession = Babe;
-	type NextSessionRotation = Babe;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, OctopusLpos>;
-	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
-	type Keys = opaque::SessionKeys;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = ();
+	type SessionHandler = TestSessionHandler;
+	type Keys = UintAuthorityId;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Test>;
 }
 
@@ -224,13 +135,20 @@ impl pallet_session::historical::Config for Test {
 	type FullIdentificationOf = pallet_octopus_lpos::ExposureOf<Test>;
 }
 
-parameter_types! {
-	pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
-	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
-	pub const MaxAuthorities: u32 = 100;
-	pub const MaxKeys: u32 = 10_000;
-	pub const MaxPeerInHeartbeats: u32 = 10_000;
-	pub const MaxPeerDataEncodingSize: u32 = 1_000;
+pub(crate) type Extrinsic = TestXt<Call, ()>;
+pub(crate) type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
+impl frame_system::offchain::SigningTypes for Test {
+	type Public = <Signature as Verify>::Signer;
+	type Signature = Signature;
+}
+
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
+where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test
@@ -239,60 +157,12 @@ where
 {
 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
-		public: <Signature as traits::Verify>::Signer,
-		account: AccountId,
-		nonce: Index,
-	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		let tip = 0;
-		let period =
-			BlockHashCount::get().checked_next_power_of_two().map(|c| c / 2).unwrap_or(2) as u64;
-		let current_block = System::block_number().saturated_into::<u64>().saturating_sub(1);
-		let era = Era::mortal(period, current_block);
-		let extra = (
-			frame_system::CheckSpecVersion::<Test>::new(),
-			frame_system::CheckTxVersion::<Test>::new(),
-			frame_system::CheckGenesis::<Test>::new(),
-			frame_system::CheckEra::<Test>::from(era),
-			frame_system::CheckNonce::<Test>::from(nonce),
-			frame_system::CheckWeight::<Test>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Test>::from(tip),
-		);
-		let raw_payload = SignedPayload::new(call, extra)
-			.map_err(|e| {
-				log::warn!("Unable to create signed payload: {:?}", e);
-			})
-			.ok()?;
-		let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
-		let address = <Self as frame_system::Config>::Lookup::unlookup(account);
-		let (call, extra, _) = raw_payload.deconstruct();
-		Some((call, (address, signature.into(), extra)))
+		_public: <Signature as Verify>::Signer,
+		_account: AccountId,
+		nonce: u64,
+	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+		Some((call, (nonce, ())))
 	}
-}
-
-impl frame_system::offchain::SigningTypes for Test {
-	type Public = <Signature as traits::Verify>::Signer;
-	type Signature = Signature;
-}
-
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
-where
-	Call: From<C>,
-{
-	type Extrinsic = UncheckedExtrinsic;
-	type OverarchingCall = Call;
-}
-
-impl pallet_im_online::Config for Test {
-	type AuthorityId = ImOnlineId;
-	type Event = Event;
-	type NextSessionRotation = Babe;
-	type ValidatorSet = Historical;
-	type ReportUnresponsiveness = ();
-	type UnsignedPriority = ImOnlineUnsignedPriority;
-	type WeightInfo = pallet_im_online::weights::SubstrateWeight<Test>;
-	type MaxKeys = MaxKeys;
-	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
-	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
 }
 
 parameter_types! {
@@ -317,10 +187,6 @@ impl pallet_assets::Config for Test {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
-}
-
-impl pallet_beefy::Config for Test {
-	type BeefyId = BeefyId;
 }
 
 pub struct OctopusAppCrypto;
@@ -362,51 +228,25 @@ impl pallet_octopus_upward_messages::Config for Test {
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 }
 
-impl pallet_sudo::Config for Test {
-	type Event = Event;
-	type Call = Call;
-}
 
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 construct_runtime!(
 	pub enum Test where
 		Block = Block,
-		NodeBlock = opaque::Block,
+		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
-		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event, ValidateUnsigned},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		OctopusAppchain: pallet_octopus_appchain::{Pallet, Call, Storage, Config<T>, Event<T>, ValidateUnsigned}, // must before session
 		OctopusLpos: pallet_octopus_lpos::{Pallet, Call, Config, Storage, Event<T>},
 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		Historical: pallet_session_historical::{Pallet},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
-		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
-
-pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
-pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type SignedExtra = (
-	frame_system::CheckSpecVersion<Test>,
-	frame_system::CheckTxVersion<Test>,
-	frame_system::CheckGenesis<Test>,
-	frame_system::CheckEra<Test>,
-	frame_system::CheckNonce<Test>,
-	frame_system::CheckWeight<Test>,
-	pallet_transaction_payment::ChargeTransactionPayment<Test>,
-);
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
-pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
@@ -434,15 +274,16 @@ pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let config: pallet_octopus_appchain::GenesisConfig::<Test> = pallet_octopus_appchain::GenesisConfig {
-		anchor_contract: "oct-test.testnet".to_string(),
-		validators: vec![
-			(AccountKeyring::Alice.into(), stash),
-			(AccountKeyring::Bob.into(), stash),
-		],
-		premined_amount: 1024 * DOLLARS,
-		asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
-	};
+	let config: pallet_octopus_appchain::GenesisConfig<Test> =
+		pallet_octopus_appchain::GenesisConfig {
+			anchor_contract: "oct-test.testnet".to_string(),
+			validators: vec![
+				(AccountKeyring::Alice.into(), stash),
+				(AccountKeyring::Bob.into(), stash),
+			],
+			premined_amount: 1024 * DOLLARS,
+			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
+		};
 	config.assimilate_storage(&mut storage).unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
