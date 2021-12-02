@@ -271,6 +271,13 @@ pub mod pallet {
 	pub type ErasStakers<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, u128, ValueQuery>;
 
+	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
+	///
+	/// Eras that haven't finished yet or has been removed doesn't have reward.
+	#[pallet::storage]
+	#[pallet::getter(fn eras_validator_reward)]
+	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128>;
+
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
@@ -650,6 +657,11 @@ impl<T: Config> Pallet<T> {
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
+			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
+				log!(warn, "era reward {:?} has already been paid", active_era.index);
+				return;
+			}
+
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 			let _era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
 			let validator_payout = Self::era_payout();
@@ -657,6 +669,8 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
 
 			// Set ending era reward.
+			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
+
 			let excluded_validators = Self::get_exclude_validators(active_era.index);
 			log!(debug, "exclude validators: {:?}", excluded_validators.clone());
 
@@ -746,6 +760,7 @@ impl<T: Config> Pallet<T> {
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
 		<ErasStakers<T>>::remove_prefix(era_index, None);
+		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
 		ErasStartSessionIndex::<T>::remove(era_index);
