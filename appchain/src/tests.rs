@@ -510,7 +510,7 @@ fn test_submit_notifies_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
-			account.clone(),
+			account,
 		)
 		.unwrap();
 
