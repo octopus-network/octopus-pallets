@@ -25,9 +25,11 @@ sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polka
 sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
-sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", optional = true }
 
 pallet-octopus-support = { path = "../support", default-features = false }
+
+[dev-dependencies]
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
 
 [features]
 default = ["std"]
@@ -43,7 +45,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"pallet-octopus-support/std",
-	"sp-keyring"
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]

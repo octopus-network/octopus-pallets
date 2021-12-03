@@ -34,6 +34,21 @@ sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkad
 
 pallet-octopus-support = { path = "../support", default-features = false }
 
+[dev-dependencies]
+sp-keystore = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
+
+pallet-assets = { version = "4.0.0-dev", path = "../../../../frame/assets" }
+pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
+sp-staking = { version = "4.0.0-dev", path = "../../../../primitives/staking" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../../../frame/timestamp" }
+pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../../frame/session" }
+#rand = { version = "0.7.2", optional = true }
+
+pallet-octopus-lpos = { path = "../lpos" }
+pallet-octopus-upward-messages = { path = "../upward-messages" }
+
 [features]
 default = ["std"]
 std = [
