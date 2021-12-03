@@ -46,7 +46,7 @@ pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
-mod weights;
+pub mod weights;
 pub use weights::WeightInfo;
 
 #[cfg(all(test))]

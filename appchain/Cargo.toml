@@ -31,22 +31,23 @@ sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polka
 sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", default-features = false }
-sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12", optional = true }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 
 pallet-octopus-support = { path = "../support", default-features = false }
-pallet-octopus-lpos = { path = "../lpos", default-features = false }
-pallet-octopus-upward-messages = { path = "../upward-messages", default-features = false }
-
-pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/assets" }
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/balances" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/staking" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/timestamp" }
-pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../../frame/session", default-features = false }
-#rand = { version = "0.7.2", optional = true, default-features = false }
 
 [dev-dependencies]
 sp-keystore = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
+sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
+
+pallet-assets = { version = "4.0.0-dev", path = "../../../../frame/assets" }
+pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
+sp-staking = { version = "4.0.0-dev", path = "../../../../primitives/staking" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../../../frame/timestamp" }
+pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../../frame/session" }
+#rand = { version = "0.7.2", optional = true }
+
+pallet-octopus-lpos = { path = "../lpos" }
+pallet-octopus-upward-messages = { path = "../upward-messages" }
 
 [features]
 default = ["std"]
@@ -67,17 +68,7 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-api/std",
 	"pallet-octopus-support/std",
-	"pallet-octopus-lpos/std",
-	"pallet-octopus-upward-messages/std",
-	"pallet-balances/std",
-	"sp-staking/std",
-	"pallet-assets/std",
-	"pallet-timestamp/std",
-	"pallet-session/std",
-	"sp-keyring",
-	#"rand/std",
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]
