@@ -6,12 +6,11 @@ use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keyring::AccountKeyring;
-use sp_runtime::traits::BadOrigin;
-// use sp_core::sr25519::Public;
 use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
 };
+use sp_runtime::traits::BadOrigin;
 use std::sync::Arc;
 
 #[test]
@@ -79,14 +78,21 @@ fn test_force_set_params() {
 fn test_mint_asset() {
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
 	new_tester().execute_with(|| {
-		// TODO:
-		// assert_ok!(OctopusAppchain::mint_asset(
-		// 	Origin::root(),
-		// 	0,
-		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
-		// 	sp_runtime::MultiAddress::Id(ferdie.clone()),
-		// 	1000000000
-		// ));
+		assert_ok!(Assets::force_create(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			true,
+			1
+		));
+
+		assert_ok!(OctopusAppchain::mint_asset(
+			Origin::root(),
+			0,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			1000000000
+		));
 
 		assert_noop!(
 			OctopusAppchain::mint_asset(
@@ -126,8 +132,15 @@ fn test_mint_asset() {
 #[test]
 fn test_burn_asset() {
 	let alice: AccountId = AccountKeyring::Alice.into();
-	let origin = Origin::signed(alice);
+	let origin = Origin::signed(alice.clone());
 	new_tester().execute_with(|| {
+		assert_ok!(Assets::force_create(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(alice.clone()),
+			true,
+			1
+		));
 		assert_noop!(
 			OctopusAppchain::burn_asset(
 				origin.clone(),
@@ -139,13 +152,19 @@ fn test_burn_asset() {
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
-		// TODO:
-		// assert_ok!(OctopusAppchain::burn_asset(
-		// 	origin.clone(),
-		// 	0,
-		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
-		// 	1000000000000000000
-		// ));
+		assert_ok!(OctopusAppchain::mint_asset(
+			Origin::root(),
+			0,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			sp_runtime::MultiAddress::Id(alice),
+			1000000000000000000
+		));
+		assert_ok!(OctopusAppchain::burn_asset(
+			origin.clone(),
+			0,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			100000000
+		));
 	});
 }
 
@@ -199,16 +218,33 @@ fn test_lock() {
 }
 
 #[test]
+fn test_submit_observations() {
+	// TODO:
+	// let alice: AccountId = AccountKeyring::Alice.into();
+	// let origin = Origin::signed(alice);
+
+	// let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	// 	.get(0)
+	// 	.unwrap()
+	// 	.clone();
+
+	// let obs_payload =
+	// 	ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	// new_tester().execute_with(|| {
+	// 	OctopusAppchain::submit_observations(
+	// 		Origin::None,
+	// 		obs_payload,
+	// 		(),
+	// 	)
+	// });
+
+}
+
+#[test]
 fn test_encode_args_works() {
 	let test_get_validators_data = vec![
-		(
-			0u32,
-			Some(b"eyJlcmFfbnVtYmVyIjoiMCJ9".to_vec()),
-		),
-		(
-			4294967295u32,
-			Some(b"eyJlcmFfbnVtYmVyIjoiNDI5NDk2NzI5NSJ9".to_vec()),
-		)
+		(0u32, Some(b"eyJlcmFfbnVtYmVyIjoiMCJ9".to_vec())),
+		(4294967295u32, Some(b"eyJlcmFfbnVtYmVyIjoiNDI5NDk2NzI5NSJ9".to_vec())),
 	];
 
 	for (set_id, expected) in test_get_validators_data {
@@ -216,16 +252,15 @@ fn test_encode_args_works() {
 	}
 
 	let test_get_notify_data = vec![
+		(0u32, 0u32, Some(b"eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjAifQ==".to_vec())),
 		(
-			0u32,
-			0u32,
-			Some(b"eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjAifQ==".to_vec()),
+			4294967295u32,
+			4294967295u32,
+			Some(
+				b"eyJzdGFydF9pbmRleCI6IjQyOTQ5NjcyOTUiLCJxdWFudGl0eSI6IjQyOTQ5NjcyOTUifQ=="
+					.to_vec(),
+			),
 		),
-		(
-			4294967295u32,
-			4294967295u32,
-			Some(b"eyJzdGFydF9pbmRleCI6IjQyOTQ5NjcyOTUiLCJxdWFudGl0eSI6IjQyOTQ5NjcyOTUifQ==".to_vec()),
-		)
 	];
 
 	for (start, limit, expected) in test_get_notify_data {
@@ -321,8 +356,10 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 				"method_name": "get_validator_list_of",
 				"args_base64": "eyJlcmFfbnVtYmVyIjoiMSJ9"
 			}
-		}"#.to_vec(),
-		response: Some(br#"
+		}"#
+		.to_vec(),
+		response: Some(
+			br#"
 		{
 			"jsonrpc": "2.0",
 			"result": {
@@ -333,7 +370,9 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 			},
 			"id": "dontcare"
 		}
-			"#.to_vec()),
+			"#
+			.to_vec(),
+		),
 		sent: true,
 		..Default::default()
 	});

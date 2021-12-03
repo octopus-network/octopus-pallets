@@ -47,6 +47,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
 mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(all(test))]
 mod mock;
@@ -283,6 +284,8 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
+
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]

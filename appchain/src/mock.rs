@@ -14,11 +14,12 @@ use sp_runtime::{
 };
 
 pub use frame_support::{
-	construct_runtime,parameter_types,
+	construct_runtime,
 	pallet_prelude::GenesisBuild,
-	traits::{OnInitialize, KeyOwnerProofSystem, Randomness, StorageInfo},
+	parameter_types,
+	traits::{KeyOwnerProofSystem, OnInitialize, Randomness, StorageInfo},
 	weights::{IdentityFee, Weight},
-	StorageValue, PalletId,
+	PalletId, StorageValue,
 };
 
 use frame_system::EnsureRoot;
@@ -227,7 +228,6 @@ impl pallet_octopus_upward_messages::Config for Test {
 	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 }
-
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

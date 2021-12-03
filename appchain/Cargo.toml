@@ -43,6 +43,7 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/staking" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/timestamp" }
 pallet-session = { version = "4.0.0-dev", features = ["historical"], path = "../../../../frame/session", default-features = false }
+#rand = { version = "0.7.2", optional = true, default-features = false }
 
 [dev-dependencies]
 sp-keystore = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
@@ -76,6 +77,7 @@ std = [
 	"pallet-timestamp/std",
 	"pallet-session/std",
 	"sp-keyring",
+	#"rand/std",
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]
