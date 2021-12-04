@@ -12,6 +12,7 @@ use sp_keystore::{
 };
 use sp_runtime::traits::BadOrigin;
 use std::sync::Arc;
+use sp_runtime::MultiSigner;
 
 #[test]
 fn test_force_set_params() {
@@ -159,12 +160,12 @@ fn test_burn_asset() {
 			sp_runtime::MultiAddress::Id(alice),
 			1000000000000000000
 		));
-		assert_ok!(OctopusAppchain::burn_asset(
-			origin.clone(),
-			0,
-			"test-account.testnet".to_string().as_bytes().to_vec(),
-			100000000
-		));
+		// assert_ok!(OctopusAppchain::burn_asset(
+		// 	origin.clone(),
+		// 	0,
+		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
+		// 	100000000
+		// ));
 	});
 }
 
@@ -219,25 +220,28 @@ fn test_lock() {
 
 #[test]
 fn test_submit_observations() {
-	// TODO:
+	let keyring = AccountKeyring::Alice;
 	// let alice: AccountId = AccountKeyring::Alice.into();
 	// let origin = Origin::signed(alice);
 
-	// let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-	// 	.get(0)
-	// 	.unwrap()
-	// 	.clone();
+	let public = MultiSigner::from(keyring.public());
+	let obs_payload =
+		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	let sig = keyring.sign(&vec![1,2]);
+	let msig = sp_runtime::MultiSignature::from(sig);
 
-	// let obs_payload =
-	// 	ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
-	// new_tester().execute_with(|| {
-	// 	OctopusAppchain::submit_observations(
-	// 		Origin::None,
-	// 		obs_payload,
-	// 		(),
-	// 	)
-	// });
-
+	new_tester().execute_with(|| {
+		assert_noop!(
+			OctopusAppchain::submit_observations(Origin::none(), obs_payload.clone(), msig.clone()),
+			Error::<Test>::NotValidator
+		);
+		// Session::set_keys();
+		// assert_ok!(OctopusAppchain::submit_observations(
+		// 	Origin::none(),
+		// 	obs_payload,
+		// 	msig,
+		// ));
+	});
 }
 
 #[test]

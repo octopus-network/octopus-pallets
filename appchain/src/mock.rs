@@ -268,6 +268,7 @@ impl Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
+	type WeightInfo = ();
 }
 
 pub fn new_tester() -> sp_io::TestExternalities {
@@ -285,6 +286,11 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
 		};
 	config.assimilate_storage(&mut storage).unwrap();
+
+	// let keys: Vec<_> = 
+	// pallet_session::GenesisConfig::<Test> { keys }
+	// 	.assimilate_storage(&mut storage)
+	// 	.unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
 	ext.execute_with(|| System::set_block_number(1));
