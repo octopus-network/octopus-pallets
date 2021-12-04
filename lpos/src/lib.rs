@@ -67,6 +67,8 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
+	/// Anchor era number of this era.
+	pub set_id: u32,
 	/// Moment of start expressed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -575,9 +577,11 @@ impl<T: Config> Pallet<T> {
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
 		let active_era = ActiveEra::<T>::mutate(|active_era| {
+			let next_set_id = T::AppchainInterface::next_set_id();
 			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
 			*active_era = Some(ActiveEraInfo {
 				index: new_index,
+				set_id: next_set_id - 1,
 				// Set new active era start in next `on_finalize`. To guarantee usage of `Time`
 				start: None,
 			});
@@ -647,14 +651,6 @@ impl<T: Config> Pallet<T> {
 			return;
 		}
 
-		let next_set_id = T::AppchainInterface::next_set_id();
-		if next_set_id == 0 {
-			log!(warn, "next_set_id cannot be 0 at end_era()");
-			return;
-		}
-
-		let current_set_id = next_set_id - 1;
-
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
@@ -674,7 +670,7 @@ impl<T: Config> Pallet<T> {
 			let excluded_validators = Self::get_exclude_validators(active_era.index);
 			log!(debug, "exclude validators: {:?}", excluded_validators.clone());
 
-			let message = EraPayoutPayload { end_era: current_set_id, excluded_validators };
+			let message = EraPayoutPayload { end_era: active_era.set_id, excluded_validators };
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);

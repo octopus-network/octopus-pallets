@@ -372,6 +372,7 @@ pub mod pallet {
 		fn build(&self) {
 			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
+			<NextSetId<T>>::put(1); // set 0 is already in the genesis
 			<PlannedValidators<T>>::put(self.validators.clone());
 
 			let account_id = <Pallet<T>>::account_id();
