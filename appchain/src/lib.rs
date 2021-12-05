@@ -341,12 +341,6 @@ pub mod pallet {
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
-	#[pallet::storage]
-	pub type NextSubmitObsIndex<T> = StorageValue<_, u32>;
-
-	#[pallet::storage]
-	pub type SubmitSequenceNumber<T> = StorageValue<_, u32>;
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
@@ -728,45 +722,6 @@ pub mod pallet {
 			}
 		}
 
-		// TODO: hard to understand, need to simplify this code
-		fn should_get_validators(val_id: T::AccountId) -> bool {
-			let next_set_id = NextSetId::<T>::get();
-			match <NextSubmitObsIndex<T>>::try_get() {
-				Ok(next_index) => {
-					log!(debug, "next_index: {}, next_set_id: {}", next_index, next_set_id);
-					if next_index > next_set_id - 1 {
-						return false;
-					}
-				}
-				Err(_) => {
-					return true;
-				}
-			}
-
-			match <SubmitSequenceNumber<T>>::try_get() {
-				Ok(sequence_number) => {
-					let observations = <Observations<T>>::get(
-						ObservationType::UpdateValidatorSet,
-						sequence_number,
-					);
-					log!(debug, "observations: {:#?},\n val_id: {:#?}", observations, val_id);
-
-					let mut found = false;
-					for observation in observations.iter() {
-						if <Observing<T>>::get(&observation).iter().any(|o| o == &val_id) {
-							log!(debug, "obser: {:#?}", <Observing<T>>::get(&observation));
-							found = true;
-							break;
-						}
-					}
-					return !found;
-				}
-				Err(_) => {
-					return true;
-				}
-			}
-		}
-
 		fn should_send(block_number: T::BlockNumber) -> bool {
 			/// A friendlier name for the error that is going to be returned in case we are in the grace
 			/// period.
@@ -847,31 +802,28 @@ pub mod pallet {
 			let next_set_id = NextSetId::<T>::get();
 			log!(debug, "next_set_id: {}", next_set_id);
 
-			// if Self::should_get_validators(val_id)
-			{
-				// Make an external HTTP request to fetch the current price.
-				// Note this call will block until response is received.
-				let ret = Self::get_validator_list_of(
-					mainchain_rpc_endpoint,
-					anchor_contract.clone(),
-					next_set_id,
-				);
+			// Make an external HTTP request to fetch the current price.
+			// Note this call will block until response is received.
+			let ret = Self::get_validator_list_of(
+				mainchain_rpc_endpoint,
+				anchor_contract.clone(),
+				next_set_id,
+			);
 
-				match ret {
-					Ok(observations) => {
-						obs = observations;
-					}
-					Err(_) => {
-						log!(debug, "retry with failsafe endpoint to get validators");
-						obs = Self::get_validator_list_of(
-							&Self::official_rpc_endpoint(
-								anchor_contract[anchor_contract.len() - 1] == 116,
-							), // last byte is 't'
-							anchor_contract.clone(),
-							next_set_id,
-						)
-						.map_err(|_| "Failed to get_validator_list_of")?;
-					}
+			match ret {
+				Ok(observations) => {
+					obs = observations;
+				}
+				Err(_) => {
+					log!(debug, "retry with failsafe endpoint to get validators");
+					obs = Self::get_validator_list_of(
+						&Self::official_rpc_endpoint(
+							anchor_contract[anchor_contract.len() - 1] == 116,
+						), // last byte is 't'
+						anchor_contract.clone(),
+						next_set_id,
+					)
+					.map_err(|_| "Failed to get_validator_list_of")?;
 				}
 			}
 
@@ -1016,13 +968,6 @@ pub mod pallet {
 			log!(debug, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
 			//
 
-			match observation {
-				Observation::UpdateValidatorSet(_) => {
-					<SubmitSequenceNumber<T>>::put(obs_id);
-				}
-				_ => log!(debug, "️️️observation not include validator sets"),
-			}
-
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
@@ -1033,10 +978,7 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
-						Self::increase_next_set_id()?; // TODO: check
-						let next_set_id = NextSetId::<T>::get();
-						<NextSubmitObsIndex<T>>::put(next_set_id);
-						<SubmitSequenceNumber<T>>::kill();
+						Self::increase_next_set_id()?;
 					}
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
