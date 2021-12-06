@@ -49,11 +49,11 @@ mod mainchain;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod mock;
+#[cfg(test)]
+mod mock;
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod tests;
+#[cfg(test)]
+mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;

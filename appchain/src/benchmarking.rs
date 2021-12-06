@@ -1,7 +1,7 @@
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
-use tests::*;
+// use tests::*;
 // use rand::Rng;
 
 #[allow(unused_imports)]
@@ -46,27 +46,10 @@ benchmarks! {
       <IsActivated<T>>::put(true);
     }: lock(pallet_account, "test-account.testnet".to_string().as_bytes().to_vec(), min)
 
-    // TODO:
-    submit_observations {
-	//   let keyring = AccountKeyring::Alice;
-	  let (obs_payload, msig) = mock_payload_for_alice();
-	//   let validators =
-	//     vec![
-	// 		(AccountKeyring::Alice.into(), 100 * 1_000_000_000_000_000_000), 
-	// 		(AccountKeyring::Bob.into(), 100 * 1_000_000_000_000_000_000)
-	// 	];
-
-	//   OctopusLpos::trigger_new_era(1, validators.clone());
-	// 	<ActiveEra<T>>::put(ActiveEraInfo{
-	// 		index: 1,
-	// 		start:None,
-	// 	});
-	// 	<ErasTotalStake<T>>::insert(1, 0);
-    }: {OctopusAppchain::submit_observations(
-			RawOrigin::None,
-			obs_payload.clone(),
-			msig.clone()
-		)}
+    // // TODO:
+    // submit_observations {
+	//   let (obs_payload, msig) = crate::tests::mock_payload_for_alice();
+    // }: OctopusAppchain::<T>::submit_observations(RawOrigin::None, obs_payload, msig)
     
     // TODO:
     // mint_asset {
