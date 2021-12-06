@@ -55,7 +55,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_octopus_appchain.
 pub trait WeightInfo {
 	fn force_set_is_activated() -> Weight;
-	fn force_set_next_set_id() -> Weight;
+	fn force_set_next_set_id(b: u32, ) -> Weight;
 	fn force_set_planned_validators(b: u32, ) -> Weight;
 	fn lock() -> Weight;
 }
@@ -65,26 +65,26 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: OctopusAppchain IsActivated (r:0 w:1)
 	fn force_set_is_activated() -> Weight {
-		(80_700_000 as Weight)
+		(83_976_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain NextSetId (r:0 w:1)
-	fn force_set_next_set_id() -> Weight {
-		(80_289_000 as Weight)
+	fn force_set_next_set_id(_b: u32, ) -> Weight {
+		(88_980_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain PlannedValidators (r:0 w:1)
 	fn force_set_planned_validators(b: u32, ) -> Weight {
-		(98_641_000 as Weight)
-			// Standard Error: 38_000
-			.saturating_add((183_000 as Weight).saturating_mul(b as Weight))
+		(103_462_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((32_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain IsActivated (r:1 w:0)
 	// Storage: OctopusUpwardMessages MessageQueue (r:1 w:1)
 	// Storage: OctopusUpwardMessages Nonce (r:1 w:1)
 	fn lock() -> Weight {
-		(1_170_528_000 as Weight)
+		(1_161_121_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -94,26 +94,26 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: OctopusAppchain IsActivated (r:0 w:1)
 	fn force_set_is_activated() -> Weight {
-		(80_700_000 as Weight)
+		(83_976_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain NextSetId (r:0 w:1)
-	fn force_set_next_set_id() -> Weight {
-		(80_289_000 as Weight)
+	fn force_set_next_set_id(_b: u32, ) -> Weight {
+		(88_980_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain PlannedValidators (r:0 w:1)
 	fn force_set_planned_validators(b: u32, ) -> Weight {
-		(98_641_000 as Weight)
-			// Standard Error: 38_000
-			.saturating_add((183_000 as Weight).saturating_mul(b as Weight))
+		(103_462_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((32_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: OctopusAppchain IsActivated (r:1 w:0)
 	// Storage: OctopusUpwardMessages MessageQueue (r:1 w:1)
 	// Storage: OctopusUpwardMessages Nonce (r:1 w:1)
 	fn lock() -> Weight {
-		(1_170_528_000 as Weight)
+		(1_161_121_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}

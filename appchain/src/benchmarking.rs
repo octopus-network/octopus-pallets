@@ -21,8 +21,9 @@ benchmarks! {
 
 
 	force_set_next_set_id {
+	  let b in 2 .. 100000u32;
 	  let mut next_set_id:u32 = 1;
-	  for i in 2 .. 100000 {
+	  for i in 2 .. b{
 		next_set_id = i;
 	  }
 	}: force_set_next_set_id(RawOrigin::Root, next_set_id)
