@@ -687,7 +687,7 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn default_rpc_endpoint(is_testnet: bool) -> String {
+		fn bsngate_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
 				"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc".to_string()
 			} else {
@@ -695,7 +695,7 @@ pub mod pallet {
 			}
 		}
 
-		fn official_rpc_endpoint(is_testnet: bool) -> String {
+		fn default_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
 				"https://rpc.testnet.near.org".to_string()
 			} else {
@@ -817,7 +817,7 @@ pub mod pallet {
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
 					obs = Self::get_validator_list_of(
-						&Self::official_rpc_endpoint(
+						&Self::bsngate_rpc_endpoint(
 							anchor_contract[anchor_contract.len() - 1] == 116,
 						), // last byte is 't'
 						anchor_contract.clone(),
@@ -846,7 +846,7 @@ pub mod pallet {
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						obs = Self::get_appchain_notification_histories(
-							&Self::official_rpc_endpoint(
+							&Self::bsngate_rpc_endpoint(
 								anchor_contract[anchor_contract.len() - 1] == 116,
 							), // last byte is 't'
 							anchor_contract,
