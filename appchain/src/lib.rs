@@ -49,14 +49,15 @@ mod mainchain;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[cfg(all(test))]
-mod mock;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod mock;
 
-#[cfg(test)]
-mod tests;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -1021,7 +1022,6 @@ pub mod pallet {
 				}
 				_ => log!(debug, "️️️observation not include validator sets"),
 			}
-
 			if 3 * stake > 2 * total_stake {
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {

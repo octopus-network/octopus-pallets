@@ -1,30 +1,27 @@
 use super::*;
 use crate as pallet_octopus_appchain;
-use sp_core::crypto::{key_types, KeyTypeId};
-use sp_keyring::AccountKeyring;
 use sp_runtime::{
-	generic,
-	testing::{TestXt, UintAuthorityId},
+	generic, impl_opaque_keys,
+	testing::TestXt,
 	traits::{
 		AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
 		OpaqueKeys, Verify,
 	},
 	MultiSignature,
-	// transaction_validity::TransactionPriority,
 };
 
 pub use frame_support::{
 	construct_runtime,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnInitialize, Randomness, StorageInfo},
+	traits::{Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness, StorageInfo},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
 };
 
 use frame_system::EnsureRoot;
 
-pub type BlockNumber = u32;
+pub(crate) type BlockNumber = u32;
 pub type Signature = MultiSignature;
 pub type Balance = u128;
 pub type Moment = u64;
@@ -99,20 +96,23 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
-
-	fn on_new_session<Ks: OpaqueKeys>(
-		_changed: bool,
-		_validators: &[(AccountId, Ks)],
-		_queued_validators: &[(AccountId, Ks)],
-	) {
+use pallet_octopus_appchain::AuthorityId as OctopusId;
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		pub octopus: OctopusAppchain,
 	}
+}
 
-	fn on_disabled(_validator_index: u32) {}
+pub struct MockSessionManager;
 
-	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+impl pallet_session::SessionManager<AccountId> for MockSessionManager {
+	fn end_session(_: sp_staking::SessionIndex) {}
+	fn start_session(index: sp_staking::SessionIndex) {
+		OctopusLpos::start_session(index);
+	}
+	fn new_session(_: sp_staking::SessionIndex) -> Option<Vec<AccountId>> {
+		None
+	}
 }
 
 parameter_types! {
@@ -125,9 +125,9 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = ConvertInto;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionManager = ();
-	type SessionHandler = TestSessionHandler;
-	type Keys = UintAuthorityId;
+	type SessionManager = MockSessionManager;
+	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = MockSessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Test>;
 }
 
@@ -271,26 +271,57 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
+use sp_core::{sr25519, Pair, Public as OtherPublic};
+
+type AccountPublic = <Signature as Verify>::Signer;
+
+pub fn get_account_id_from_seed<TPublic: OtherPublic>(seed: &str) -> AccountId
+where
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+{
+	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+}
+pub fn get_from_seed<TPublic: OtherPublic>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+	TPublic::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+pub fn authority_keys_from_seed(s: &str) -> (AccountId, OctopusId) {
+	(get_account_id_from_seed::<sr25519::Public>(s), get_from_seed::<OctopusId>(s))
+}
+
+pub fn advance_session() {
+	let now = System::block_number().max(1);
+	System::set_block_number(now + 1);
+	Session::rotate_session();
+	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
+}
+
 pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
+	let initial_authorities: Vec<(AccountId, OctopusId)> =
+		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")];
+	let validators = initial_authorities.iter().map(|x| (x.0.clone(), stash)).collect::<Vec<_>>();
+
+	let keys: Vec<_> = initial_authorities
+		.iter()
+		.map(|x| (x.0.clone(), x.0.clone(), MockSessionKeys { octopus: x.1.clone() }))
+		.collect::<Vec<_>>();
+
+	let config: pallet_session::GenesisConfig<Test> = pallet_session::GenesisConfig { keys };
+	config.assimilate_storage(&mut storage).unwrap();
+
 	let config: pallet_octopus_appchain::GenesisConfig<Test> =
 		pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),
-			validators: vec![
-				(AccountKeyring::Alice.into(), stash),
-				(AccountKeyring::Bob.into(), stash),
-			],
+			validators,
 			premined_amount: 1024 * DOLLARS,
 			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
 		};
 	config.assimilate_storage(&mut storage).unwrap();
-
-	// let keys: Vec<_> = 
-	// pallet_session::GenesisConfig::<Test> { keys }
-	// 	.assimilate_storage(&mut storage)
-	// 	.unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
 	ext.execute_with(|| System::set_block_number(1));

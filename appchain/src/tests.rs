@@ -5,14 +5,18 @@ use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
-use sp_keyring::AccountKeyring;
+use sp_keyring::{sr25519::Keyring, AccountKeyring};
 use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
 };
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{
+	traits::{BadOrigin, Verify},
+	MultiSigner,
+};
 use std::sync::Arc;
-use sp_runtime::MultiSigner;
+
+type Public = <Signature as Verify>::Signer;
 
 #[test]
 fn test_force_set_params() {
@@ -218,29 +222,64 @@ fn test_lock() {
 	});
 }
 
+pub fn mock_payload_and_signature(
+	keyring: Keyring,
+) -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature) {
+	let public = MultiSigner::from(keyring);
+	let obs_payload =
+		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	let sig = keyring.sign(&vec![1, 2]);
+	let msig = sp_runtime::MultiSignature::from(sig);
+	(obs_payload, msig)
+}
+
+pub fn mock_payload_for_alice() -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature)
+{
+	let keyring = AccountKeyring::Alice;
+	mock_payload_and_signature(keyring)
+}
+
 #[test]
 fn test_submit_observations() {
 	let keyring = AccountKeyring::Alice;
-	// let alice: AccountId = AccountKeyring::Alice.into();
-	// let origin = Origin::signed(alice);
+	let (obs_payload1, msig1) = mock_payload_and_signature(keyring);
 
-	let public = MultiSigner::from(keyring.public());
-	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
-	let sig = keyring.sign(&vec![1,2]);
-	let msig = sp_runtime::MultiSignature::from(sig);
+	let keyring = AccountKeyring::Bob;
+	let (obs_payload2, msig2) = mock_payload_and_signature(keyring);
+
+	let keyring = AccountKeyring::Charlie;
+	let (obs_payload3, msig3) = mock_payload_and_signature(keyring);
+
+	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
+	let validators =
+		vec![(AccountKeyring::Alice.into(), stash), (AccountKeyring::Bob.into(), stash)];
 
 	new_tester().execute_with(|| {
 		assert_noop!(
-			OctopusAppchain::submit_observations(Origin::none(), obs_payload.clone(), msig.clone()),
+			OctopusAppchain::submit_observations(
+				Origin::none(),
+				obs_payload1.clone(),
+				msig1.clone()
+			),
+			Error::<Test>::InvalidActiveTotalStake
+		);
+
+		OctopusLpos::trigger_new_era(1, validators.clone());
+		advance_session();
+		assert_ok!(OctopusAppchain::submit_observations(
+			Origin::none(),
+			obs_payload2.clone(),
+			msig2.clone()
+		));
+
+		assert_noop!(
+			OctopusAppchain::submit_observations(
+				Origin::none(),
+				obs_payload3.clone(),
+				msig3.clone()
+			),
 			Error::<Test>::NotValidator
 		);
-		// Session::set_keys();
-		// assert_ok!(OctopusAppchain::submit_observations(
-		// 	Origin::none(),
-		// 	obs_payload,
-		// 	msig,
-		// ));
 	});
 }
 
@@ -381,7 +420,7 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 		..Default::default()
 	});
 }
-fn expected_burn_notify() -> Observation<AccountId> {
+pub fn expected_burn_notify() -> Observation<AccountId> {
 	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
 		.map(|b| AccountId::decode(&mut &b[..]))
 		.unwrap()
