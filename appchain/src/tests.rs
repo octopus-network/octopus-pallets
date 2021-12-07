@@ -233,12 +233,6 @@ pub fn mock_payload_and_signature(
 	(obs_payload, msig)
 }
 
-pub fn mock_payload_for_alice() -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature)
-{
-	let keyring = AccountKeyring::Alice;
-	mock_payload_and_signature(keyring)
-}
-
 #[test]
 fn test_submit_observations() {
 	let keyring = AccountKeyring::Alice;

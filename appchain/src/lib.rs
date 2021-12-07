@@ -36,7 +36,7 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
+	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup, SaturatedConversion},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -554,14 +554,14 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_is_activated())]
 		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
 			ensure_root(origin)?;
 			<IsActivated<T>>::put(is_activated);
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id((*next_set_id).saturated_into()))]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
@@ -569,7 +569,7 @@ pub mod pallet {
 		}
 
 		// Force set planned validators with sudo permissions.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len() as u32))]
 		pub fn force_set_planned_validators(
 			origin: OriginFor<T>,
 			validators: Vec<(T::AccountId, u128)>,
@@ -590,7 +590,7 @@ pub mod pallet {
 		// mainchain:lock_asset()   -> appchain:mint_asset()
 		// mainchain:unlock_asset() <- appchain:burn_asset()
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::lock())]
 		#[transactional]
 		pub fn lock(
 			origin: OriginFor<T>,
