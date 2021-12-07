@@ -1,7 +1,6 @@
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
-// use tests::*;
 // use rand::Rng;
 
 #[allow(unused_imports)]

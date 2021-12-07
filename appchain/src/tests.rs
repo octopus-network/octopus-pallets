@@ -414,7 +414,8 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 		..Default::default()
 	});
 }
-pub fn expected_burn_notify() -> Observation<AccountId> {
+
+fn expected_burn_notify() -> Observation<AccountId> {
 	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
 		.map(|b| AccountId::decode(&mut &b[..]))
 		.unwrap()
