@@ -249,14 +249,11 @@ fn test_submit_observations() {
 		vec![(AccountKeyring::Alice.into(), stash), (AccountKeyring::Bob.into(), stash)];
 
 	new_tester().execute_with(|| {
-		assert_noop!(
-			OctopusAppchain::submit_observations(
-				Origin::none(),
-				obs_payload1.clone(),
-				msig1.clone()
-			),
-			Error::<Test>::InvalidActiveTotalStake
-		);
+		assert_ok!(OctopusAppchain::submit_observations(
+			Origin::none(),
+			obs_payload1.clone(),
+			msig1.clone()
+		));
 
 		OctopusLpos::trigger_new_era(1, validators.clone());
 		advance_session();
@@ -546,8 +543,11 @@ fn test_submit_validator_sets_on_chain() {
 
 	let public = <Test as SigningTypes>::Public::from(public_key);
 	let account = public.clone().into_account();
-	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_val_set()] };
+	let obs_payload = ObservationsPayload {
+		public: public.clone(),
+		block_number: 2,
+		observations: vec![expected_val_set()],
+	};
 
 	t.execute_with(|| {
 		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
@@ -555,6 +555,7 @@ fn test_submit_validator_sets_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
+			public,
 			account,
 		)
 		.unwrap();
@@ -613,8 +614,11 @@ fn test_submit_notifies_on_chain() {
 
 	let public = <Test as SigningTypes>::Public::from(public_key);
 	let account = public.clone().into_account();
-	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	let obs_payload = ObservationsPayload {
+		public: public.clone(),
+		block_number: 2,
+		observations: vec![expected_burn_notify()],
+	};
 
 	t.execute_with(|| {
 		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
@@ -622,6 +626,7 @@ fn test_submit_notifies_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
+			public,
 			account,
 		)
 		.unwrap();
