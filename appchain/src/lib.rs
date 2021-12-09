@@ -36,7 +36,9 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup, SaturatedConversion},
+	traits::{
+		AccountIdConversion, CheckedConversion, IdentifyAccount, SaturatedConversion, StaticLookup,
+	},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -57,7 +59,6 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -556,7 +557,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id((*next_set_id).saturated_into()))]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id(*next_set_id))]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);

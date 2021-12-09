@@ -20,7 +20,8 @@ fn get_public<T: Config>() -> (T::Public, T::Signature) {
 	let sig = <T::AuthorityId as AppCrypto<
 		<T as SigningTypes>::Public,
 		<T as SigningTypes>::Signature,
-	>>::sign(&vec![1, 2, 3], public.clone()).unwrap();
+	>>::sign(&vec![1, 2, 3], public.clone())
+	.unwrap();
 	(public, sig)
 }
 
