@@ -445,6 +445,7 @@ pub mod pallet {
 			{
 				return;
 			}
+
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
@@ -454,7 +455,9 @@ pub mod pallet {
 
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
-				Some(validator_id) => {
+				Some((public, validator_id)) => {
+					log!(debug, "public: {:?}, validator_id: {:?}", public, validator_id);
+
 					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint(
 						anchor_contract[anchor_contract.len() - 1] == 116,
 					); // last byte is 't'
@@ -464,6 +467,7 @@ pub mod pallet {
 						block_number,
 						&mainchain_rpc_endpoint,
 						anchor_contract,
+						public,
 						validator_id,
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
@@ -541,10 +545,10 @@ pub mod pallet {
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
 			//
 
-			// TODO
-			// ensure!(val_set.set_id == validator_set.set_id + 1, Error::<T>::WrongSetId);
 			for observation in payload.observations.iter() {
-				Self::submit_observation(&val_id, observation.clone())?;
+				if let Err(e) = Self::submit_observation(&val_id, observation.clone()) {
+					log!(warn, "OCTOPUS-ALERT-DISCORD submit_observation: Error: {:?}", e);
+				}
 			}
 
 			Ok(().into())
@@ -766,7 +770,7 @@ pub mod pallet {
 			}
 		}
 
-		fn get_validator_id() -> Option<T::AccountId> {
+		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, T::AccountId)> {
 			for key in <T::AuthorityId as AppCrypto<
 				<T as SigningTypes>::Public,
 				<T as SigningTypes>::Signature,
@@ -787,7 +791,7 @@ pub mod pallet {
 				if val_id.is_none() {
 					continue;
 				}
-				return val_id;
+				return Some((public, val_id.unwrap()));
 			}
 			None
 		}
@@ -796,6 +800,7 @@ pub mod pallet {
 			block_number: T::BlockNumber,
 			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
+			public: <T as SigningTypes>::Public,
 			validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
@@ -865,8 +870,8 @@ pub mod pallet {
 				return Ok(());
 			}
 
-			// -- Sign using any account
-			let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+			let result = Signer::<T, T::AuthorityId>::all_accounts()
+				.with_filter(vec![public])
 				.send_unsigned_transaction(
 					|account| ObservationsPayload {
 						public: account.public.clone(),
@@ -874,9 +879,19 @@ pub mod pallet {
 						observations: obs.clone(),
 					},
 					|payload, signature| Call::submit_observations { payload, signature },
-				)
-				.ok_or("No local accounts accounts available.")?;
-			result.map_err(|()| "Unable to submit transaction")?;
+				);
+			if result.len() != 1 {
+				return Err("No account found");
+			}
+			if result[0].1.is_err() {
+				log!(
+					warn,
+					"OCTOPUS-ALERT-DISCORD Failed to submit observations: {:?}",
+					result[0].1
+				);
+
+				return Err("Failed to submit observations");
+			}
 
 			Ok(())
 		}
