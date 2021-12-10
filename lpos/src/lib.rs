@@ -614,7 +614,7 @@ impl<T: Config> Pallet<T> {
 			.collect::<Vec<T::AccountId>>();
 
 		log!(debug, "All validators: {:?}", validators.clone());
-		let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 70 / 100;
+		let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 80 / 100;
 		let era_reward_points = <ErasRewardPoints<T>>::get(index);
 		let qualified_validators = era_reward_points
 			.individual
