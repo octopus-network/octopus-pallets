@@ -1,5 +1,5 @@
 use super::*;
-use crate as pallet_octopus_appchain;
+use crate as pallet_octopus_lpos;
 use sp_runtime::{
 	generic, impl_opaque_keys,
 	testing::TestXt,
@@ -7,7 +7,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
 		OpaqueKeys, Verify,
 	},
-	MultiSignature,
+	BuildStorage, MultiSignature,
 };
 
 pub use frame_support::{
@@ -74,7 +74,6 @@ impl pallet_timestamp::Config for Test {
 	type Moment = Moment;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
-	// type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Test>;
 	type WeightInfo = ();
 }
 
@@ -92,7 +91,6 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	// type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
 	type WeightInfo = ();
 }
 
@@ -200,28 +198,6 @@ impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	type GenericPublic = sp_core::sr25519::Public;
 }
 
-parameter_types! {
-	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
-	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
-	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
-}
-
-impl pallet_octopus_lpos::Config for Test {
-	type Currency = Balances;
-	type UnixTime = Timestamp;
-	type Event = Event;
-	type Reward = (); // rewards are minted from the void
-	type SessionsPerEra = SessionsPerEra;
-	type BondingDuration = BondingDuration;
-	type BlocksPerEra = BlocksPerEra;
-	type SessionInterface = Self;
-	type AppchainInterface = OctopusAppchain;
-	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
-	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
-}
-
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -256,7 +232,7 @@ parameter_types! {
 	   pub const UpwardMessagesLimit: u32 = 10;
 }
 
-impl Config for Test {
+impl pallet_octopus_appchain::Config for Test {
 	type AuthorityId = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
@@ -271,8 +247,29 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-use sp_core::{sr25519, Pair, Public as OtherPublic};
+parameter_types! {
+	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
+	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
+	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
+}
 
+impl Config for Test {
+	type Currency = Balances;
+	type UnixTime = Timestamp;
+	type Event = Event;
+	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
+	type BlocksPerEra = BlocksPerEra;
+	type SessionInterface = Self;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type PalletId = OctopusAppchainPalletId;
+	type ValidatorsProvider = OctopusAppchain;
+	type WeightInfo = ();
+}
+
+use sp_core::{sr25519, Pair, Public as OtherPublic};
 type AccountPublic = <Signature as Verify>::Signer;
 
 pub fn get_account_id_from_seed<TPublic: OtherPublic>(seed: &str) -> AccountId
@@ -291,16 +288,8 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, OctopusId) {
 	(get_account_id_from_seed::<sr25519::Public>(s), get_from_seed::<OctopusId>(s))
 }
 
-pub fn advance_session() {
-	let now = System::block_number().max(1);
-	System::set_block_number(now + 1);
-	Session::rotate_session();
-	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
-}
-
 pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	let initial_authorities: Vec<(AccountId, OctopusId)> =
 		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")];
@@ -311,17 +300,23 @@ pub fn new_tester() -> sp_io::TestExternalities {
 		.map(|x| (x.0.clone(), x.0.clone(), MockSessionKeys { octopus: x.1.clone() }))
 		.collect::<Vec<_>>();
 
-	let config: pallet_session::GenesisConfig<Test> = pallet_session::GenesisConfig { keys };
-	config.assimilate_storage(&mut storage).unwrap();
-
-	let config: pallet_octopus_appchain::GenesisConfig<Test> =
-		pallet_octopus_appchain::GenesisConfig {
+	let config =
+		pallet_octopus_lpos::GenesisConfig { history_depth: 84u32, era_payout: 2 * DOLLARS };
+	let storage = GenesisConfig {
+		system: Default::default(),
+		octopus_lpos: config,
+		assets: Default::default(),
+		balances: Default::default(),
+		octopus_appchain: pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 			premined_amount: 1024 * DOLLARS,
 			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
-		};
-	config.assimilate_storage(&mut storage).unwrap();
+		},
+		session: pallet_session::GenesisConfig { keys },
+	}
+	.build_storage()
+	.unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();
 	ext.execute_with(|| System::set_block_number(1));

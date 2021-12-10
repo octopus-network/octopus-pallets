@@ -5,13 +5,18 @@ use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
-use sp_keyring::AccountKeyring;
+use sp_keyring::{sr25519::Keyring, AccountKeyring};
 use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
 };
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{
+	traits::{BadOrigin, Verify},
+	MultiSigner,
+};
 use std::sync::Arc;
+
+type Public = <Signature as Verify>::Signer;
 
 #[test]
 fn test_force_set_params() {
@@ -159,12 +164,12 @@ fn test_burn_asset() {
 			sp_runtime::MultiAddress::Id(alice),
 			1000000000000000000
 		));
-		assert_ok!(OctopusAppchain::burn_asset(
-			origin.clone(),
-			0,
-			"test-account.testnet".to_string().as_bytes().to_vec(),
-			100000000
-		));
+		// assert_ok!(OctopusAppchain::burn_asset(
+		// 	origin.clone(),
+		// 	0,
+		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
+		// 	100000000
+		// ));
 	});
 }
 
@@ -217,27 +222,56 @@ fn test_lock() {
 	});
 }
 
+pub fn mock_payload_and_signature(
+	keyring: Keyring,
+) -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature) {
+	let public = MultiSigner::from(keyring);
+	let obs_payload =
+		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	let sig = keyring.sign(&vec![1, 2]);
+	let msig = sp_runtime::MultiSignature::from(sig);
+	(obs_payload, msig)
+}
+
 #[test]
 fn test_submit_observations() {
-	// TODO:
-	// let alice: AccountId = AccountKeyring::Alice.into();
-	// let origin = Origin::signed(alice);
+	let keyring = AccountKeyring::Alice;
+	let (obs_payload1, msig1) = mock_payload_and_signature(keyring);
 
-	// let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-	// 	.get(0)
-	// 	.unwrap()
-	// 	.clone();
+	let keyring = AccountKeyring::Bob;
+	let (obs_payload2, msig2) = mock_payload_and_signature(keyring);
 
-	// let obs_payload =
-	// 	ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
-	// new_tester().execute_with(|| {
-	// 	OctopusAppchain::submit_observations(
-	// 		Origin::None,
-	// 		obs_payload,
-	// 		(),
-	// 	)
-	// });
+	let keyring = AccountKeyring::Charlie;
+	let (obs_payload3, msig3) = mock_payload_and_signature(keyring);
 
+	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
+	let validators =
+		vec![(AccountKeyring::Alice.into(), stash), (AccountKeyring::Bob.into(), stash)];
+
+	new_tester().execute_with(|| {
+		assert_ok!(OctopusAppchain::submit_observations(
+			Origin::none(),
+			obs_payload1.clone(),
+			msig1.clone()
+		));
+
+		OctopusLpos::trigger_new_era(1, validators.clone());
+		advance_session();
+		assert_ok!(OctopusAppchain::submit_observations(
+			Origin::none(),
+			obs_payload2.clone(),
+			msig2.clone()
+		));
+
+		assert_noop!(
+			OctopusAppchain::submit_observations(
+				Origin::none(),
+				obs_payload3.clone(),
+				msig3.clone()
+			),
+			Error::<Test>::NotValidator
+		);
+	});
 }
 
 #[test]
@@ -377,6 +411,7 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 		..Default::default()
 	});
 }
+
 fn expected_burn_notify() -> Observation<AccountId> {
 	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
 		.map(|b| AccountId::decode(&mut &b[..]))
@@ -508,8 +543,11 @@ fn test_submit_validator_sets_on_chain() {
 
 	let public = <Test as SigningTypes>::Public::from(public_key);
 	let account = public.clone().into_account();
-	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_val_set()] };
+	let obs_payload = ObservationsPayload {
+		public: public.clone(),
+		block_number: 2,
+		observations: vec![expected_val_set()],
+	};
 
 	t.execute_with(|| {
 		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
@@ -517,6 +555,7 @@ fn test_submit_validator_sets_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
+			public,
 			account,
 		)
 		.unwrap();
@@ -575,8 +614,11 @@ fn test_submit_notifies_on_chain() {
 
 	let public = <Test as SigningTypes>::Public::from(public_key);
 	let account = public.clone().into_account();
-	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+	let obs_payload = ObservationsPayload {
+		public: public.clone(),
+		block_number: 2,
+		observations: vec![expected_burn_notify()],
+	};
 
 	t.execute_with(|| {
 		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
@@ -584,6 +626,7 @@ fn test_submit_notifies_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
+			public,
 			account,
 		)
 		.unwrap();

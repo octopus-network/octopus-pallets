@@ -11,6 +11,8 @@ use alloc::string::{String, ToString};
 pub mod benchmarking;
 
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 pub mod weights;
@@ -462,7 +464,7 @@ pub mod pallet {
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth, *_era_items_deleted))]
 		pub fn set_history_depth(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_history_depth: EraIndex,
@@ -483,7 +485,7 @@ pub mod pallet {
 		}
 
 		// Force set era rewards with sudo permissions.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_era_payout())]
 		pub fn force_set_era_payout(origin: OriginFor<T>, era_payout: u128) -> DispatchResult {
 			ensure_root(origin)?;
 			<EraPayout<T>>::put(era_payout);
