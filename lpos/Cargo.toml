@@ -36,12 +36,12 @@ frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", bran
 [dev-dependencies]
 sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
 sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.12" }
-# pallet-octopus-appchain = { path = "../appchain" }
-# pallet-octopus-upward-messages = { path = "../upward-messages" }
+pallet-octopus-appchain = { path = "../appchain" }
+pallet-octopus-upward-messages = { path = "../upward-messages" }
 
-# pallet-assets = { version = "4.0.0-dev", path = "../../../../frame/assets" }
-# pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
-# pallet-timestamp = { version = "4.0.0-dev", path = "../../../../frame/timestamp" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../../frame/assets" }
+pallet-balances = { version = "4.0.0-dev", path = "../../../../frame/balances" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../../../frame/timestamp" }
 
 [features]
 default = ["std"]
