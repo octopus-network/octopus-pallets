@@ -160,6 +160,12 @@ pub enum AppchainNotification<AccountId> {
 	Burn(BurnEvent<AccountId>),
 }
 
+#[derive(PartialEq, Encode, Decode, Clone, Default, RuntimeDebug, TypeInfo)]
+pub struct ObservationRecord<AccountId> {
+	observation: Option<Observation<AccountId>>,
+	exe_success: bool,
+}
+
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
 where
 	S: Decode,
@@ -196,6 +202,12 @@ pub enum ObservationType {
 	UpdateValidatorSet,
 	Burn,
 	LockAsset,
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum RecordType {
+	UpdateValidatorSet,
+	AppchainNotification,
 }
 
 impl<AccountId> Observation<AccountId> {
@@ -287,6 +299,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
 
+		#[pallet::constant]
+		type PruneStep: Get<u32>;
+
+		#[pallet::constant]
+		type ObservationsLimit: Get<u32>;
+
 		type WeightInfo: WeightInfo;
 	}
 
@@ -342,6 +360,17 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type ObservationRecords<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		RecordType,
+		Twox64Concat,
+		u32,
+		ObservationRecord<T::AccountId>,
+		ValueQuery,
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -424,6 +453,12 @@ pub mod pallet {
 		InvalidTokenId,
 		/// Next set Id overflow.
 		NextSetIdOverflow,
+		/// Submit duplicate ocw.
+		SubmitDuplicateOCW,
+		/// Observation expired.
+		ObservationExpired,
+		/// Observations exceeded limit.
+		ObservationsExceededLimit,
 	}
 
 	#[pallet::hooks]
@@ -801,7 +836,7 @@ pub mod pallet {
 			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
-			validator_id: T::AccountId,
+			_validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
 			let next_notification_id = NextNotificationId::<T>::get();
@@ -921,11 +956,18 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
+		fn increase_next_notification_id(index: u32) -> DispatchResultWithPostInfo {
 			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_id.checked_add(1) {
-					*next_id = v;
-					log!(debug, "️️️increase next_notification_id{:?} ", v);
+				let limit = T::RequestEventLimit::get();
+				if let Some(end_id) = next_id.checked_add(limit - 1) {
+					if index == end_id {
+						if let Some(v) = next_id.checked_add(limit) {
+							*next_id = v;
+							log!(debug, "️️️increase next_notification_id{:?} ", v);
+						} else {
+							return Err(Error::<T>::NextNotificationIdOverflow.into());
+						}
+					}
 				} else {
 					return Err(Error::<T>::NextNotificationIdOverflow.into());
 				}
@@ -944,6 +986,114 @@ pub mod pallet {
 			})
 		}
 
+		fn record_observation(
+			record_type: RecordType,
+			index: u32,
+			observation: Observation<T::AccountId>,
+			exe_success: bool,
+		) {
+			let record = ObservationRecord { observation: Some(observation), exe_success };
+			log!(debug, "️️️put record {:?} to ObservationRecords ", record.clone());
+			ObservationRecords::<T>::insert(record_type, index, record);
+		}
+
+		fn get_next_index_of_record(record_type: RecordType) -> u32 {
+			match record_type {
+				RecordType::AppchainNotification => <NextNotificationId<T>>::get(),
+				RecordType::UpdateValidatorSet => <NextSetId<T>>::get(),
+			}
+		}
+
+		fn check_submit_valid(
+			obs_id: u32,
+			observation_type: ObservationType,
+			record_type: RecordType,
+		) -> DispatchResultWithPostInfo {
+			// If the observation in records, should not submit again.
+			if <ObservationRecords<T>>::contains_key(record_type, obs_id) {
+				log!(
+					warn,
+					"the ({:?}, {:?}) record is already in the ObservationRecords, please do not submit it again",
+					obs_id,
+					record_type
+				);
+				return Err(Error::<T>::SubmitDuplicateOCW.into());
+			}
+
+			// If index of the observation is less than (next_id - PruneStep),
+			// the observation should not submit again.
+			// According to next_id:
+			//	   RecordType::UpdateValidatorSet   => next_id = NextSetId,
+			//	   RecordType::AppchainNotification => next_id = NextNotificationId.
+			let next_obs_id = Self::get_next_index_of_record(record_type);
+			if (next_obs_id > T::PruneStep::get()) && (obs_id < (next_obs_id - T::PruneStep::get()))
+			{
+				log!(
+					warn,
+					"the ({:?}, {:?}) observation is expired, please do not submit it again",
+					obs_id,
+					observation_type
+				);
+				return Err(Error::<T>::ObservationExpired.into());
+			}
+
+			// If the observation with same index and type has been submit too times,
+			// should not submit again.
+			let submited_obs = <Observations<T>>::try_get(observation_type, obs_id);
+			if let Ok(submited_obs) = submited_obs {
+				if (submited_obs.len() as u32) >= T::ObservationsLimit::get() {
+					log!(
+						warn,
+						"the ({:?}, {:?}) observation has submited too times",
+						obs_id,
+						observation_type
+					);
+					return Err(Error::<T>::ObservationsExceededLimit.into());
+				}
+			}
+
+			Ok(().into())
+		}
+
+		fn prune_old_histories(observation_type: ObservationType, record_type: RecordType) {
+			let next_obs_index = Self::get_next_index_of_record(record_type);
+			if next_obs_index <= T::PruneStep::get() {
+				return;
+			}
+
+			let prune_index = next_obs_index - T::PruneStep::get();
+
+			// prune observations
+			let prune_obs = <Observations<T>>::iter_prefix(observation_type)
+				.filter(|(index, _)| *index <= prune_index)
+				.collect::<Vec<(u32, Vec<Observation<T::AccountId>>)>>();
+
+			log!(debug, "will delete old observations: {:#?}", prune_obs.clone());
+			let _ = prune_obs
+				.iter()
+				.map(|(index, obs)| {
+					for o in obs.iter() {
+						<Observing<T>>::remove(o);
+					}
+					<Observations<T>>::remove(observation_type, index);
+				})
+				.collect::<Vec<_>>();
+
+			// prune records
+			// TODO: use simple code
+			let prune_records = <ObservationRecords<T>>::iter_prefix(record_type)
+				.filter(|(index, _)| *index <= prune_index)
+				.collect::<Vec<(u32, ObservationRecord<T::AccountId>)>>();
+
+			log!(debug, "will delete old records: {:#?}", prune_records.clone());
+			let _ = prune_records
+				.iter()
+				.map(|(index, _)| {
+					<ObservationRecords<T>>::remove(record_type, index);
+				})
+				.collect::<Vec<_>>();
+		}
+
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
 		#[transactional]
@@ -951,8 +1101,11 @@ pub mod pallet {
 			validator_id: &T::AccountId,
 			observation: Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			let observation_type = Self::get_observation_type(&observation);
-			<Observations<T>>::mutate(observation_type, observation.observation_index(), |obs| {
+			let (observation_type, record_type) = Self::get_observation_type(&observation);
+			let obs_id = observation.observation_index();
+			Self::check_submit_valid(obs_id, observation_type, record_type)?;
+
+			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
 					obs.push(observation.clone())
@@ -973,7 +1126,6 @@ pub mod pallet {
 				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
 
-			let obs_id = observation.observation_index();
 			//
 			log!(debug, "observations type: {:#?}", observation_type);
 			log!(
@@ -986,6 +1138,7 @@ pub mod pallet {
 			//
 
 			if 3 * stake > 2 * total_stake {
+				let mut exe_success = false;
 				match observation.clone() {
 					Observation::UpdateValidatorSet(val_set) => {
 						let validators: Vec<(T::AccountId, u128)> = val_set
@@ -996,9 +1149,10 @@ pub mod pallet {
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
 						Self::increase_next_set_id()?;
+						exe_success = true;
 					}
 					Observation::Burn(event) => {
-						Self::increase_next_notification_id()?;
+						Self::increase_next_notification_id(obs_id)?;
 						if let Err(error) = Self::unlock_inner(
 							event.sender_id.clone(),
 							event.receiver.clone(),
@@ -1012,11 +1166,12 @@ pub mod pallet {
 								event.receiver,
 								amount_unwrapped,
 							));
-							return Ok(().into());
+						} else {
+							exe_success = true;
 						}
 					}
 					Observation::LockAsset(event) => {
-						Self::increase_next_notification_id()?;
+						Self::increase_next_notification_id(obs_id)?;
 						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
 							log!(
 								info,
@@ -1039,7 +1194,8 @@ pub mod pallet {
 									event.receiver,
 									event.amount,
 								));
-								return Ok(().into());
+							} else {
+								exe_success = true;
 							}
 						} else {
 							Self::deposit_event(Event::AssetIdGetFailed(
@@ -1048,31 +1204,29 @@ pub mod pallet {
 								event.receiver,
 								event.amount,
 							));
-							return Ok(().into());
 						}
 					}
 				}
 
-				let obs = <Observations<T>>::get(observation_type, obs_id);
-				for o in obs.iter() {
-					<Observing<T>>::remove(o);
-				}
-				<Observations<T>>::remove(observation_type, obs_id);
+				Self::record_observation(record_type, obs_id, observation.clone(), exe_success);
+				Self::prune_old_histories(observation_type, record_type);
 			}
 
 			Ok(().into())
 		}
 
-		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
+		fn get_observation_type(
+			observation: &Observation<T::AccountId>,
+		) -> (ObservationType, RecordType) {
 			match observation.clone() {
 				Observation::UpdateValidatorSet(_) => {
-					return ObservationType::UpdateValidatorSet;
+					return (ObservationType::UpdateValidatorSet, RecordType::UpdateValidatorSet);
 				}
 				Observation::Burn(_) => {
-					return ObservationType::Burn;
+					return (ObservationType::Burn, RecordType::AppchainNotification);
 				}
 				Observation::LockAsset(_) => {
-					return ObservationType::LockAsset;
+					return (ObservationType::LockAsset, RecordType::AppchainNotification);
 				}
 			}
 		}
