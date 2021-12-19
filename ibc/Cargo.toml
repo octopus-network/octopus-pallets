@@ -2,10 +2,10 @@
 authors 		= ['Octopus Network <hi@oct.network>']
 edition 		= '2021'
 name 			= 'pallet-ibc'
-version 		= "3.0.0-pre.0"
+version 		= "4.0.0-pre.0"
 license 		= "Apache-2.0"
 homepage 		= "https://oct.network"
-repository 		= "https://github.com/octopus-network/substrate-ibc/"
+repository 		= "https://github.com/octopus-network/octopus-pallets.git"
 description 	= "An IBC implementation on Substrate."
 readme 			= "README.md"
 build       	= 'build.rs'
