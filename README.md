@@ -8,7 +8,7 @@ Collection of pallets used in Octopus Network
 - Validators of the appchain will observe the mainchain and submit the observed events using OCW for consensus.
 
 ## [pallet-ibc](https://github.com/octopus-network/octopus-pallets/tree/main/ibc)
-- This pallet is currently in [substrate-ibc](https://github.com/octopus-network/substrate-ibc) and will be moved here after refactoring.
+- This pallet implements the standard [IBC protocol](https://github.com/cosmos/ics).
 
 ## [pallet-octopus-lpos](https://github.com/octopus-network/octopus-pallets/tree/main/lpos)
 - An implementation of Octopus Network's LPoS.
