@@ -36,9 +36,7 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{
-		AccountIdConversion, CheckedConversion, IdentifyAccount, SaturatedConversion, StaticLookup,
-	},
+	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -158,6 +156,20 @@ pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "WrappedAppchainTokenBurnt")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+}
+
+#[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug, TypeInfo)]
+pub enum NotificationResult {
+	Success,
+	UnlockFailed,
+	AssetMintFailed,
+	AssetGetFailed,
+}
+
+impl Default for NotificationResult {
+	fn default() -> Self {
+		NotificationResult::Success
+	}
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -343,6 +355,10 @@ pub mod pallet {
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
+	#[pallet::storage]
+	pub type NotificationHistory<T: Config> =
+		StorageMap<_, Twox64Concat, u32, NotificationResult, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
@@ -404,6 +420,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The set id of new validator set was wrong.
 		WrongSetId,
+		/// Invalid notification id of observation.
+		InvalidNotificationId,
 		/// Must be a validator.
 		NotValidator,
 		/// Amount overflow.
@@ -414,8 +432,6 @@ pub mod pallet {
 		WrongAssetId,
 		/// Invalid active total stake.
 		InvalidActiveTotalStake,
-		/// Next validators submit index overflow.
-		NextSubmitObsIndexOverflow,
 		/// Appchain is not activated.
 		NotActivated,
 		/// ReceiverId is not a valid utf8 string.
@@ -424,6 +440,8 @@ pub mod pallet {
 		InvalidTokenId,
 		/// Next set Id overflow.
 		NextSetIdOverflow,
+		/// Observations exceeded limit.
+		ObservationsExceededLimit,
 	}
 
 	#[pallet::hooks]
@@ -801,7 +819,7 @@ pub mod pallet {
 			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
-			validator_id: T::AccountId,
+			_validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
 			let next_notification_id = NextNotificationId::<T>::get();
@@ -944,6 +962,96 @@ pub mod pallet {
 			})
 		}
 
+		fn check_observation(
+			observation_type: ObservationType,
+			obs_id: u32,
+		) -> DispatchResultWithPostInfo {
+			match observation_type {
+				ObservationType::UpdateValidatorSet => {
+					let next_set_id = NextSetId::<T>::get();
+					if obs_id != next_set_id {
+						log!(
+							warn,
+							"wrong set id for update validator set: {:?}, expected: {:?}",
+							obs_id,
+							next_set_id
+						);
+						return Err(Error::<T>::WrongSetId.into());
+					}
+				}
+				_ => {
+					let next_notification_id = NextNotificationId::<T>::get();
+					let limit = T::RequestEventLimit::get();
+					if (obs_id < next_notification_id) || (obs_id >= next_notification_id + limit) {
+						log!(
+							warn,
+							"invalid notification id for observation: {:?}, expected: [{:?}, {:?})",
+							obs_id,
+							next_notification_id,
+							next_notification_id + limit
+						);
+						return Err(Error::<T>::InvalidNotificationId.into());
+					}
+				}
+			}
+
+			// The maximum number of observation for the same obs_id is the number of validators (100),
+			// that is, each validator submits a observation.
+			let obs = <Observations<T>>::try_get(observation_type, obs_id);
+			if let Ok(obs) = obs {
+				if obs.len() > 100 {
+					log!(
+						warn,
+						"the number of observations with ({:?}, {:?}) exceeded the upper limit",
+						obs_id,
+						observation_type
+					);
+					return Err(Error::<T>::ObservationsExceededLimit.into());
+				}
+			}
+
+			Ok(().into())
+		}
+
+		fn prune_old_histories() {
+			// let next_notification_id = NextNotificationId::<T>::get();
+			// if next_notification_id <= T::NotificationHistoryDepth::get() {
+			// 	return;
+			// }
+
+			// let prune_index = next_notification_id - T::NotificationHistoryDepth::get();
+
+			// // prune observations
+			// let prune_obs = <Observations<T>>::iter_prefix(observation_type)
+			// 	.filter(|(index, _)| *index < prune_index)
+			// 	.collect::<Vec<(u32, Vec<Observation<T::AccountId>>)>>();
+
+			// log!(debug, "will delete old observations: {:#?}", prune_obs.clone());
+			// let _ = prune_obs
+			// 	.iter()
+			// 	.map(|(index, obs)| {
+			// 		for o in obs.iter() {
+			// 			<Observing<T>>::remove(o);
+			// 		}
+			// 		<Observations<T>>::remove(observation_type, index);
+			// 	})
+			// 	.collect::<Vec<_>>();
+
+			// // prune records
+			// // TODO: use simple code
+			// let prune_records = <ObservationRecords<T>>::iter_prefix(record_type)
+			// 	.filter(|(index, _)| *index <= prune_index)
+			// 	.collect::<Vec<(u32, ObservationRecord<T::AccountId>)>>();
+
+			// log!(debug, "will delete old records: {:#?}", prune_records.clone());
+			// let _ = prune_records
+			// 	.iter()
+			// 	.map(|(index, _)| {
+			// 		<ObservationRecords<T>>::remove(record_type, index);
+			// 	})
+			// 	.collect::<Vec<_>>();
+		}
+
 		/// If the observation already exists in the Observations, then the only thing
 		/// to do is vote for this observation.
 		#[transactional]
@@ -952,7 +1060,10 @@ pub mod pallet {
 			observation: Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let observation_type = Self::get_observation_type(&observation);
-			<Observations<T>>::mutate(observation_type, observation.observation_index(), |obs| {
+			let obs_id = observation.observation_index();
+			Self::check_observation(observation_type, obs_id)?;
+
+			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
 					obs.push(observation.clone())
@@ -973,7 +1084,6 @@ pub mod pallet {
 				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
 
-			let obs_id = observation.observation_index();
 			//
 			log!(debug, "observations type: {:#?}", observation_type);
 			log!(
@@ -999,6 +1109,7 @@ pub mod pallet {
 					}
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
+						let mut result = NotificationResult::Success;
 						if let Err(error) = Self::unlock_inner(
 							event.sender_id.clone(),
 							event.receiver.clone(),
@@ -1012,11 +1123,19 @@ pub mod pallet {
 								event.receiver,
 								amount_unwrapped,
 							));
-							return Ok(().into());
+							result = NotificationResult::UnlockFailed;
 						}
+						NotificationHistory::<T>::insert(obs_id, result.clone());
+						log!(
+							debug,
+							"save notification result {:?}:{:?} to NotificationHistory ",
+							obs_id,
+							result
+						);
 					}
 					Observation::LockAsset(event) => {
 						Self::increase_next_notification_id()?;
+						let mut result = NotificationResult::Success;
 						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
 							log!(
 								info,
@@ -1039,7 +1158,7 @@ pub mod pallet {
 									event.receiver,
 									event.amount,
 								));
-								return Ok(().into());
+								result = NotificationResult::AssetMintFailed;
 							}
 						} else {
 							Self::deposit_event(Event::AssetIdGetFailed(
@@ -1048,16 +1167,20 @@ pub mod pallet {
 								event.receiver,
 								event.amount,
 							));
-							return Ok(().into());
+							result = NotificationResult::AssetGetFailed;
 						}
+
+						NotificationHistory::<T>::insert(obs_id, result.clone());
+						log!(
+							debug,
+							"save notification result {:?}:{:?} to NotificationHistory ",
+							obs_id,
+							result
+						);
 					}
 				}
 
-				let obs = <Observations<T>>::get(observation_type, obs_id);
-				for o in obs.iter() {
-					<Observing<T>>::remove(o);
-				}
-				<Observations<T>>::remove(observation_type, obs_id);
+				Self::prune_old_histories();
 			}
 
 			Ok(().into())
