@@ -7,9 +7,6 @@ Collection of pallets used in Octopus Network
 - Metadata of an appchain. Including appchain identifier, RPC endpoint of mainchain, etc.
 - Validators of the appchain will observe the mainchain and submit the observed events using OCW for consensus.
 
-## [pallet-ibc](https://github.com/octopus-network/octopus-pallets/tree/main/ibc)
-- This pallet is currently in [substrate-ibc](https://github.com/octopus-network/substrate-ibc) and will be moved here after refactoring.
-
 ## [pallet-octopus-lpos](https://github.com/octopus-network/octopus-pallets/tree/main/lpos)
 - An implementation of Octopus Network's LPoS.
 - This pallet depends on pallet-octopus-appchain.
