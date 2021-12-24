@@ -37,3 +37,7 @@ pub trait UpwardMessagesInterface<AccountId> {
 		payload: &[u8],
 	) -> Result<u64, DispatchError>;
 }
+
+pub trait GetMmrRootHash {
+	fn get_mmr_root_hash() -> sp_core::H256;
+}

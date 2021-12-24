@@ -590,6 +590,7 @@ fn test_submit_validator_sets_on_chain() {
 		OctopusAppchain::observing_mainchain(
 			2,
 			"https://rpc.testnet.near.org",
+			"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc",
 			b"oct-test.testnet".to_vec(),
 			public,
 			account,
@@ -661,6 +662,7 @@ fn test_submit_notifies_on_chain() {
 		OctopusAppchain::observing_mainchain(
 			2,
 			"https://rpc.testnet.near.org",
+			"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc",
 			b"oct-test.testnet".to_vec(),
 			public,
 			account,

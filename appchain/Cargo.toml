@@ -33,6 +33,7 @@ sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "po
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13", default-features = false }
 
 pallet-octopus-support = { path = "../support", default-features = false }
+base58 = { version = "0.2.0"}
 
 [dev-dependencies]
 sp-api = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13" }
@@ -44,6 +45,7 @@ pallet-assets = { git = "https://github.com/paritytech/substrate.git", branch = 
 pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13" }
 pallet-timestamp = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13" }
 pallet-session = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13", features = ["historical"] }
+
 
 pallet-octopus-lpos = { path = "../lpos" }
 pallet-octopus-upward-messages = { path = "../upward-messages" }
@@ -68,6 +70,8 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"pallet-octopus-support/std",
+	#"beefy-primitives/std",
+	#"pallet-mmr/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

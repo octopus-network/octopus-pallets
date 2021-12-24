@@ -7,6 +7,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
+use base58::FromBase58;
 use borsh::BorshSerialize;
 use codec::{Codec, Decode, Encode};
 use frame_support::{
@@ -21,14 +22,14 @@ use frame_support::{
 	transactional, PalletId,
 };
 use frame_system::offchain::{
-	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
-	SigningTypes,
+	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignMessage, SignedPayload,
+	Signer, SigningTypes,
 };
 use pallet_octopus_support::{
 	log,
 	traits::{
-		AppchainInterface, AssetIdAndNameProvider, LposInterface, UpwardMessagesInterface,
-		ValidatorsProvider,
+		AppchainInterface, AssetIdAndNameProvider, GetMmrRootHash, LposInterface,
+		UpwardMessagesInterface, ValidatorsProvider,
 	},
 	types::{BurnAssetPayload, LockPayload, PayloadType},
 };
@@ -44,7 +45,7 @@ use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
 	RuntimeAppPublic, RuntimeDebug,
 };
-use sp_std::prelude::*;
+use sp_std::{convert::TryInto, prelude::*};
 pub use weights::WeightInfo;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
@@ -52,7 +53,12 @@ pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
+mod challenge;
+mod equivocation_proof;
 mod mainchain;
+mod submit_challenge;
+mod transaction;
+
 pub mod weights;
 
 #[cfg(test)]
@@ -61,6 +67,8 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+
+pub const MAINCHAIN_KEY_TYPE: KeyTypeId = KeyTypeId(*b"main");
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -82,6 +90,18 @@ mod crypto {
 
 /// Identity of an appchain authority.
 pub type AuthorityId = crypto::Public;
+
+/// ed25519 for mainchain transaction sign.
+pub mod ed25519 {
+	mod app_ed25519 {
+		use super::super::MAINCHAIN_KEY_TYPE;
+		use sp_runtime::app_crypto::{app_crypto, ed25519};
+		app_crypto!(ed25519, MAINCHAIN_KEY_TYPE);
+	}
+
+	/// Identity of an mainchain authority.
+	pub type AuthorityId = app_ed25519::Public;
+}
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -249,6 +269,9 @@ pub mod pallet {
 		/// The identifier type for an offchain worker.
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
+		/// The identifier type for an offchain worker to sign mainchain transaction.
+		type MainchainAuthorityId: AppCrypto<Self::Public, Self::Signature>;
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -290,6 +313,8 @@ pub mod pallet {
 		type LposInterface: LposInterface<Self::AccountId>;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
+
+		type GetRootHash: GetMmrRootHash;
 
 		// Configuration parameters
 
@@ -529,9 +554,10 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			if !Self::should_send(block_number) {
-				return
-			}
+			// Store historical mmr root hash.
+			let root_hash = T::GetRootHash::get_mmr_root_hash();
+			Self::local_store_mmr_root_with_number(block_number, root_hash);
+			log!(debug, "Set root hash, blocknumber: {:?}, hash: {:?} ", block_number, root_hash);
 
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
@@ -543,9 +569,55 @@ pub mod pallet {
 					); // last byte is 't'
 					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
 
+					let mainchain_bakup_rpc_endpoint = Self::bsngate_rpc_endpoint(
+						anchor_contract[anchor_contract.len() - 1] == 116,
+					); // last byte is 't'
+					log!(
+						debug,
+						"current mainchain_bakup_rpc_endpoint {:?}",
+						mainchain_bakup_rpc_endpoint
+					);
+
+					// Submit equivocation proof to mainchain.
+					// Need check: Can everyone submit it or only validator？
+					if let Ok(submit_account) = Self::get_challenge_submit_account() {
+						if let Ok(benefit_account) = Self::get_challenge_submit_benefit_account() {
+							// Submit equivocation challenge.
+							if let Ok(equivocation_proof) = Self::get_equivocation_proof() {
+								if let Err(e) = Self::submit_equivocation(
+									&mainchain_rpc_endpoint,
+									&mainchain_bakup_rpc_endpoint,
+									benefit_account.clone(),
+									submit_account.clone(),
+									anchor_contract.clone(),
+									equivocation_proof,
+								) {
+									log!(debug, "Error happend when submit equivocation, {:?} ", e);
+								}
+							}
+
+							// Submit mmr challenge.
+							if let Err(e) = Self::check_commitment_behavior(
+								&mainchain_rpc_endpoint,
+								&mainchain_bakup_rpc_endpoint,
+								benefit_account,
+								submit_account,
+								anchor_contract.clone(),
+								block_number,
+							) {
+								log!(debug, "Error happend when submit mmr challenge, {:?} ", e);
+							}
+						}
+					}
+
+					// Observ mainchain
+					if !Self::should_send(block_number) {
+						return
+					}
 					if let Err(e) = Self::observing_mainchain(
 						block_number,
 						&mainchain_rpc_endpoint,
+						&mainchain_bakup_rpc_endpoint,
 						anchor_contract,
 						public,
 						validator_id,
@@ -581,6 +653,12 @@ pub mod pallet {
 					&payload.block_number,
 					payload.public.clone().into_account(),
 				)
+			} else if let Call::report_equivocation_unsigned { equivocation_proof: _ } = call {
+				ValidTransaction::with_tag_prefix("OctopusAppchain")
+					.priority(TransactionPriority::max_value())
+					.longevity(5)
+					.propagate(false)
+					.build()
 			} else {
 				InvalidTransaction::Call.into()
 			}
@@ -819,6 +897,20 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			log!(debug, "Set equivocation: {:?}", equivocation_proof.clone());
+
+			let key = Self::derived_key();
+			sp_io::offchain_index::set(&key, equivocation_proof.encode().as_slice());
+
+			Ok(().into())
+		}
 	}
 
 	impl<T: Config> AssetIdAndNameProvider<T::AssetId> for Pallet<T> {
@@ -867,16 +959,21 @@ pub mod pallet {
 				kind,
 				b"octopus_appchain::mainchain_rpc_endpoint",
 			) {
-				if let Ok(rpc_url) = String::from_utf8(data) {
-					log!(debug, "The configure url is {:?} ", rpc_url.clone());
-					return rpc_url
-				} else {
-					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::default_rpc_endpoint(is_testnet)
-				}
+				let ret = match String::from_utf8(data) {
+					Ok(rpc_url) => {
+						log!(debug, "The configure url is {:?} ", rpc_url.clone());
+						rpc_url
+					},
+					_ => {
+						log!(warn, "Parse configure url error, return default rpc url");
+						Self::default_rpc_endpoint(is_testnet)
+					},
+				};
+
+				ret
 			} else {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::default_rpc_endpoint(is_testnet)
+				Self::default_rpc_endpoint(is_testnet)
 			}
 		}
 
@@ -952,11 +1049,11 @@ pub mod pallet {
 		pub(crate) fn observing_mainchain(
 			block_number: T::BlockNumber,
 			mainchain_rpc_endpoint: &str,
+			mainchain_bakup_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
 			_validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
-			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
 			let next_notification_id = NextNotificationId::<T>::get();
 			log!(debug, "next_notification_id: {}", next_notification_id);
 			let next_set_id = NextSetId::<T>::get();
@@ -970,22 +1067,18 @@ pub mod pallet {
 				next_set_id,
 			);
 
-			match ret {
-				Ok(observations) => {
-					obs = observations;
-				},
+			let mut obs = match ret {
+				Ok(observations) => observations,
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
-					obs = Self::get_validator_list_of(
-						&Self::bsngate_rpc_endpoint(
-							anchor_contract[anchor_contract.len() - 1] == 116,
-						), // last byte is 't'
+					Self::get_validator_list_of(
+						mainchain_bakup_rpc_endpoint,
 						anchor_contract.clone(),
 						next_set_id,
 					)
-					.map_err(|_| "Failed to get_validator_list_of")?;
+					.map_err(|_| "Failed to get_validator_list_of")?
 				},
-			}
+			};
 
 			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
@@ -999,23 +1092,19 @@ pub mod pallet {
 					T::RequestEventLimit::get(),
 				);
 
-				match ret {
-					Ok(observations) => {
-						obs = observations;
-					},
+				obs = match ret {
+					Ok(observations) => observations,
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
-						obs = Self::get_appchain_notification_histories(
-							&Self::bsngate_rpc_endpoint(
-								anchor_contract[anchor_contract.len() - 1] == 116,
-							), // last byte is 't'
+						Self::get_appchain_notification_histories(
+							mainchain_bakup_rpc_endpoint,
 							anchor_contract,
 							next_notification_id,
 							T::RequestEventLimit::get(),
 						)
-						.map_err(|_| "Failed to get_appchain_notification_histories")?;
+						.map_err(|_| "Failed to get_appchain_notification_histories")?
 					},
-				}
+				};
 			}
 
 			if obs.len() == 0 {
@@ -1365,9 +1454,9 @@ pub mod pallet {
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
 			match observation.clone() {
-				Observation::UpdateValidatorSet(_) => return ObservationType::UpdateValidatorSet,
-				Observation::Burn(_) => return ObservationType::Burn,
-				Observation::LockAsset(_) => return ObservationType::LockAsset,
+				Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+				Observation::Burn(_) => ObservationType::Burn,
+				Observation::LockAsset(_) => ObservationType::LockAsset,
 			}
 		}
 
@@ -1409,6 +1498,43 @@ pub mod pallet {
 				// claim a reward.
 				.propagate(true)
 				.build()
+		}
+
+		fn get_challenge_submit_account() -> Result<Vec<u8>, &'static str> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			sp_io::offchain::local_storage_get(kind, b"octopus_appchain::challenge_submit_account")
+				.ok_or("No challenge submit account configure.")
+		}
+
+		fn get_challenge_submit_benefit_account() -> Result<Vec<u8>, &'static str> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			let benefit_account = match sp_io::offchain::local_storage_get(
+				kind,
+				b"octopus_appchain::challenge_submit_benefit_account",
+			) {
+				Some(account) => account,
+				_ => Self::get_challenge_submit_account()
+					.map_err(|_| "Get default benefit account failed")?,
+			};
+
+			Ok(benefit_account)
+		}
+
+		pub fn report_equivocation(equivocation_proof: Vec<u8>) {
+			// Note: need check.
+			// if let Err(_) = Self::get_challenge_submit_account() {
+			// 	log!(debug, "Not configure challenge account should not report equivocation.");
+			// 	return;
+			// }
+
+			use frame_system::offchain::SubmitTransaction;
+
+			let call = Call::report_equivocation_unsigned { equivocation_proof };
+
+			match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+				Ok(()) => log!(debug, "Submit equivocation ok"),
+				Err(e) => log!(debug, "Submit equivocation error, e = {:?}", e),
+			}
 		}
 	}
 
