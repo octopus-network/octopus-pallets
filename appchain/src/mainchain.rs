@@ -1,4 +1,5 @@
 use super::*;
+use base58::ToBase58;
 
 #[derive(Deserialize, RuntimeDebug)]
 struct Response {
@@ -8,7 +9,7 @@ struct Response {
 }
 
 #[derive(Deserialize, RuntimeDebug)]
-struct ResponseResult {
+pub struct ResponseResult {
 	result: Vec<u8>,
 	logs: Vec<String>,
 	block_height: u64,
@@ -23,6 +24,44 @@ pub struct AppchainNotificationHistory<AccountId> {
 	timestamp: u64,
 	#[serde(deserialize_with = "deserialize_from_str")]
 	index: u32,
+}
+
+#[derive(Deserialize, RuntimeDebug)]
+struct AccessKeyResponse {
+	jsonrpc: String,
+	result: AccessKeyResult,
+	id: String,
+}
+
+#[derive(Deserialize, RuntimeDebug)]
+pub struct AccessKeyResult {
+	pub nonce: transaction::Nonce,
+	pub block_height: u64,
+	pub block_hash: String,
+}
+
+#[derive(Deserialize, RuntimeDebug, Clone)]
+pub struct SendTransactionResponse {
+	jsonrpc: String,
+	result: SendTransactionResult,
+	id: String,
+}
+
+#[derive(Deserialize, RuntimeDebug, Clone)]
+pub struct SendTransactionResult {
+	pub status: TransactionExecuteSuccess,
+	pub transaction: TransactionResult,
+}
+
+#[derive(Deserialize, RuntimeDebug, Clone)]
+pub struct TransactionExecuteSuccess {
+	#[serde(rename = "SuccessValue")]
+	pub success_value: String,
+}
+
+#[derive(Deserialize, RuntimeDebug, Clone)]
+pub struct TransactionResult {
+	pub hash: String,
 }
 
 impl<T: Config> Pallet<T> {
@@ -245,5 +284,131 @@ impl<T: Config> Pallet<T> {
 		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
 		Some(res)
+	}
+
+	pub(super) fn query_access_key(
+		rpc_endpoint: &str,
+		account_id: Vec<u8>,
+		public_key: [u8; 32],
+	) -> Result<AccessKeyResult, http::Error> {
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
+		let public_key = Self::encode_public_key_in_base58(public_key);
+		log!(debug, "query_access_key, public key is {:?}", public_key.clone());
+
+		let mut body = br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "query",
+			"params": {
+				"request_type": "view_access_key",
+				"finality": "final",
+				"account_id": ""#
+			.to_vec();
+		body.extend(&account_id);
+		body.extend(
+			br#"",
+				"public_key": "ed25519:"#,
+		);
+		body.extend(&public_key.as_bytes().to_vec());
+		body.extend(
+			br#""
+			}
+		}"#,
+		);
+
+		let request = http::Request::default()
+			.method(http::Method::Post)
+			.url(rpc_endpoint)
+			.body(vec![body])
+			.add_header("Content-Type", "application/json");
+		log!(debug, "Access key request: {:?}", request);
+
+		let pending = request.deadline(deadline).send().map_err(|_| http::Error::IoError)?;
+
+		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
+		if response.code != 200 {
+			log!(warn, "Unexpected status code: {}", response.code);
+			return Err(http::Error::Unknown);
+		}
+
+		let body = response.body().collect::<Vec<u8>>();
+		log!(debug, "Access key body: {:?}", body);
+
+		let json_response: AccessKeyResponse = serde_json::from_slice(&body).map_err(|_| {
+			log::warn!("Failed to decode http body when call query_access_key.");
+			http::Error::Unknown
+		})?;
+		log!(debug, "Query access key, json_response: {:?}", json_response);
+
+		Ok(json_response.result)
+	}
+
+	pub(crate) fn encode_public_key_in_base58(public_key: [u8; 32]) -> String {
+		public_key[..].to_base58()
+	}
+
+	pub(crate) fn send_transaction(
+		rpc_endpoint: &str,
+		signed_transaction: transaction::SignedTransaction,
+	) -> Result<String, http::Error> {
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(30_000));
+		let args = Self::encode_signed_transaction(signed_transaction).ok_or_else(|| {
+			log!(info, "Encode send transaction args error");
+			http::Error::Unknown
+		})?;
+
+		let mut body = br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "broadcast_tx_commit",
+			"params": [
+				""#
+		.to_vec();
+		body.extend(&args);
+		body.extend(
+			br#""
+			]
+		}"#,
+		);
+
+		let request = http::Request::default()
+			.method(http::Method::Post)
+			.url(rpc_endpoint)
+			.body(vec![body])
+			.add_header("Content-Type", "application/json");
+		log!(debug, "send transaction request: {:?}", request);
+
+		let pending = request.deadline(deadline).send().map_err(|_| http::Error::IoError)?;
+
+		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
+		if response.code != 200 {
+			log!(warn, "Unexpected status code: {}", response.code);
+			return Err(http::Error::Unknown);
+		}
+
+		let body = response.body().collect::<Vec<u8>>();
+		log!(debug, "Send transaction, response body: {:?}", body);
+
+		let json_response: SendTransactionResponse =
+			serde_json::from_slice(&body).map_err(|_| {
+				log::warn!("Failed to decode http body when call send_transaction.");
+				http::Error::Unknown
+			})?;
+		log!(debug, "Send transaction, json_response: {:?}", json_response.clone());
+
+		Ok(json_response.result.transaction.hash)
+	}
+
+	pub(crate) fn encode_signed_transaction(
+		signed_transaction: transaction::SignedTransaction,
+	) -> Option<Vec<u8>> {
+		if let Ok(signed_tx) = signed_transaction.try_to_vec() {
+			let res = base64::encode(&signed_tx).into_bytes();
+			Some(res)
+		} else {
+			None
+		}
 	}
 }
