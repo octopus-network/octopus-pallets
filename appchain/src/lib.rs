@@ -7,6 +7,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
+use base58::FromBase58;
 use borsh::BorshSerialize;
 use codec::{Codec, Decode, Encode};
 use frame_support::{
@@ -21,8 +22,8 @@ use frame_support::{
 	transactional, PalletId,
 };
 use frame_system::offchain::{
-	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
-	SigningTypes,
+	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignMessage, SignedPayload,
+	Signer, SigningTypes,
 };
 use pallet_octopus_support::{
 	log,
@@ -44,6 +45,7 @@ use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
 	RuntimeAppPublic, RuntimeDebug,
 };
+use sp_std::convert::TryInto;
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -52,7 +54,13 @@ pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
+mod challenge;
+mod equivocation_proof;
 mod mainchain;
+mod transaction;
+
+#[cfg(test)]
+mod mock;
 pub mod weights;
 
 #[cfg(test)]
@@ -61,6 +69,8 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+
+pub const MAINCHAIN_KEY_TYPE: KeyTypeId = KeyTypeId(*b"main");
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -82,6 +92,18 @@ mod crypto {
 
 /// Identity of an appchain authority.
 pub type AuthorityId = crypto::Public;
+
+/// ed25519 for mainchain transaction sign.
+pub mod ed25519 {
+	mod app_ed25519 {
+		use super::super::MAINCHAIN_KEY_TYPE;
+		use sp_runtime::app_crypto::{app_crypto, ed25519};
+		app_crypto!(ed25519, MAINCHAIN_KEY_TYPE);
+	}
+
+	/// Identity of an mainchain authority.
+	pub type AuthorityId = app_ed25519::Public;
+}
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -248,6 +270,9 @@ pub mod pallet {
 	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
 		/// The identifier type for an offchain worker.
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+
+		/// The identifier type for an offchain worker to sign mainchain transaction.
+		type MainchainAuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -529,10 +554,6 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			if !Self::should_send(block_number) {
-				return;
-			}
-
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
 				Some((public, validator_id)) => {
@@ -543,6 +564,26 @@ pub mod pallet {
 					); // last byte is 't'
 					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
 
+					// Submit equivocation proof to mainchain.
+					if let Ok(account_id) = Self::get_equivocation_submit_account() {
+						if let Ok(equivocation_proof) = Self::get_equivocation_proof() {
+							if let Err(e) = Self::submit_equivocation(
+								&mainchain_rpc_endpoint,
+								account_id,
+								anchor_contract.clone(),
+								equivocation_proof,
+							) {
+								log!(debug, "Error happend when submit equivocation, {:?} ", e);
+							} else {
+								log!(debug, "Submit equivocation success.");
+							}
+						}
+					}
+
+					// Observ mainchain
+					if !Self::should_send(block_number) {
+						return;
+					}
 					if let Err(e) = Self::observing_mainchain(
 						block_number,
 						&mainchain_rpc_endpoint,
@@ -581,6 +622,12 @@ pub mod pallet {
 					&payload.block_number,
 					payload.public.clone().into_account(),
 				)
+			} else if let Call::report_equivocation_unsigned { equivocation_proof: _ } = call {
+				ValidTransaction::with_tag_prefix("OctopusAppchain")
+					.priority(TransactionPriority::max_value())
+					.longevity(5)
+					.propagate(false)
+					.build()
 			} else {
 				InvalidTransaction::Call.into()
 			}
@@ -817,6 +864,20 @@ pub mod pallet {
 			Self::deposit_event(Event::TransferredFromPallet { receiver, amount });
 
 			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			log!(debug, "Set equivocation: {:?}", equivocation_proof.clone());
+
+			let key = Self::derived_key();
+			sp_io::offchain_index::set(&key, equivocation_proof.encode().as_slice());
+
+			Ok(().into())
 		}
 	}
 
@@ -1397,6 +1458,217 @@ pub mod pallet {
 				// claim a reward.
 				.propagate(true)
 				.build()
+		}
+
+		fn get_equivocation_submit_account() -> Result<Vec<u8>, &'static str> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			sp_io::offchain::local_storage_get(
+				kind,
+				b"octopus_appchain::equivocation_submit_account",
+			)
+			.ok_or("No equivocation submit account configure.")
+		}
+
+		fn get_equivocation_submit_benefit_account() -> Result<Vec<u8>, &'static str> {
+			let kind = sp_core::offchain::StorageKind::PERSISTENT;
+			if let Some(benefit_account) = sp_io::offchain::local_storage_get(
+				kind,
+				b"octopus_appchain::equivocation_submit_benefit_account",
+			) {
+				Ok(benefit_account)
+			} else {
+				Self::get_equivocation_submit_account()
+			}
+		}
+
+		pub fn report_equivocation(equivocation_proof: Vec<u8>) {
+			// Note: need check.
+			// if let Err(_) = Self::get_equivocation_submit_account() {
+			// 	log!(debug, "Not configure equivocation account should not report equivocation.");
+			// 	return;
+			// }
+
+			use frame_system::offchain::SubmitTransaction;
+
+			let call = Call::report_equivocation_unsigned { equivocation_proof };
+
+			match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+				Ok(()) => log!(debug, "Submit equivocation ok"),
+				Err(e) => log!(debug, "Submit equivocation error, e = {:?}", e),
+			}
+		}
+
+		fn derived_key() -> Vec<u8> {
+			b"octo::appchain::equivocation".encode()
+		}
+
+		fn get_equivocation_proof() -> Result<Vec<u8>, &'static str> {
+			let key = Self::derived_key();
+			let equivocation_proof_storage = StorageValueRef::persistent(&key);
+
+			match equivocation_proof_storage.get::<Vec<u8>>() {
+				Ok(storage) => match storage {
+					Some(data) => {
+						log!(debug, "Get proof data = {:?}", data.clone());
+						return Ok(data);
+					},
+					None => {
+						log!(debug, "No proof get.");
+						return Err("No equivocation proof need to submit");
+					},
+				},
+				Err(e) => {
+					log!(debug, "Get proof failed error: {:?}", e);
+					return Err("No equivocation proof need to submit");
+				},
+			}
+		}
+
+		fn get_public() -> Option<<T as SigningTypes>::Public> {
+			for key in <T::MainchainAuthorityId as AppCrypto<
+				<T as SigningTypes>::Public,
+				<T as SigningTypes>::Signature,
+			>>::RuntimeAppPublic::all()
+			.into_iter()
+			{
+				let generic_public = <T::MainchainAuthorityId as AppCrypto<
+					<T as SigningTypes>::Public,
+					<T as SigningTypes>::Signature,
+				>>::GenericPublic::from(key);
+				let public: <T as SigningTypes>::Public = generic_public.into();
+				return Some(public);
+			}
+
+			None
+		}
+
+		fn construct_challenge_args(proof: Vec<u8>) -> Result<Vec<u8>, &'static str> {
+			let proof = equivocation_proof::EquivocationProof::decode(&mut proof.as_slice())
+				.map_err(|_| "parse equivocation error")?;
+			log!(debug, "proof after decode : {:?}", proof.clone());
+
+			let benefit_account = Self::get_equivocation_submit_benefit_account()?;
+			let benefit_account =
+				String::from_utf8(benefit_account).map_err(|_| "Parse benefit account error")?;
+
+			let challenge_proof = challenge::AppchainChallenge::EquivocationChallenge {
+				submitter_account: benefit_account,
+				proof,
+			};
+
+			let challenge = challenge::Challenge { appchain_challenge: challenge_proof };
+			let challenge =
+				serde_json::to_string(&challenge).map_err(|_| "serialize proof error")?;
+			log!(debug, "challenge after serialize: {:?}", challenge.clone());
+
+			let args = challenge.as_bytes().to_vec();
+			Ok(args)
+		}
+
+		fn submit_equivocation(
+			mainchain_rpc_endpoint: &str,
+			account_id: Vec<u8>,
+			anchor_contract: Vec<u8>,
+			equivocation_proof: Vec<u8>,
+		) -> Result<String, &'static str> {
+			// 1. Construct challenge args
+			let args = Self::construct_challenge_args(equivocation_proof)?;
+			log!(debug, "args after serialize: {:?}", args.clone());
+
+			// 2. Get key
+			let public = Self::get_public()
+				.ok_or(0)
+				.map_err(|_| "No key used for report equivocation to mainchain.")?;
+			let public_key: [u8; 32] = public.clone().encode()[1..]
+				.try_into()
+				.map_err(|_| "Error, Public key length is not 32")?;
+
+			// 3. Query access key
+			let ret = Self::query_access_key(
+				mainchain_rpc_endpoint,
+				account_id.clone(),
+				public_key.clone(),
+			);
+
+			let access_key_info: mainchain::AccessKeyResult;
+			match ret {
+				Ok(proof) => {
+					access_key_info = proof;
+				},
+				Err(_) => {
+					log!(debug, "retry with failsafe endpoint to get accesskey reponse");
+					access_key_info = Self::query_access_key(
+						&Self::bsngate_rpc_endpoint(
+							anchor_contract[anchor_contract.len() - 1] == 116,
+						),
+						account_id.clone(),
+						public_key.clone(),
+					)
+					.map_err(|_| "Failed to query_access_key")?;
+				},
+			}
+
+			// 4. Create transaction
+			let action = transaction::Action::FunctionCall(transaction::FunctionCallAction {
+				method_name: "commit_appchain_challenge".to_string(),
+				args,
+				gas: 200_000_000_000_000, // 200T
+				deposit: 0,
+			});
+			let nonce = access_key_info.nonce + 1;
+			let receiver_id = String::from_utf8(anchor_contract.clone())
+				.map_err(|_| "Parse anchor_contract error")?;
+			let signer_id = String::from_utf8(account_id).map_err(|_| "Parse account_id error")?;
+			let block_hash =
+				access_key_info.block_hash.from_base58().map_err(|_| "Parse block hash error")?;
+			let block_hash: [u8; 32] = block_hash.encode()[1..]
+				.try_into()
+				.map_err(|_| "Error, Public key length is not 32")?;
+			log!(debug, "Block hash is: {:?}", block_hash.clone());
+
+			let transaction = transaction::Transaction {
+				signer_id,
+				public_key: transaction::PublicKey(public_key),
+				nonce,
+				receiver_id,
+				block_hash,
+				actions: vec![action],
+			};
+
+			// 5. Get Signer
+			let signer =
+				Signer::<T, T::MainchainAuthorityId>::all_accounts().with_filter(vec![public]);
+			if !(signer.can_sign()) {
+				log!(warn, "Err, no signer found when submit equivocation.");
+				return Err("No signer found.");
+			}
+
+			// 6. Sign transaction
+			let transaction_serialize =
+				transaction.try_to_vec().map_err(|_| "Format transaction to string error.")?;
+			log!(debug, "transaction_serialize: {:?}", transaction_serialize);
+
+			let tx_hash = sp_io::hashing::sha2_256(&transaction_serialize);
+			let sig = signer.sign_message(&tx_hash);
+			let sig: [u8; 64] = sig[0].1.encode()[1..]
+				.try_into()
+				.map_err(|_| "Error, Signature length is not 64")?;
+			log!(debug, "signature: {:?}", sig.clone());
+
+			let signed_transaction = transaction::SignedTransaction {
+				transaction,
+				signature: transaction::Signature(sig),
+			};
+
+			// 7. Send transaction
+			let exec_tx_hash = Self::send_transaction(mainchain_rpc_endpoint, signed_transaction)
+				.map_err(|_| "Failed to send transaction")?;
+
+			// 8. Clear local storage
+			let key = Self::derived_key();
+			StorageValueRef::persistent(&key).clear();
+
+			Ok(exec_tx_hash)
 		}
 	}
 
