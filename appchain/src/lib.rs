@@ -406,11 +406,22 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Locked(T::AccountId, Vec<u8>, BalanceOf<T>),
+		/// A new set of validators is waiting to be changed.
+		/// \[set_id, validators\]
+		NewPlannedValidators(u32, Vec<(T::AccountId, u128)>),
+		/// An `amount` of native token has been locked in the appchain to indicate that
+		/// it will be cross-chain transferred to the mainchain.
+		/// \[who, receiver, amount, sequence\]
+		Locked(T::AccountId, Vec<u8>, BalanceOf<T>, u64),
+		/// An `amount` was unlocked to `receiver` from `sender`.
+		/// \[sender, receiver, amount\]
 		Unlocked(Vec<u8>, T::AccountId, BalanceOf<T>),
+		/// An `amount` unlock to `receiver` from `sender` failed.
+		/// \[sender, receiver, amount\]
+		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
+
 		AssetMinted(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
 		AssetBurned(AssetIdOf<T>, T::AccountId, Vec<u8>, AssetBalanceOf<T>),
-		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
 		AssetMintFailed(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
 		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
 	}
@@ -608,6 +619,7 @@ pub mod pallet {
 		// mainchain:lock_asset()   -> appchain:mint_asset()
 		// mainchain:unlock_asset() <- appchain:burn_asset()
 
+		/// Emits `Locked` event when successful.
 		#[pallet::weight(<T as Config>::WeightInfo::lock())]
 		#[transactional]
 		pub fn lock(
@@ -633,12 +645,17 @@ pub mod pallet {
 				amount: amount_wrapped,
 			};
 
-			T::UpwardMessagesInterface::submit(
+			let sequence = T::UpwardMessagesInterface::submit(
 				&who,
 				PayloadType::Lock,
 				&message.try_to_vec().unwrap(),
 			)?;
-			Self::deposit_event(Event::Locked(who, receiver_id.as_bytes().to_vec(), amount));
+			Self::deposit_event(Event::Locked(
+				who,
+				receiver_id.as_bytes().to_vec(),
+				amount,
+				sequence,
+			));
 
 			Ok(().into())
 		}
@@ -914,6 +931,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Emits `Unlocked` event when successful.
 		fn unlock_inner(
 			sender_id: Vec<u8>,
 			receiver: T::AccountId,
@@ -1105,6 +1123,8 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
+						let set_id = NextSetId::<T>::get();
+						Self::deposit_event(Event::NewPlannedValidators(set_id, validators));
 						Self::increase_next_set_id()?;
 					}
 					Observation::Burn(event) => {

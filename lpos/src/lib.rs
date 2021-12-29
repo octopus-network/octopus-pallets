@@ -339,34 +339,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward.
-		/// \[era_index, validator_payout, remainder\]
-		EraPayout(EraIndex, u128),
-		/// The staker has been rewarded by this amount. \[stash, amount\]
-		Reward(T::AccountId, BalanceOf<T>),
-		/// One validator (and its nominators) has been slashed by the given amount.
-		/// \[validator, amount\]
-		Slash(T::AccountId, BalanceOf<T>),
-		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed. \[session_index\]
-		OldSlashingReportDiscarded(SessionIndex),
-		/// A new set of stakers was elected.
-		StakingElection,
-		/// An account has bonded this amount. \[stash, amount\]
-		///
-		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
-		/// it will not be emitted for staking rewards when they are added to stake.
-		Bonded(T::AccountId, u128),
-		/// An account has unbonded this amount. \[stash, amount\]
-		Unbonded(T::AccountId, BalanceOf<T>),
-		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue. \[stash, amount\]
-		Withdrawn(T::AccountId, BalanceOf<T>),
-		/// A nominator has been kicked from a validator. \[nominator, stash\]
-		Kicked(T::AccountId, T::AccountId),
-		/// The election failed. No new era is planned.
-		StakingElectionFailed,
+		/// Notifies the mainchain to prepare the next era.
+		/// \[era_index\]
+		PlanNewEra(u32),
+		/// Failed to notify the mainchain to prepare the next era.
+		PlanNewEraFailed,
+		/// Trigger new era.
+		TriggerNewEra,
+		/// Notifies the mainchain to pay the validator rewards of `era_index`.
+		/// `excluded_validators` were excluded because they were not working properly.
+		/// \[era_index, excluded_validators\]
+		EraPayout(EraIndex, Vec<T::AccountId>),
+		/// Failed to notify the mainchain to pay the validator rewards of `era_index`.
+		EraPayoutFailed(EraIndex),
 	}
 
 	#[pallet::error]
@@ -528,6 +513,11 @@ impl<T: Config> Pallet<T> {
 						&message.try_to_vec().unwrap(),
 					);
 					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
+					if res.is_ok() {
+						Self::deposit_event(Event::<T>::PlanNewEra(next_set_id));
+					} else {
+						Self::deposit_event(Event::<T>::PlanNewEraFailed);
+					}
 				}
 				return None;
 			}
@@ -610,7 +600,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Get exclude validators.
-	fn get_exclude_validators(index: EraIndex) -> Vec<String> {
+	fn get_exclude_validators(index: EraIndex) -> Vec<T::AccountId> {
 		let mut validators = <ErasStakers<T>>::iter_prefix(index)
 			.map(|(k, _)| k)
 			.collect::<Vec<T::AccountId>>();
@@ -633,18 +623,7 @@ impl<T: Config> Pallet<T> {
 			.collect::<Vec<T::AccountId>>();
 
 		validators.retain(|v| !(qualified_validators.iter().any(|val| val == v)));
-
-		let excluded_validators = validators
-			.iter()
-			.map(|validator| {
-				let prefix = String::from("0x");
-				let hex_validator = prefix + &hex::encode(validator.encode());
-				hex_validator
-			})
-			.collect::<Vec<String>>();
-
-		log!(debug, "Exclude validators: {:?}", excluded_validators.clone());
-		excluded_validators
+		validators
 	}
 
 	/// Compute payout for era.
@@ -664,15 +643,26 @@ impl<T: Config> Pallet<T> {
 			let _era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
 			let validator_payout = Self::era_payout();
 
-			Self::deposit_event(Event::<T>::EraPayout(active_era.index, validator_payout));
-
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
 
 			let excluded_validators = Self::get_exclude_validators(active_era.index);
-			log!(debug, "exclude validators: {:?}", excluded_validators.clone());
 
-			let message = EraPayoutPayload { end_era: active_era.set_id, excluded_validators };
+			let excluded_validators_str = excluded_validators
+				.iter()
+				.map(|validator| {
+					let prefix = String::from("0x");
+					let hex_validator = prefix + &hex::encode(validator.encode());
+					hex_validator
+				})
+				.collect::<Vec<String>>();
+
+			log!(debug, "Exclude validators: {:?}", excluded_validators_str.clone());
+
+			let message = EraPayoutPayload {
+				end_era: active_era.set_id,
+				excluded_validators: excluded_validators_str.clone(),
+			};
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 			T::Currency::deposit_creating(&Self::account_id(), amount);
@@ -684,6 +674,11 @@ impl<T: Config> Pallet<T> {
 				&message.try_to_vec().unwrap(),
 			);
 			log!(info, "UpwardMessage::EraPayout: {:?}", res);
+			if res.is_ok() {
+				Self::deposit_event(Event::<T>::EraPayout(active_era.set_id, excluded_validators));
+			} else {
+				Self::deposit_event(Event::<T>::EraPayoutFailed(active_era.set_id));
+			}
 		}
 	}
 
@@ -722,6 +717,7 @@ impl<T: Config> Pallet<T> {
 		let validators = T::ValidatorsProvider::validators();
 		log!(info, "Next validator set: {:?}", validators);
 
+		<Pallet<T>>::deposit_event(Event::<T>::TriggerNewEra);
 		Some(Self::trigger_new_era(start_session_index, validators))
 	}
 
@@ -928,7 +924,6 @@ where
 		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
 			R::report_offence(reporters, offence)
 		} else {
-			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
 			Ok(())
 		}
 	}

@@ -7,12 +7,12 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 
 use codec::{Decode, Encode};
-pub use pallet::*;
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::DispatchError,
 	ensure,
 	traits::{Get, StorageVersion},
 };
+pub use pallet::*;
 
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
@@ -146,7 +146,11 @@ pub mod pallet {
 }
 
 impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
-	fn submit(_who: &T::AccountId, payload_type: PayloadType, payload: &[u8]) -> DispatchResult {
+	fn submit(
+		_who: &T::AccountId,
+		payload_type: PayloadType,
+		payload: &[u8],
+	) -> Result<u64, DispatchError> {
 		match payload_type {
 			PayloadType::Lock | PayloadType::BurnAsset => {
 				ensure!(
@@ -157,7 +161,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 			_ => {}
 		}
 
-		Nonce::<T>::try_mutate(|nonce| -> DispatchResult {
+		Nonce::<T>::try_mutate(|nonce| -> Result<u64, DispatchError> {
 			if let Some(v) = nonce.checked_add(1) {
 				*nonce = v;
 			} else {
@@ -169,7 +173,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 				payload_type,
 				payload: payload.to_vec(),
 			});
-			Ok(())
+			Ok(*nonce)
 		})
 	}
 }

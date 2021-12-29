@@ -1,4 +1,4 @@
-use frame_support::dispatch::DispatchResult;
+use frame_support::dispatch::DispatchError;
 use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
 
@@ -27,5 +27,5 @@ pub trait UpwardMessagesInterface<AccountId> {
 		who: &AccountId,
 		payload_type: crate::types::PayloadType,
 		payload: &[u8],
-	) -> DispatchResult;
+	) -> Result<u64, DispatchError>;
 }
