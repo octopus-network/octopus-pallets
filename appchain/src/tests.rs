@@ -80,6 +80,47 @@ fn test_force_set_params() {
 }
 
 #[test]
+fn test_set_asset_name() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let origin = Origin::signed(alice.clone());
+	new_tester().execute_with(|| {
+		assert_noop!(
+			OctopusAppchain::set_asset_name(
+				Origin::root(),
+				"usdc.testnet".to_string().as_bytes().to_vec(),
+				2,
+			),
+			Error::<Test>::NotActivated
+		);
+
+		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		assert_noop!(
+			OctopusAppchain::set_asset_name(
+				Origin::root(),
+				"usdc.testnet".to_string().as_bytes().to_vec(),
+				2,
+			),
+			Error::<Test>::AssetNameHasSet
+		);
+
+		assert_noop!(
+			OctopusAppchain::set_asset_name(
+				Origin::root(),
+				"test.testnet".to_string().as_bytes().to_vec(),
+				2,
+			),
+			Error::<Test>::AssetIdInUse
+		);
+
+		assert_ok!(OctopusAppchain::set_asset_name(
+			Origin::root(),
+			"test.testnet".to_string().as_bytes().to_vec(),
+			1,
+		));
+	});
+}
+
+#[test]
 fn test_mint_asset() {
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
 	new_tester().execute_with(|| {
@@ -164,12 +205,12 @@ fn test_burn_asset() {
 			sp_runtime::MultiAddress::Id(alice),
 			1000000000000000000
 		));
-		// assert_ok!(OctopusAppchain::burn_asset(
-		// 	origin.clone(),
-		// 	0,
-		// 	"test-account.testnet".to_string().as_bytes().to_vec(),
-		// 	100000000
-		// ));
+		assert_ok!(OctopusAppchain::burn_asset(
+			origin.clone(),
+			0,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			100000000
+		));
 	});
 }
 
