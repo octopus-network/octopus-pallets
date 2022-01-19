@@ -40,7 +40,7 @@ use sp_runtime::{
 	Perbill, RuntimeDebug,
 };
 use sp_staking::{
-	offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
+	offence::{DisableStrategy, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
@@ -899,6 +899,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
+		disable_strategy: DisableStrategy,
 	) -> Weight {
 		0
 	}
