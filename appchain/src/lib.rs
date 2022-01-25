@@ -9,13 +9,13 @@ use alloc::string::{String, ToString};
 use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
-	PalletId,
 	traits::{
+		tokens::fungibles,
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		OneSessionHandler,
-		StorageVersion, tokens::fungibles,
-	}, transactional,
+		OneSessionHandler, StorageVersion,
+	},
+	transactional, PalletId,
 };
 use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
@@ -24,16 +24,16 @@ use frame_system::offchain::{
 use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
+use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
-		Duration,
 		http,
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+		Duration,
 	},
-	RuntimeDebug,
 	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
+	RuntimeDebug,
 };
-use sp_runtime::RuntimeAppPublic;
 use sp_std::prelude::*;
 
 pub use pallet::*;
@@ -47,9 +47,9 @@ pub use weights::WeightInfo;
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
-pub mod weights;
 #[cfg(test)]
 mod mock;
+pub mod weights;
 
 #[cfg(test)]
 mod tests;
@@ -70,8 +70,8 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"octo");
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
 /// the types with this pallet-specific identifier.
 mod crypto {
-	use sp_runtime::app_crypto::{app_crypto, sr25519};
 	use super::KEY_TYPE;
+	use sp_runtime::app_crypto::{app_crypto, sr25519};
 	app_crypto!(sr25519, KEY_TYPE);
 }
 
@@ -240,13 +240,13 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use codec::Codec;
 	use frame_support::pallet_prelude::*;
 	use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 	use frame_support::sp_std::fmt::Debug;
 	use frame_system::pallet_prelude::*;
 	use pallet_octopus_support::traits::AssetIdAndNameProvider;
-	use super::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -265,24 +265,24 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId>;
 
 		type AssetId: Member
-		+ Parameter
-		+ AtLeast32BitUnsigned
-		+ Codec
-		+ Copy
-		+ Debug
-		+ Default
-		+ MaybeSerializeDeserialize;
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Copy
+			+ Debug
+			+ Default
+			+ MaybeSerializeDeserialize;
 
 		type AssetBalance: Parameter
-		+ Member
-		+ AtLeast32BitUnsigned
-		+ Codec
-		+ Default
-		+ From<u128>
-		+ Into<u128>
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Default
+			+ From<u128>
+			+ Into<u128>
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ Debug;
 
 		type Assets: fungibles::Mutate<
 			<Self as frame_system::Config>::AccountId,
@@ -336,7 +336,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type AssetIdByName<T: Config> =
-	StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
+		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
 
 	/// Whether the appchain is activated.
 	///
@@ -467,6 +467,10 @@ pub mod pallet {
 		NextSetIdOverflow,
 		/// Observations exceeded limit.
 		ObservationsExceededLimit,
+		/// Asset name has been set.
+		AssetNameHasSet,
+		/// Asset id in use.
+		AssetIdInUse,
 	}
 
 	#[pallet::hooks]
@@ -703,7 +707,8 @@ pub mod pallet {
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-			let token_id = T::AssetIdByName::try_get_asset_name(asset_id).map_err(|_| Error::<T>::WrongAssetId)?;
+			let token_id = T::AssetIdByName::try_get_asset_name(asset_id)
+				.map_err(|_| Error::<T>::WrongAssetId)?;
 
 			let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
@@ -732,6 +737,35 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn set_asset_name(
+			origin: OriginFor<T>,
+			asset_name: Vec<u8>,
+			asset_id: T::AssetId,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
+
+			if let Ok(_asset_id) = <AssetIdByName<T>>::try_get(&asset_name) {
+				return Err(Error::<T>::AssetNameHasSet.into());
+			}
+
+			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id);
+			if token_id.is_some() {
+				log!(
+					debug,
+					"Set asset name error, asset name: {:?} has used asset_id: {:?}!",
+					token_id.unwrap(),
+					asset_id
+				);
+				return Err(Error::<T>::AssetIdInUse.into());
+			}
+
+			<AssetIdByName<T>>::insert(asset_name, asset_id);
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> AssetIdAndNameProvider<T::AssetId> for Pallet<T> {
@@ -741,17 +775,15 @@ pub mod pallet {
 			let asset_id = <AssetIdByName<T>>::try_get(name.as_ref().to_vec());
 			match asset_id {
 				Ok(id) => Ok(id),
-				_ => Err(Error::<T>::InvalidTokenId)
+				_ => Err(Error::<T>::InvalidTokenId),
 			}
 		}
 
 		fn try_get_asset_name(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
-			let token_id = <AssetIdByName<T>>::iter()
-				.find(|p| p.1 == asset_id)
-				.map(|p| p.0);
+			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
 			match token_id {
 				Some(id) => Ok(id),
-				_ => Err(Error::<T>::WrongAssetId)
+				_ => Err(Error::<T>::WrongAssetId),
 			}
 		}
 	}
