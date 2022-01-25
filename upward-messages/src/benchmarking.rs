@@ -1,5 +1,6 @@
-use super::*;
+#![cfg(feature = "runtime-benchmarks")]
 
+use crate::*;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 

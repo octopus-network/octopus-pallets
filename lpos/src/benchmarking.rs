@@ -1,4 +1,6 @@
-use super::*;
+#![cfg(feature = "runtime-benchmarks")]
+
+use crate::*;
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 

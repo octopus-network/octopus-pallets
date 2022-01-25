@@ -1,3 +1,4 @@
+// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
@@ -7,8 +8,10 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 
 use borsh::BorshSerialize;
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::{
+	sp_runtime::traits::AtLeast32BitUnsigned,
+	sp_std::fmt::Debug,
 	traits::{
 		tokens::fungibles,
 		Currency,
@@ -21,10 +24,17 @@ use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
+use pallet_octopus_support::{
+	log,
+	traits::{
+		AppchainInterface, AssetIdAndNameProvider, LposInterface, UpwardMessagesInterface,
+		ValidatorsProvider,
+	},
+	types::{BurnAssetPayload, LockPayload, PayloadType},
+};
 use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
-use sp_runtime::RuntimeAppPublic;
 use sp_runtime::{
 	offchain::{
 		http,
@@ -32,29 +42,24 @@ use sp_runtime::{
 		Duration,
 	},
 	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
-	RuntimeDebug,
+	RuntimeAppPublic, RuntimeDebug,
 };
 use sp_std::prelude::*;
-
-pub use pallet::*;
-use pallet_octopus_support::{
-	log,
-	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
-	types::{BurnAssetPayload, LockPayload, PayloadType},
-};
 pub use weights::WeightInfo;
+
+// Re-export pallet items so that they can be accessed from the crate namespace.
+pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
-#[cfg(test)]
-mod mock;
 pub mod weights;
 
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 /// Defines application identifier for crypto keys of this module.
@@ -241,12 +246,8 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use codec::Codec;
 	use frame_support::pallet_prelude::*;
-	use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
-	use frame_support::sp_std::fmt::Debug;
 	use frame_system::pallet_prelude::*;
-	use pallet_octopus_support::traits::AssetIdAndNameProvider;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -421,23 +422,39 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new set of validators is waiting to be changed.
-		/// \[set_id, validators\]
-		NewPlannedValidators(u32, Vec<(T::AccountId, u128)>),
+		NewPlannedValidators { set_id: u32, validators: Vec<(T::AccountId, u128)> },
 		/// An `amount` of native token has been locked in the appchain to indicate that
 		/// it will be cross-chain transferred to the mainchain.
-		/// \[who, receiver, amount, sequence\]
-		Locked(T::AccountId, Vec<u8>, BalanceOf<T>, u64),
+		Locked { sender: T::AccountId, receiver: Vec<u8>, amount: BalanceOf<T>, sequence: u64 },
 		/// An `amount` was unlocked to `receiver` from `sender`.
-		/// \[sender, receiver, amount\]
-		Unlocked(Vec<u8>, T::AccountId, BalanceOf<T>),
+		Unlocked { sender: Vec<u8>, receiver: T::AccountId, amount: BalanceOf<T> },
 		/// An `amount` unlock to `receiver` from `sender` failed.
-		/// \[sender, receiver, amount\]
-		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
+		UnlockFailed { sender: Vec<u8>, receiver: T::AccountId, amount: BalanceOf<T> },
 
-		AssetMinted(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
-		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance),
-		AssetMintFailed(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
-		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, T::AssetBalance),
+		AssetMinted {
+			asset_id: T::AssetId,
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			amount: T::AssetBalance,
+		},
+		AssetBurned {
+			asset_id: T::AssetId,
+			sender: T::AccountId,
+			receiver: Vec<u8>,
+			amount: T::AssetBalance,
+		},
+		AssetMintFailed {
+			asset_id: T::AssetId,
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			amount: T::AssetBalance,
+		},
+		AssetIdGetFailed {
+			token_id: Vec<u8>,
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			amount: T::AssetBalance,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -519,10 +536,10 @@ pub mod pallet {
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
 					}
-				}
+				},
 				None => {
 					log!(warn, "Not a validator, skipping offchain worker");
-				}
+				},
 			}
 		}
 	}
@@ -668,12 +685,12 @@ pub mod pallet {
 				PayloadType::Lock,
 				&message.try_to_vec().unwrap(),
 			)?;
-			Self::deposit_event(Event::Locked(
-				who,
-				receiver_id.as_bytes().to_vec(),
+			Self::deposit_event(Event::Locked {
+				sender: who,
+				receiver: receiver_id.as_bytes().to_vec(),
 				amount,
 				sequence,
-			));
+			});
 
 			Ok(().into())
 		}
@@ -728,12 +745,12 @@ pub mod pallet {
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
 			)?;
-			Self::deposit_event(Event::AssetBurned(
+			Self::deposit_event(Event::AssetBurned {
 				asset_id,
 				sender,
-				receiver_id.as_bytes().to_vec(),
+				receiver: receiver_id.as_bytes().to_vec(),
 				amount,
-			));
+			});
 
 			Ok(().into())
 		}
@@ -849,7 +866,7 @@ pub mod pallet {
 						// we avoid sending another transaction at this time.
 						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
 							Err(RECENTLY_SENT)
-						}
+						},
 						// In every other case we attempt to acquire the lock and send a transaction.
 						_ => Ok(block_number),
 					}
@@ -919,7 +936,7 @@ pub mod pallet {
 			match ret {
 				Ok(observations) => {
 					obs = observations;
-				}
+				},
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
 					obs = Self::get_validator_list_of(
@@ -930,7 +947,7 @@ pub mod pallet {
 						next_set_id,
 					)
 					.map_err(|_| "Failed to get_validator_list_of")?;
-				}
+				},
 			}
 
 			// check cross-chain transfers only if there isn't a validator_set update.
@@ -948,7 +965,7 @@ pub mod pallet {
 				match ret {
 					Ok(observations) => {
 						obs = observations;
-					}
+					},
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						obs = Self::get_appchain_notification_histories(
@@ -960,7 +977,7 @@ pub mod pallet {
 							T::RequestEventLimit::get(),
 						)
 						.map_err(|_| "Failed to get_appchain_notification_histories")?;
-					}
+					},
 				}
 			}
 
@@ -1004,7 +1021,11 @@ pub mod pallet {
 			let amount_unwrapped = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 			// unlock native token
 			T::Currency::transfer(&Self::account_id(), &receiver, amount_unwrapped, KeepAlive)?;
-			Self::deposit_event(Event::Unlocked(sender_id, receiver, amount_unwrapped));
+			Self::deposit_event(Event::Unlocked {
+				sender: sender_id,
+				receiver,
+				amount: amount_unwrapped,
+			});
 
 			Ok(().into())
 		}
@@ -1016,7 +1037,12 @@ pub mod pallet {
 			amount: T::AssetBalance,
 		) -> DispatchResultWithPostInfo {
 			<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(asset_id, &receiver, amount)?;
-			Self::deposit_event(Event::AssetMinted(asset_id, sender_id, receiver, amount));
+			Self::deposit_event(Event::AssetMinted {
+				asset_id,
+				sender: sender_id,
+				receiver,
+				amount,
+			});
 
 			Ok(().into())
 		}
@@ -1060,7 +1086,7 @@ pub mod pallet {
 						);
 						return Err(Error::<T>::WrongSetId.into());
 					}
-				}
+				},
 				_ => {
 					let next_notification_id = NextNotificationId::<T>::get();
 					let limit = T::RequestEventLimit::get();
@@ -1074,7 +1100,7 @@ pub mod pallet {
 						);
 						return Err(Error::<T>::InvalidNotificationId.into());
 					}
-				}
+				},
 			}
 
 			// The maximum number of observation for the same obs_id is the number of validators (100),
@@ -1188,9 +1214,9 @@ pub mod pallet {
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
 						let set_id = NextSetId::<T>::get();
-						Self::deposit_event(Event::NewPlannedValidators(set_id, validators));
+						Self::deposit_event(Event::NewPlannedValidators { set_id, validators });
 						Self::increase_next_set_id()?;
-					}
+					},
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
@@ -1202,11 +1228,11 @@ pub mod pallet {
 							log!(info, "️️️failed to unlock native token: {:?}", error);
 							let min = T::Currency::minimum_balance();
 							let amount_unwrapped = event.amount.checked_into().unwrap_or(min); //Check: should not return error.
-							Self::deposit_event(Event::UnlockFailed(
-								event.sender_id,
-								event.receiver,
-								amount_unwrapped,
-							));
+							Self::deposit_event(Event::UnlockFailed {
+								sender: event.sender_id,
+								receiver: event.receiver,
+								amount: amount_unwrapped,
+							});
 							result = NotificationResult::UnlockFailed;
 						}
 						NotificationHistory::<T>::insert(obs_id, result.clone());
@@ -1216,7 +1242,7 @@ pub mod pallet {
 							obs_id,
 							result
 						);
-					}
+					},
 					Observation::LockAsset(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
@@ -1236,21 +1262,21 @@ pub mod pallet {
 								event.amount.into(),
 							) {
 								log!(warn, "️️️failed to mint asset: {:?}", error);
-								Self::deposit_event(Event::AssetMintFailed(
+								Self::deposit_event(Event::AssetMintFailed {
 									asset_id,
-									event.sender_id,
-									event.receiver,
-									event.amount.into(),
-								));
+									sender: event.sender_id,
+									receiver: event.receiver,
+									amount: event.amount.into(),
+								});
 								result = NotificationResult::AssetMintFailed;
 							}
 						} else {
-							Self::deposit_event(Event::AssetIdGetFailed(
-								event.token_id,
-								event.sender_id,
-								event.receiver,
-								event.amount.into(),
-							));
+							Self::deposit_event(Event::AssetIdGetFailed {
+								token_id: event.token_id,
+								sender: event.sender_id,
+								receiver: event.receiver,
+								amount: event.amount.into(),
+							});
 							result = NotificationResult::AssetGetFailed;
 						}
 
@@ -1261,7 +1287,7 @@ pub mod pallet {
 							obs_id,
 							result
 						);
-					}
+					},
 				}
 
 				Self::prune_old_histories();
@@ -1274,13 +1300,13 @@ pub mod pallet {
 			match observation.clone() {
 				Observation::UpdateValidatorSet(_) => {
 					return ObservationType::UpdateValidatorSet;
-				}
+				},
 				Observation::Burn(_) => {
 					return ObservationType::Burn;
-				}
+				},
 				Observation::LockAsset(_) => {
 					return ObservationType::LockAsset;
-				}
+				},
 			}
 		}
 

@@ -7,7 +7,6 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 
 #[cfg(test)]
@@ -33,14 +32,14 @@ use pallet_octopus_support::{
 };
 use pallet_session::historical;
 use scale_info::TypeInfo;
-use sp_runtime::traits::{AccountIdConversion, CheckedConversion};
-use sp_runtime::KeyTypeId;
 use sp_runtime::{
-	traits::{Convert, SaturatedConversion},
-	Perbill, RuntimeDebug,
+	traits::{AccountIdConversion, CheckedConversion, Convert, SaturatedConversion},
+	KeyTypeId, Perbill, RuntimeDebug,
 };
 use sp_staking::{
-	offence::{DisableStrategy, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
+	offence::{
+		DisableStrategy, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence,
+	},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
@@ -340,18 +339,16 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Notifies the mainchain to prepare the next era.
-		/// \[era_index\]
-		PlanNewEra(u32),
+		PlanNewEra { era_index: u32 },
 		/// Failed to notify the mainchain to prepare the next era.
 		PlanNewEraFailed,
 		/// Trigger new era.
 		TriggerNewEra,
 		/// Notifies the mainchain to pay the validator rewards of `era_index`.
 		/// `excluded_validators` were excluded because they were not working properly.
-		/// \[era_index, excluded_validators\]
-		EraPayout(EraIndex, Vec<T::AccountId>),
+		EraPayout { era_index: EraIndex, excluded_validators: Vec<T::AccountId> },
 		/// Failed to notify the mainchain to pay the validator rewards of `era_index`.
-		EraPayoutFailed(EraIndex),
+		EraPayoutFailed { era_index: EraIndex },
 	}
 
 	#[pallet::error]
@@ -514,7 +511,7 @@ impl<T: Config> Pallet<T> {
 					);
 					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
 					if res.is_ok() {
-						Self::deposit_event(Event::<T>::PlanNewEra(next_set_id));
+						Self::deposit_event(Event::<T>::PlanNewEra { era_index: next_set_id });
 					} else {
 						Self::deposit_event(Event::<T>::PlanNewEraFailed);
 					}
@@ -675,9 +672,12 @@ impl<T: Config> Pallet<T> {
 			);
 			log!(info, "UpwardMessage::EraPayout: {:?}", res);
 			if res.is_ok() {
-				Self::deposit_event(Event::<T>::EraPayout(active_era.set_id, excluded_validators));
+				Self::deposit_event(Event::<T>::EraPayout {
+					era_index: active_era.set_id,
+					excluded_validators,
+				});
 			} else {
-				Self::deposit_event(Event::<T>::EraPayoutFailed(active_era.set_id));
+				Self::deposit_event(Event::<T>::EraPayoutFailed { era_index: active_era.set_id });
 			}
 		}
 	}

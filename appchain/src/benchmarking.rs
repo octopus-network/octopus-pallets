@@ -1,7 +1,8 @@
-use super::*;
+#![cfg(feature = "runtime-benchmarks")]
+
+use crate::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
-// use rand::Rng;
 
 #[allow(unused_imports)]
 use crate::Pallet as OctopusAppchain;

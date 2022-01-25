@@ -12,8 +12,6 @@ use frame_support::{
 	ensure,
 	traits::{Get, StorageVersion},
 };
-pub use pallet::*;
-
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -25,6 +23,8 @@ use sp_runtime::{
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
+pub use pallet::*;
+
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
 pub mod weights;
@@ -32,7 +32,6 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -157,8 +156,8 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 					MessageQueue::<T>::get().len() < T::UpwardMessagesLimit::get() as usize,
 					Error::<T>::QueueSizeLimitReached,
 				);
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 
 		Nonce::<T>::try_mutate(|nonce| -> Result<u64, DispatchError> {
