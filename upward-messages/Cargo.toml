@@ -1,7 +1,7 @@
 [package]
 name = "pallet-octopus-upward-messages"
 version = "4.0.0-pre.0"
-edition = "2018"
+edition = "2021"
 authors = ["Octopus Network <hi@oct.network>"]
 license = "Apache-2.0"
 homepage = "https://oct.network"
@@ -14,8 +14,8 @@ documentation = "https://docs.rs/pallet-octopus-upward-messages"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-log = { version = "0.4.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+log = { version = "0.4.14", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.13", default-features = false, optional = true }
@@ -46,5 +46,5 @@ std = [
 	"sp-std/std",
 	"pallet-octopus-support/std",
 ]
-
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+try-runtime = ["frame-support/try-runtime"]
