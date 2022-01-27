@@ -128,7 +128,7 @@ pub struct BurnEvent<AccountId> {
 pub struct LockAssetEvent<AccountId> {
 	#[serde(default)]
 	index: u32,
-	#[serde(rename = "symbol")]
+	#[serde(rename = "contract_account")]
 	#[serde(with = "serde_bytes")]
 	token_id: Vec<u8>,
 	#[serde(rename = "sender_id_in_near")]
