@@ -422,14 +422,30 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new set of validators is waiting to be changed.
-		NewPlannedValidators { set_id: u32, validators: Vec<(T::AccountId, u128)> },
+		NewPlannedValidators {
+			set_id: u32,
+			validators: Vec<(T::AccountId, u128)>,
+		},
 		/// An `amount` of native token has been locked in the appchain to indicate that
 		/// it will be cross-chain transferred to the mainchain.
-		Locked { sender: T::AccountId, receiver: Vec<u8>, amount: BalanceOf<T>, sequence: u64 },
+		Locked {
+			sender: T::AccountId,
+			receiver: Vec<u8>,
+			amount: BalanceOf<T>,
+			sequence: u64,
+		},
 		/// An `amount` was unlocked to `receiver` from `sender`.
-		Unlocked { sender: Vec<u8>, receiver: T::AccountId, amount: BalanceOf<T> },
+		Unlocked {
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 		/// An `amount` unlock to `receiver` from `sender` failed.
-		UnlockFailed { sender: Vec<u8>, receiver: T::AccountId, amount: BalanceOf<T> },
+		UnlockFailed {
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 
 		AssetMinted {
 			asset_id: T::AssetId,
@@ -454,6 +470,11 @@ pub mod pallet {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
+		},
+
+		TransferredFromPallet {
+			receiver: T::AccountId,
+			amount: BalanceOf<T>,
 		},
 	}
 
@@ -780,6 +801,24 @@ pub mod pallet {
 			}
 
 			<AssetIdByName<T>>::insert(asset_name, asset_id);
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn tranfer_from_pallet_account(
+			origin: OriginFor<T>,
+			receiver: <T::Lookup as StaticLookup>::Source,
+			amount: BalanceOf<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let receiver = T::Lookup::lookup(receiver)?;
+
+			T::Currency::transfer(&Self::account_id(), &receiver, amount, KeepAlive)?;
+			log!(debug, "Transfer from pallet, receiver: {:?}, amount: {:?} ", receiver, amount);
+
+			Self::deposit_event(Event::TransferredFromPallet { receiver, amount });
 
 			Ok(())
 		}

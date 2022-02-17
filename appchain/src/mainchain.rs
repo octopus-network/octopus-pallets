@@ -223,11 +223,11 @@ impl<T: Config> Pallet<T> {
 				AppchainNotification::Burn(mut event) => {
 					event.index = n.index;
 					obs.push(Observation::Burn(event));
-				}
+				},
 				AppchainNotification::LockAsset(mut event) => {
 					event.index = n.index;
 					obs.push(Observation::LockAsset(event));
-				}
+				},
 			}
 		}
 
