@@ -174,10 +174,12 @@ parameter_types! {
 	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
 }
 
+pub type AssetId = u32;
+pub type AssetBalance = u128;
 impl pallet_assets::Config for Test {
 	type Event = Event;
-	type Balance = u128;
-	type AssetId = u32;
+	type Balance = AssetBalance;
+	type AssetId = AssetId;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
@@ -257,6 +259,9 @@ parameter_types! {
 }
 
 impl Config for Test {
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type AssetIdByName = OctopusAppchain;
 	type AuthorityId = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
@@ -319,7 +324,10 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 			premined_amount: 1024 * DOLLARS,
-			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
+			asset_id_by_name: vec![
+				("test-account.testnet".to_string(), 0),
+				("usdc.testnet".to_string(), 2),
+			],
 		};
 	config.assimilate_storage(&mut storage).unwrap();
 

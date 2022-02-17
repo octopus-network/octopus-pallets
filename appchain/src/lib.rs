@@ -21,11 +21,6 @@ use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
 	SigningTypes,
 };
-use pallet_octopus_support::{
-	log,
-	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
-	types::{BurnAssetPayload, LockPayload, PayloadType},
-};
 use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
@@ -42,15 +37,19 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 pub use pallet::*;
+use pallet_octopus_support::{
+	log,
+	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	types::{BurnAssetPayload, LockPayload, PayloadType},
+};
+pub use weights::WeightInfo;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
-pub mod weights;
-pub use weights::WeightInfo;
-
 #[cfg(test)]
 mod mock;
+pub mod weights;
 
 #[cfg(test)]
 mod tests;
@@ -79,17 +78,8 @@ mod crypto {
 /// Identity of an appchain authority.
 pub type AuthorityId = crypto::Public;
 
-type AssetId = u32;
-type AssetBalance = u128;
-
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-type AssetBalanceOf<T> =
-	<<T as Config>::Assets as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-
-type AssetIdOf<T> =
-	<<T as Config>::Assets as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
 /// Validator of appchain.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -133,7 +123,7 @@ pub struct BurnEvent<AccountId> {
 pub struct LockAssetEvent<AccountId> {
 	#[serde(default)]
 	index: u32,
-	#[serde(rename = "symbol")]
+	#[serde(rename = "contract_account")]
 	#[serde(with = "serde_bytes")]
 	token_id: Vec<u8>,
 	#[serde(rename = "sender_id_in_near")]
@@ -251,8 +241,12 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use codec::Codec;
 	use frame_support::pallet_prelude::*;
+	use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+	use frame_support::sp_std::fmt::Debug;
 	use frame_system::pallet_prelude::*;
+	use pallet_octopus_support::traits::AssetIdAndNameProvider;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -270,13 +264,36 @@ pub mod pallet {
 
 		type Currency: Currency<Self::AccountId>;
 
+		type AssetId: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Copy
+			+ Debug
+			+ Default
+			+ MaybeSerializeDeserialize;
+
+		type AssetBalance: Parameter
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Default
+			+ From<u128>
+			+ Into<u128>
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ Debug;
+
 		type Assets: fungibles::Mutate<
 			<Self as frame_system::Config>::AccountId,
-			AssetId = AssetId,
-			Balance = AssetBalance,
+			AssetId = Self::AssetId,
+			Balance = Self::AssetBalance,
 		>;
 
+		type AssetIdByName: AssetIdAndNameProvider<Self::AssetId>;
+
 		type LposInterface: LposInterface<Self::AccountId>;
+
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		// Configuration parameters
@@ -317,6 +334,10 @@ pub mod pallet {
 	pub(super) type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
+	#[pallet::storage]
+	pub type AssetIdByName<T: Config> =
+		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
+
 	/// Whether the appchain is activated.
 	///
 	/// Only an active appchain will communicate with the mainchain and pay block rewards.
@@ -348,10 +369,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type AssetIdByName<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, AssetIdOf<T>, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn pallet_account)]
 	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
 
@@ -364,7 +381,7 @@ pub mod pallet {
 		pub anchor_contract: String,
 		pub validators: Vec<(T::AccountId, u128)>,
 		pub premined_amount: u128,
-		pub asset_id_by_name: Vec<(String, AssetIdOf<T>)>,
+		pub asset_id_by_name: Vec<(String, T::AssetId)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -386,7 +403,6 @@ pub mod pallet {
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
 			<PlannedValidators<T>>::put(self.validators.clone());
-
 			let account_id = <Pallet<T>>::account_id();
 			let min = T::Currency::minimum_balance();
 			let amount =
@@ -394,9 +410,7 @@ pub mod pallet {
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
-
 			<PalletAccount<T>>::put(account_id);
-
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
 			}
@@ -420,10 +434,11 @@ pub mod pallet {
 		/// \[sender, receiver, amount\]
 		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
 
-		AssetMinted(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
-		AssetBurned(AssetIdOf<T>, T::AccountId, Vec<u8>, AssetBalanceOf<T>),
-		AssetMintFailed(AssetIdOf<T>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
-		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, AssetBalanceOf<T>),
+		AssetMinted(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
+		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance),
+		AssetMintFailed(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
+		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, T::AssetBalance),
+		TransferredFromPallet(T::AccountId, BalanceOf<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -453,6 +468,10 @@ pub mod pallet {
 		NextSetIdOverflow,
 		/// Observations exceeded limit.
 		ObservationsExceededLimit,
+		/// Asset name has been set.
+		AssetNameHasSet,
+		/// Asset id in use.
+		AssetIdInUse,
 	}
 
 	#[pallet::hooks]
@@ -501,10 +520,10 @@ pub mod pallet {
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
 					}
-				}
+				},
 				None => {
 					log!(warn, "Not a validator, skipping offchain worker");
-				}
+				},
 			}
 		}
 	}
@@ -664,10 +683,10 @@ pub mod pallet {
 		#[transactional]
 		pub fn mint_asset(
 			origin: OriginFor<T>,
-			asset_id: AssetIdOf<T>,
+			asset_id: T::AssetId,
 			sender_id: Vec<u8>,
 			receiver: <T::Lookup as StaticLookup>::Source,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
@@ -679,9 +698,9 @@ pub mod pallet {
 		#[transactional]
 		pub fn burn_asset(
 			origin: OriginFor<T>,
-			asset_id: AssetIdOf<T>,
+			asset_id: T::AssetId,
 			receiver_id: Vec<u8>,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
@@ -689,10 +708,8 @@ pub mod pallet {
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-			let token_id = <AssetIdByName<T>>::iter()
-				.find(|p| p.1 == asset_id)
-				.map(|p| p.0)
-				.ok_or(Error::<T>::WrongAssetId)?;
+			let token_id = T::AssetIdByName::try_get_asset_name(asset_id)
+				.map_err(|_| Error::<T>::WrongAssetId)?;
 
 			let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
@@ -704,7 +721,7 @@ pub mod pallet {
 				token_id,
 				sender: hex_sender,
 				receiver_id: receiver_id.clone(),
-				amount,
+				amount: amount.into(),
 			};
 
 			T::UpwardMessagesInterface::submit(
@@ -721,8 +738,74 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn set_asset_name(
+			origin: OriginFor<T>,
+			asset_name: Vec<u8>,
+			asset_id: T::AssetId,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
+
+			if let Ok(_asset_id) = <AssetIdByName<T>>::try_get(&asset_name) {
+				return Err(Error::<T>::AssetNameHasSet.into());
+			}
+
+			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id);
+			if token_id.is_some() {
+				log!(
+					debug,
+					"Set asset name error, asset name: {:?} has used asset_id: {:?}!",
+					token_id.unwrap(),
+					asset_id
+				);
+				return Err(Error::<T>::AssetIdInUse.into());
+			}
+
+			<AssetIdByName<T>>::insert(asset_name, asset_id);
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn tranfer_from_pallet_account(
+			origin: OriginFor<T>,
+			receiver: <T::Lookup as StaticLookup>::Source,
+			amount: BalanceOf<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let receiver = T::Lookup::lookup(receiver)?;
+
+			T::Currency::transfer(&Self::account_id(), &receiver, amount, KeepAlive)?;
+			log!(debug, "Transfer from pallet, receiver: {:?}, amount: {:?} ", receiver, amount);
+
+			Self::deposit_event(Event::TransferredFromPallet(receiver, amount));
+
+			Ok(())
+		}
 	}
 
+	impl<T: Config> AssetIdAndNameProvider<T::AssetId> for Pallet<T> {
+		type Err = Error<T>;
+
+		fn try_get_asset_id(name: impl AsRef<[u8]>) -> Result<<T as Config>::AssetId, Self::Err> {
+			let asset_id = <AssetIdByName<T>>::try_get(name.as_ref().to_vec());
+			match asset_id {
+				Ok(id) => Ok(id),
+				_ => Err(Error::<T>::InvalidTokenId),
+			}
+		}
+
+		fn try_get_asset_name(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
+			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
+			match token_id {
+				Some(id) => Ok(id),
+				_ => Err(Error::<T>::WrongAssetId),
+			}
+		}
+	}
 	impl<T: Config> Pallet<T> {
 		fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account()
@@ -785,7 +868,7 @@ pub mod pallet {
 						// we avoid sending another transaction at this time.
 						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
 							Err(RECENTLY_SENT)
-						}
+						},
 						// In every other case we attempt to acquire the lock and send a transaction.
 						_ => Ok(block_number),
 					}
@@ -855,7 +938,7 @@ pub mod pallet {
 			match ret {
 				Ok(observations) => {
 					obs = observations;
-				}
+				},
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
 					obs = Self::get_validator_list_of(
@@ -866,7 +949,7 @@ pub mod pallet {
 						next_set_id,
 					)
 					.map_err(|_| "Failed to get_validator_list_of")?;
-				}
+				},
 			}
 
 			// check cross-chain transfers only if there isn't a validator_set update.
@@ -884,7 +967,7 @@ pub mod pallet {
 				match ret {
 					Ok(observations) => {
 						obs = observations;
-					}
+					},
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						obs = Self::get_appchain_notification_histories(
@@ -896,7 +979,7 @@ pub mod pallet {
 							T::RequestEventLimit::get(),
 						)
 						.map_err(|_| "Failed to get_appchain_notification_histories")?;
-					}
+					},
 				}
 			}
 
@@ -946,10 +1029,10 @@ pub mod pallet {
 		}
 
 		fn mint_asset_inner(
-			asset_id: AssetIdOf<T>,
+			asset_id: T::AssetId,
 			sender_id: Vec<u8>,
 			receiver: T::AccountId,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 		) -> DispatchResultWithPostInfo {
 			<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(asset_id, &receiver, amount)?;
 			Self::deposit_event(Event::AssetMinted(asset_id, sender_id, receiver, amount));
@@ -996,7 +1079,7 @@ pub mod pallet {
 						);
 						return Err(Error::<T>::WrongSetId.into());
 					}
-				}
+				},
 				_ => {
 					let next_notification_id = NextNotificationId::<T>::get();
 					let limit = T::RequestEventLimit::get();
@@ -1010,7 +1093,7 @@ pub mod pallet {
 						);
 						return Err(Error::<T>::InvalidNotificationId.into());
 					}
-				}
+				},
 			}
 
 			// The maximum number of observation for the same obs_id is the number of validators (100),
@@ -1126,7 +1209,7 @@ pub mod pallet {
 						let set_id = NextSetId::<T>::get();
 						Self::deposit_event(Event::NewPlannedValidators(set_id, validators));
 						Self::increase_next_set_id()?;
-					}
+					},
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
@@ -1152,11 +1235,11 @@ pub mod pallet {
 							obs_id,
 							result
 						);
-					}
+					},
 					Observation::LockAsset(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
-						if let Ok(asset_id) = <AssetIdByName<T>>::try_get(&event.token_id) {
+						if let Ok(asset_id) = T::AssetIdByName::try_get_asset_id(&event.token_id) {
 							log!(
 								info,
 								"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
@@ -1169,14 +1252,14 @@ pub mod pallet {
 								asset_id,
 								event.sender_id.clone(),
 								event.receiver.clone(),
-								event.amount,
+								event.amount.into(),
 							) {
 								log!(warn, "️️️failed to mint asset: {:?}", error);
 								Self::deposit_event(Event::AssetMintFailed(
 									asset_id,
 									event.sender_id,
 									event.receiver,
-									event.amount,
+									event.amount.into(),
 								));
 								result = NotificationResult::AssetMintFailed;
 							}
@@ -1185,7 +1268,7 @@ pub mod pallet {
 								event.token_id,
 								event.sender_id,
 								event.receiver,
-								event.amount,
+								event.amount.into(),
 							));
 							result = NotificationResult::AssetGetFailed;
 						}
@@ -1197,7 +1280,7 @@ pub mod pallet {
 							obs_id,
 							result
 						);
-					}
+					},
 				}
 
 				Self::prune_old_histories();
@@ -1210,13 +1293,13 @@ pub mod pallet {
 			match observation.clone() {
 				Observation::UpdateValidatorSet(_) => {
 					return ObservationType::UpdateValidatorSet;
-				}
+				},
 				Observation::Burn(_) => {
 					return ObservationType::Burn;
-				}
+				},
 				Observation::LockAsset(_) => {
 					return ObservationType::LockAsset;
-				}
+				},
 			}
 		}
 
