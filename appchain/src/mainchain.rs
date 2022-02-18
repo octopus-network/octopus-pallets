@@ -90,7 +90,7 @@ impl<T: Config> Pallet<T> {
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log!(warn, "Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			return Err(http::Error::Unknown)
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.
@@ -194,7 +194,7 @@ impl<T: Config> Pallet<T> {
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log!(warn, "Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			return Err(http::Error::Unknown)
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.
@@ -227,6 +227,10 @@ impl<T: Config> Pallet<T> {
 				AppchainNotification::LockAsset(mut event) => {
 					event.index = n.index;
 					obs.push(Observation::LockAsset(event));
+				},
+				AppchainNotification::EnableBridging(mut event) => {
+					event.index = n.index;
+					obs.push(Observation::EnableBridging(event));
 				},
 			}
 		}

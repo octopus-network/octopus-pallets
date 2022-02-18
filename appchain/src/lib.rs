@@ -107,7 +107,24 @@ pub struct ValidatorSet<AccountId> {
 	validators: Vec<Validator<AccountId>>,
 }
 
-/// Appchain token burn event.
+/// Token bridging enable event.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct EnableBridgingEvent {
+	#[serde(default)]
+	index: u32,
+	/// this is token contract in near
+	#[serde(rename = "contract_account")]
+	#[serde(with = "serde_bytes")]
+	token_id: Vec<u8>,
+	/// this is symbol, e.g. WBTC
+	#[serde(rename = "token_symbol")]
+	#[serde(with = "serde_bytes")]
+	symbol: Vec<u8>,
+	/// this is decimals of NEP-141 contract, `u8`
+	decimals: u8,
+}
+
+/// Wrapped Appchain token burn event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnEvent<AccountId> {
 	#[serde(default)]
@@ -151,6 +168,9 @@ pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "WrappedAppchainTokenBurnt")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+
+	#[serde(rename = "NearFungibleTokenBridgingEnabled")]
+	EnableBridging(EnableBridgingEvent),
 }
 
 #[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug, TypeInfo)]
@@ -159,6 +179,7 @@ pub enum NotificationResult {
 	UnlockFailed,
 	AssetMintFailed,
 	AssetGetFailed,
+	TokenMetadataSyncFailed,
 }
 
 impl Default for NotificationResult {
@@ -196,6 +217,7 @@ pub enum Observation<AccountId> {
 	LockAsset(LockAssetEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+	EnableBridging(EnableBridgingEvent),
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -203,6 +225,7 @@ pub enum ObservationType {
 	UpdateValidatorSet,
 	Burn,
 	LockAsset,
+	EnableBridging,
 }
 
 impl<AccountId> Observation<AccountId> {
@@ -211,6 +234,16 @@ impl<AccountId> Observation<AccountId> {
 			Observation::UpdateValidatorSet(set) => set.set_id,
 			Observation::LockAsset(event) => event.index,
 			Observation::Burn(event) => event.index,
+			Observation::EnableBridging(event) => event.index,
+		}
+	}
+
+	fn get_type(&self) -> ObservationType {
+		match self {
+			&Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+			&Observation::Burn(_) => ObservationType::Burn,
+			&Observation::LockAsset(_) => ObservationType::LockAsset,
+			&Observation::EnableBridging(_) => ObservationType::EnableBridging,
 		}
 	}
 }
@@ -285,11 +318,13 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug;
 
-		type Assets: fungibles::Mutate<
-			<Self as frame_system::Config>::AccountId,
-			AssetId = Self::AssetId,
-			Balance = Self::AssetBalance,
-		>;
+		type Assets: fungibles::metadata::Inspect<<Self as frame_system::Config>::AccountId>
+			+ fungibles::metadata::Mutate<<Self as frame_system::Config>::AccountId>
+			+ fungibles::Mutate<
+				<Self as frame_system::Config>::AccountId,
+				AssetId = Self::AssetId,
+				Balance = Self::AssetBalance,
+			>;
 
 		type AssetIdByName: AssetIdAndNameProvider<Self::AssetId>;
 
@@ -446,7 +481,12 @@ pub mod pallet {
 			receiver: T::AccountId,
 			amount: BalanceOf<T>,
 		},
-
+		BridgingEnabled {
+			asset_id: T::AssetId,
+			token_id: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+		},
 		AssetMinted {
 			asset_id: T::AssetId,
 			sender: Vec<u8>,
@@ -465,13 +505,21 @@ pub mod pallet {
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
 		},
+		// I'm not sure whether this would be used for debuging
+		// usually, AssetIdGetFailed just happened because of ƒ(token_id) -> asset_id = none
+		// if not necessay, we should delete these fields
 		AssetIdGetFailed {
 			token_id: Vec<u8>,
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			amount: T::AssetBalance,
+			sender: Option<Vec<u8>>,
+			receiver: Option<T::AccountId>,
+			amount: Option<T::AssetBalance>,
 		},
-
+		TokenMetadataSyncFailed {
+			asset_id: T::AssetId,
+			token_id: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+		},
 		TransferredFromPallet {
 			receiver: T::AccountId,
 			amount: BalanceOf<T>,
@@ -524,18 +572,18 @@ pub mod pallet {
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let anchor_contract = Self::anchor_contract();
-			if !sp_io::offchain::is_validator()
-				|| !IsActivated::<T>::get()
-				|| anchor_contract.is_empty()
+			if !sp_io::offchain::is_validator() ||
+				!IsActivated::<T>::get() ||
+				anchor_contract.is_empty()
 			{
-				return;
+				return
 			}
 
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			if !Self::should_send(block_number) {
-				return;
+				return
 			}
 
 			// Only communicate with mainchain if we are validators.
@@ -580,7 +628,7 @@ pub mod pallet {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into();
+					return InvalidTransaction::BadProof.into()
 				}
 				Self::validate_transaction_parameters(
 					&payload.block_number,
@@ -622,7 +670,7 @@ pub mod pallet {
 					"Not a validator in current validator set: {:?}",
 					payload.public.clone().into_account()
 				);
-				return Err(Error::<T>::NotValidator.into());
+				return Err(Error::<T>::NotValidator.into())
 			}
 			let val_id = val_id.expect("Validator is valid; qed").clone();
 
@@ -786,7 +834,7 @@ pub mod pallet {
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
 			if let Ok(_asset_id) = <AssetIdByName<T>>::try_get(&asset_name) {
-				return Err(Error::<T>::AssetNameHasSet.into());
+				return Err(Error::<T>::AssetNameHasSet.into())
 			}
 
 			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id);
@@ -797,7 +845,7 @@ pub mod pallet {
 					token_id.unwrap(),
 					asset_id
 				);
-				return Err(Error::<T>::AssetIdInUse.into());
+				return Err(Error::<T>::AssetIdInUse.into())
 			}
 
 			<AssetIdByName<T>>::insert(asset_name, asset_id);
@@ -843,6 +891,7 @@ pub mod pallet {
 			}
 		}
 	}
+
 	impl<T: Config> Pallet<T> {
 		fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account()
@@ -872,20 +921,20 @@ pub mod pallet {
 			) {
 				if let Ok(rpc_url) = String::from_utf8(data) {
 					log!(debug, "The configure url is {:?} ", rpc_url.clone());
-					return rpc_url;
+					return rpc_url
 				} else {
 					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::default_rpc_endpoint(is_testnet);
+					return Self::default_rpc_endpoint(is_testnet)
 				}
 			} else {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::default_rpc_endpoint(is_testnet);
+				return Self::default_rpc_endpoint(is_testnet)
 			}
 		}
 
 		fn should_send(block_number: T::BlockNumber) -> bool {
-			/// A friendlier name for the error that is going to be returned in case we are in the grace
-			/// period.
+			/// A friendlier name for the error that is going to be returned in case we are in the
+			/// grace period.
 			const RECENTLY_SENT: () = ();
 
 			// Start off by creating a reference to Local Storage value.
@@ -901,18 +950,19 @@ pub mod pallet {
 			let res =
 				val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
 					match last_send {
-						// If we already have a value in storage and the block number is recent enough
-						// we avoid sending another transaction at this time.
-						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
-							Err(RECENTLY_SENT)
-						},
-						// In every other case we attempt to acquire the lock and send a transaction.
+						// If we already have a value in storage and the block number is recent
+						// enough we avoid sending another transaction at this time.
+						Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+							Err(RECENTLY_SENT),
+						// In every other case we attempt to acquire the lock and send a
+						// transaction.
 						_ => Ok(block_number),
 					}
 				});
 
 			match res {
-				// The value has been set correctly, which means we can safely send a transaction now.
+				// The value has been set correctly, which means we can safely send a transaction
+				// now.
 				Ok(_) => true,
 				// We are in the grace period, we should not send a transaction this time.
 				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
@@ -944,9 +994,9 @@ pub mod pallet {
 				);
 
 				if val_id.is_none() {
-					continue;
+					continue
 				}
-				return Some((public, val_id.unwrap()));
+				return Some((public, val_id.unwrap()))
 			}
 			None
 		}
@@ -1022,7 +1072,7 @@ pub mod pallet {
 
 			if obs.len() == 0 {
 				log!(debug, "No messages from mainchain.");
-				return Ok(());
+				return Ok(())
 			}
 
 			let result = Signer::<T, T::AuthorityId>::all_accounts()
@@ -1036,7 +1086,7 @@ pub mod pallet {
 					|payload, signature| Call::submit_observations { payload, signature },
 				);
 			if result.len() != 1 {
-				return Err("No account found");
+				return Err("No account found")
 			}
 			if result[0].1.is_err() {
 				log!(
@@ -1045,7 +1095,7 @@ pub mod pallet {
 					result[0].1
 				);
 
-				return Err("Failed to submit observations");
+				return Err("Failed to submit observations")
 			}
 
 			Ok(())
@@ -1092,7 +1142,7 @@ pub mod pallet {
 					*next_id = v;
 					log!(debug, "️️️increase next_notification_id{:?} ", v);
 				} else {
-					return Err(Error::<T>::NextNotificationIdOverflow.into());
+					return Err(Error::<T>::NextNotificationIdOverflow.into())
 				}
 				Ok(().into())
 			})
@@ -1103,7 +1153,7 @@ pub mod pallet {
 				if let Some(v) = next_id.checked_add(1) {
 					*next_id = v;
 				} else {
-					return Err(Error::<T>::NextSetIdOverflow.into());
+					return Err(Error::<T>::NextSetIdOverflow.into())
 				}
 				Ok(().into())
 			})
@@ -1123,7 +1173,7 @@ pub mod pallet {
 							obs_id,
 							next_set_id
 						);
-						return Err(Error::<T>::WrongSetId.into());
+						return Err(Error::<T>::WrongSetId.into())
 					}
 				},
 				_ => {
@@ -1137,13 +1187,13 @@ pub mod pallet {
 							next_notification_id,
 							next_notification_id + limit
 						);
-						return Err(Error::<T>::InvalidNotificationId.into());
+						return Err(Error::<T>::InvalidNotificationId.into())
 					}
 				},
 			}
 
-			// The maximum number of observation for the same obs_id is the number of validators (100),
-			// that is, each validator submits a observation.
+			// The maximum number of observation for the same obs_id is the number of validators
+			// (100), that is, each validator submits a observation.
 			let obs = <Observations<T>>::try_get(observation_type, obs_id);
 			if let Ok(obs) = obs {
 				if obs.len() > 100 {
@@ -1153,7 +1203,7 @@ pub mod pallet {
 						obs_id,
 						observation_type
 					);
-					return Err(Error::<T>::ObservationsExceededLimit.into());
+					return Err(Error::<T>::ObservationsExceededLimit.into())
 				}
 			}
 
@@ -1256,6 +1306,53 @@ pub mod pallet {
 						Self::deposit_event(Event::NewPlannedValidators { set_id, validators });
 						Self::increase_next_set_id()?;
 					},
+					Observation::EnableBridging(event) => {
+						Self::increase_next_notification_id()?;
+						let mut result = NotificationResult::Success;
+						if let Ok(asset_id) = T::AssetIdByName::try_get_asset_id(&event.token_id) {
+							log!(
+								info,
+								"️️️sync metadata asset_id:{:?}, external_token_contract:{:?}, symbol:{:?}, decimals:{:?}",
+								asset_id,
+								&event.token_id,
+								&event.symbol,
+								event.decimals,
+							);
+							// use NEP-141 canonical contract to represent name in appchain
+							if let Err(error) =
+								<T::Assets as fungibles::metadata::Mutate<T::AccountId>>::set(
+									asset_id,
+									&Self::account_id(),
+									event.token_id.clone(),
+									event.symbol.clone(),
+									event.decimals,
+								) {
+								log!(warn, "️️️failed to sync token metadata: {:?}", error);
+								Self::deposit_event(Event::TokenMetadataSyncFailed {
+									asset_id,
+									token_id: event.token_id,
+									symbol: event.symbol,
+									decimals: event.decimals,
+								});
+								result = NotificationResult::TokenMetadataSyncFailed;
+							}
+						} else {
+							Self::deposit_event(Event::AssetIdGetFailed {
+								token_id: event.token_id,
+								sender: None,
+								receiver: None,
+								amount: None,
+							});
+							result = NotificationResult::TokenMetadataSyncFailed;
+						}
+						NotificationHistory::<T>::insert(obs_id, result.clone());
+						log!(
+							debug,
+							"save notification result {:?}:{:?} to NotificationHistory ",
+							obs_id,
+							result
+						);
+					},
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
@@ -1312,9 +1409,9 @@ pub mod pallet {
 						} else {
 							Self::deposit_event(Event::AssetIdGetFailed {
 								token_id: event.token_id,
-								sender: event.sender_id,
-								receiver: event.receiver,
-								amount: event.amount.into(),
+								sender: Some(event.sender_id),
+								receiver: Some(event.receiver),
+								amount: Some(event.amount.into()),
 							});
 							result = NotificationResult::AssetGetFailed;
 						}
@@ -1336,16 +1433,11 @@ pub mod pallet {
 		}
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
-			match observation.clone() {
-				Observation::UpdateValidatorSet(_) => {
-					return ObservationType::UpdateValidatorSet;
-				},
-				Observation::Burn(_) => {
-					return ObservationType::Burn;
-				},
-				Observation::LockAsset(_) => {
-					return ObservationType::LockAsset;
-				},
+			match observation {
+				&Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+				&Observation::Burn(_) => ObservationType::Burn,
+				&Observation::LockAsset(_) => ObservationType::LockAsset,
+				&Observation::EnableBridging(_) => ObservationType::EnableBridging,
 			}
 		}
 
@@ -1362,7 +1454,7 @@ pub mod pallet {
 					current_block,
 					block_number
 				);
-				return InvalidTransaction::Future.into();
+				return InvalidTransaction::Future.into()
 			}
 
 			ValidTransaction::with_tag_prefix("OctopusAppchain")
