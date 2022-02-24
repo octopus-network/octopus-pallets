@@ -161,12 +161,6 @@ pub enum NotificationResult {
 	AssetGetFailed,
 }
 
-impl Default for NotificationResult {
-	fn default() -> Self {
-		NotificationResult::Success
-	}
-}
-
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
 where
 	S: Decode,
@@ -375,7 +369,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type NotificationHistory<T: Config> =
-		StorageMap<_, Twox64Concat, u32, NotificationResult, ValueQuery>;
+		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1274,7 +1268,7 @@ pub mod pallet {
 							});
 							result = NotificationResult::UnlockFailed;
 						}
-						NotificationHistory::<T>::insert(obs_id, result.clone());
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							debug,
 							"save notification result {:?}:{:?} to NotificationHistory ",
@@ -1319,7 +1313,7 @@ pub mod pallet {
 							result = NotificationResult::AssetGetFailed;
 						}
 
-						NotificationHistory::<T>::insert(obs_id, result.clone());
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							debug,
 							"save notification result {:?}:{:?} to NotificationHistory ",
