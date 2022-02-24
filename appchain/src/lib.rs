@@ -452,6 +452,7 @@ pub mod pallet {
 			sender: T::AccountId,
 			receiver: Vec<u8>,
 			amount: T::AssetBalance,
+			sequence: u64,
 		},
 		AssetMintFailed {
 			asset_id: T::AssetId,
@@ -755,7 +756,7 @@ pub mod pallet {
 				amount: amount.into(),
 			};
 
-			T::UpwardMessagesInterface::submit(
+			let sequence = T::UpwardMessagesInterface::submit(
 				&sender,
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
@@ -765,6 +766,7 @@ pub mod pallet {
 				sender,
 				receiver: receiver_id.as_bytes().to_vec(),
 				amount,
+				sequence,
 			});
 
 			Ok(().into())
