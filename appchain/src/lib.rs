@@ -429,7 +429,7 @@ pub mod pallet {
 		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
 
 		AssetMinted(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
-		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance),
+		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance, u64),
 		AssetMintFailed(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
 		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, T::AssetBalance),
 		TransferredFromPallet(T::AccountId, BalanceOf<T>),
@@ -718,7 +718,7 @@ pub mod pallet {
 				amount: amount.into(),
 			};
 
-			T::UpwardMessagesInterface::submit(
+			let sequence = T::UpwardMessagesInterface::submit(
 				&sender,
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
@@ -728,6 +728,7 @@ pub mod pallet {
 				sender,
 				receiver_id.as_bytes().to_vec(),
 				amount,
+				sequence,
 			));
 
 			Ok(().into())
