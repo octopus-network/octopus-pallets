@@ -156,12 +156,6 @@ pub enum NotificationResult {
 	AssetGetFailed,
 }
 
-impl Default for NotificationResult {
-	fn default() -> Self {
-		NotificationResult::Success
-	}
-}
-
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
 where
 	S: Decode,
@@ -374,7 +368,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type NotificationHistory<T: Config> =
-		StorageMap<_, Twox64Concat, u32, NotificationResult, ValueQuery>;
+		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -435,7 +429,7 @@ pub mod pallet {
 		UnlockFailed(Vec<u8>, T::AccountId, BalanceOf<T>),
 
 		AssetMinted(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
-		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance),
+		AssetBurned(T::AssetId, T::AccountId, Vec<u8>, T::AssetBalance, u64),
 		AssetMintFailed(T::AssetId, Vec<u8>, T::AccountId, T::AssetBalance),
 		AssetIdGetFailed(Vec<u8>, Vec<u8>, T::AccountId, T::AssetBalance),
 		TransferredFromPallet(T::AccountId, BalanceOf<T>),
@@ -724,7 +718,7 @@ pub mod pallet {
 				amount: amount.into(),
 			};
 
-			T::UpwardMessagesInterface::submit(
+			let sequence = T::UpwardMessagesInterface::submit(
 				&sender,
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
@@ -734,6 +728,7 @@ pub mod pallet {
 				sender,
 				receiver_id.as_bytes().to_vec(),
 				amount,
+				sequence,
 			));
 
 			Ok(().into())
@@ -1228,7 +1223,7 @@ pub mod pallet {
 							));
 							result = NotificationResult::UnlockFailed;
 						}
-						NotificationHistory::<T>::insert(obs_id, result.clone());
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							debug,
 							"save notification result {:?}:{:?} to NotificationHistory ",
@@ -1273,7 +1268,7 @@ pub mod pallet {
 							result = NotificationResult::AssetGetFailed;
 						}
 
-						NotificationHistory::<T>::insert(obs_id, result.clone());
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							debug,
 							"save notification result {:?}:{:?} to NotificationHistory ",
