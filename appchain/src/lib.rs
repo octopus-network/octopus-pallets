@@ -1260,7 +1260,11 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.amount,
 						) {
-							log!(info, "️️️failed to unlock native token: {:?}", error);
+							log!(warn, "️️️failed to unlock native token, send_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+							event.sender_id.clone(),
+							event.receiver.clone(),
+							event.amount,
+							error);
 							let min = T::Currency::minimum_balance();
 							let amount_unwrapped = event.amount.checked_into().unwrap_or(min); //Check: should not return error.
 							Self::deposit_event(Event::UnlockFailed {
@@ -1296,7 +1300,12 @@ pub mod pallet {
 								event.receiver.clone(),
 								event.amount.into(),
 							) {
-								log!(warn, "️️️failed to mint asset: {:?}", error);
+								log!(warn, "️️️failed to mint asset, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+								asset_id,
+								event.sender_id.clone(),
+								event.receiver.clone(),
+								event.amount,
+								error);
 								Self::deposit_event(Event::AssetMintFailed {
 									asset_id,
 									sender: event.sender_id,
@@ -1306,6 +1315,11 @@ pub mod pallet {
 								result = NotificationResult::AssetMintFailed;
 							}
 						} else {
+							log!(
+								warn,
+								"️️️failed to mint asset, token_id: {:?}, error: AssetIdGetFailed",
+								event.token_id
+							);
 							Self::deposit_event(Event::AssetIdGetFailed {
 								token_id: event.token_id,
 								sender: event.sender_id,
