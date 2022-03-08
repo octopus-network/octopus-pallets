@@ -1077,9 +1077,7 @@ pub mod pallet {
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						obs = Self::get_appchain_notification_histories(
-							&Self::bsngate_rpc_endpoint(
-								anchor_contract[anchor_contract.len() - 1] == 116,
-							), // last byte is 't'
+							mainchain_bakup_rpc_endpoint,
 							anchor_contract,
 							next_notification_id,
 							T::RequestEventLimit::get(),
