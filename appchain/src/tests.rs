@@ -1,15 +1,10 @@
-use crate::mock::*;
-use crate::Error;
-use crate::*;
+use crate::{mock::*, Error, *};
 use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keyring::{sr25519::Keyring, AccountKeyring};
-use sp_keystore::{
-	testing::KeyStore,
-	{KeystoreExt, SyncCryptoStore},
-};
+use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
 use sp_runtime::{
 	traits::{BadOrigin, Verify},
 	MultiSigner,

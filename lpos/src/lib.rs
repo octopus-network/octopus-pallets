@@ -136,7 +136,7 @@ where
 	) -> Option<<T as frame_system::Config>::AccountId> {
 		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
 		if who.is_none() {
-			return None;
+			return None
 		}
 
 		Self::validators().into_iter().find(|v| {
@@ -184,8 +184,8 @@ pub mod pallet {
 
 		/// Time used for computing era duration.
 		///
-		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
-		/// is not used.
+		/// It is guaranteed to start being called from the first `on_finalize`. Thus value at
+		/// genesis is not used.
 		type UnixTime: UnixTime;
 
 		/// Something that provides the next validators.
@@ -393,11 +393,11 @@ pub mod pallet {
 		BadTarget,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
-		/// There are too many nominators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many nominators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validators in the system. Governance needs to adjust the staking settings
-		/// to keep things safe for the runtime.
+		/// There are too many validators in the system. Governance needs to adjust the staking
+		/// settings to keep things safe for the runtime.
 		TooManyValidators,
 		/// There are not claimed rewards for this validator.
 		NoClaimedRewards,
@@ -413,7 +413,8 @@ pub mod pallet {
 				if active_era.start.is_none() {
 					let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 					active_era.start = Some(now_as_millis_u64);
-					// This write only ever happens once, we don't include it in the weight in general
+					// This write only ever happens once, we don't include it in the weight in
+					// general
 					ActiveEra::<T>::put(active_era);
 				}
 			}
@@ -428,10 +429,10 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `new_history_depth`: The new history depth you would like to set.
-		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch.
-		///    This should report all the storage items that will be deleted by clearing old
-		///    era history. Needed to report an accurate weight for the dispatch. Trusted by
-		///    `Root` to report an accurate number.
+		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch. This
+		///   should report all the storage items that will be deleted by clearing old era history.
+		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
+		///   accurate number.
 		///
 		/// Origin must be root.
 		///
@@ -442,7 +443,8 @@ pub mod pallet {
 		///     - Reads: Current Era, History Depth
 		///     - Writes: History Depth
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
-		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
+		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
+		///       ErasStartSessionIndex
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth, *_era_items_deleted))]
 		pub fn set_history_depth(
@@ -496,8 +498,8 @@ impl<T: Config> Pallet<T> {
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				// The 5th session of the era.
-				if T::AppchainInterface::is_activated()
-					&& (era_length == T::SessionsPerEra::get() - 1)
+				if T::AppchainInterface::is_activated() &&
+					(era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
 					let message = PlanNewEraPayload { new_era: next_set_id };
@@ -514,7 +516,7 @@ impl<T: Config> Pallet<T> {
 						Self::deposit_event(Event::<T>::PlanNewEraFailed);
 					}
 				}
-				return None;
+				return None
 			}
 
 			// New era.
@@ -624,14 +626,14 @@ impl<T: Config> Pallet<T> {
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-			return;
+			return
 		}
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
 				log!(warn, "era reward {:?} has already been paid", active_era.index);
-				return;
+				return
 			}
 
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
