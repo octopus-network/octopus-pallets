@@ -77,7 +77,7 @@ fn test_force_set_params() {
 #[test]
 fn test_set_asset_name() {
 	let alice: AccountId = AccountKeyring::Alice.into();
-	let origin = Origin::signed(alice.clone());
+	let _origin = Origin::signed(alice.clone());
 	new_tester().execute_with(|| {
 		assert_noop!(
 			OctopusAppchain::set_asset_name(

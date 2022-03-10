@@ -96,7 +96,7 @@ fn test_submit_exceeds_queue_limit() {
 
 		let messages_limit = UpwardMessagesLimit::get();
 		(0..messages_limit).for_each(|_| {
-			OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]).unwrap()
+			OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]).unwrap();
 		});
 
 		assert_noop!(

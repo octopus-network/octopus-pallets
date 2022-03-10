@@ -7,6 +7,7 @@ use frame_system::RawOrigin;
 #[allow(unused_imports)]
 use crate::Pallet as OctopusAppchain;
 
+#[allow(dead_code)]
 fn get_public<T: Config>() -> (T::Public, T::Signature) {
 	let key = <T::AuthorityId as AppCrypto<
 		<T as SigningTypes>::Public,
@@ -26,6 +27,7 @@ fn get_public<T: Config>() -> (T::Public, T::Signature) {
 	(public, sig)
 }
 
+#[allow(dead_code)]
 pub fn expected_burn_notify<T: Config>() -> Observation<T::AccountId> {
 	let receiver = hex::decode("94f135526ec5fe830e0cbc6fd58683cb2d9ee06522cd9a2c0481268c5c73674f")
 		.map(|b| T::AccountId::decode(&mut &b[..]))
@@ -40,6 +42,7 @@ pub fn expected_burn_notify<T: Config>() -> Observation<T::AccountId> {
 	})
 }
 
+#[allow(dead_code)]
 fn create_payload_and_signature<T: Config>(
 ) -> (ObservationsPayload<T::Public, T::BlockNumber, T::AccountId>, T::Signature) {
 	let (public, msig) = get_public::<T>();
