@@ -1348,15 +1348,9 @@ pub mod pallet {
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
 			match observation.clone() {
-				Observation::UpdateValidatorSet(_) => {
-					return ObservationType::UpdateValidatorSet
-				},
-				Observation::Burn(_) => {
-					return ObservationType::Burn
-				},
-				Observation::LockAsset(_) => {
-					return ObservationType::LockAsset
-				},
+				Observation::UpdateValidatorSet(_) => return ObservationType::UpdateValidatorSet,
+				Observation::Burn(_) => return ObservationType::Burn,
+				Observation::LockAsset(_) => return ObservationType::LockAsset,
 			}
 		}
 
