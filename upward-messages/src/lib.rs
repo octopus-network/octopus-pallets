@@ -109,7 +109,7 @@ pub mod pallet {
 		fn commit() -> Weight {
 			let messages: Vec<Message> = MessageQueue::<T>::take();
 			if messages.is_empty() {
-				return 0;
+				return 0
 			}
 
 			let encoded_messages = messages.encode();
@@ -164,7 +164,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 			if let Some(v) = nonce.checked_add(1) {
 				*nonce = v;
 			} else {
-				return Err(Error::<T>::NonceOverflow.into());
+				return Err(Error::<T>::NonceOverflow.into())
 			}
 
 			MessageQueue::<T>::append(Message {

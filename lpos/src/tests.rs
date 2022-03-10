@@ -1,5 +1,4 @@
-use crate::mock::*;
-use crate::*;
+use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
 use sp_keyring::AccountKeyring;
 use sp_runtime::traits::{BadOrigin, Zero};
