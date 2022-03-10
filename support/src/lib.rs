@@ -3,6 +3,7 @@
 pub mod traits;
 pub mod types;
 
+#[allow(dead_code)]
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-support";
 
 // syntactic sugar for logging.

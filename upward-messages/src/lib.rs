@@ -44,6 +44,7 @@ pub struct Message {
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
+#[allow(dead_code)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
