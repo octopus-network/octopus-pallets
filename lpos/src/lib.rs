@@ -483,7 +483,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+	fn new_session(session_index: SessionIndex, _is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -586,7 +586,7 @@ impl<T: Config> Pallet<T> {
 				let first_kept = active_era - bonding_duration;
 
 				// Prune out everything that's from before the first-kept index.
-				let n_to_prune =
+				let _n_to_prune =
 					bonded.iter().take_while(|&&(era_idx, _)| era_idx < first_kept).count();
 
 				if let Some(&(_, first_session)) = bonded.first() {
@@ -893,13 +893,13 @@ where
 	>,
 {
 	fn on_offence(
-		offenders: &[OffenceDetails<
+		_offenders: &[OffenceDetails<
 			T::AccountId,
 			pallet_session::historical::IdentificationTuple<T>,
 		>],
-		slash_fraction: &[Perbill],
-		slash_session: SessionIndex,
-		disable_strategy: DisableStrategy,
+		_slash_fraction: &[Perbill],
+		_slash_session: SessionIndex,
+		_disable_strategy: DisableStrategy,
 	) -> Weight {
 		0
 	}

@@ -232,7 +232,13 @@ parameter_types! {
 	   pub const UpwardMessagesLimit: u32 = 10;
 }
 
+pub type AssetId = u32;
+pub type AssetBalance = u128;
+
 impl pallet_octopus_appchain::Config for Test {
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type AssetIdByName = OctopusAppchain;
 	type AuthorityId = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
