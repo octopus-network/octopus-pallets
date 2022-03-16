@@ -645,6 +645,7 @@ pub mod pallet {
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
+			log!(info, "️️️force set next_set_id, next_set_id is : {:?} ", NextSetId::<T>::get());
 			Ok(())
 		}
 
@@ -1087,7 +1088,7 @@ pub mod pallet {
 			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
 				if let Some(v) = next_id.checked_add(1) {
 					*next_id = v;
-					log!(debug, "️️️increase next_notification_id{:?} ", v);
+					log!(debug, "️️️increase next_notification_id: {:?} ", v);
 				} else {
 					return Err(Error::<T>::NextNotificationIdOverflow.into())
 				}
@@ -1099,6 +1100,7 @@ pub mod pallet {
 			NextSetId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
 				if let Some(v) = next_id.checked_add(1) {
 					*next_id = v;
+					log!(debug, "️️️increase next_set_id: {:?} ", v);
 				} else {
 					return Err(Error::<T>::NextSetIdOverflow.into())
 				}
@@ -1252,6 +1254,11 @@ pub mod pallet {
 						let set_id = NextSetId::<T>::get();
 						Self::deposit_event(Event::NewPlannedValidators { set_id, validators });
 						Self::increase_next_set_id()?;
+						log!(
+							info,
+							"️️️processed updata validator set, next_set_id is : {:?} ",
+							NextSetId::<T>::get()
+						);
 					},
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
@@ -1281,6 +1288,11 @@ pub mod pallet {
 							"save notification result {:?}:{:?} to NotificationHistory ",
 							obs_id,
 							result
+						);
+						log!(
+							info,
+							"️️️processed burn observation, next_notification_id is : {:?} ",
+							NextNotificationId::<T>::get()
 						);
 					},
 					Observation::LockAsset(event) => {
@@ -1336,6 +1348,11 @@ pub mod pallet {
 							"save notification result {:?}:{:?} to NotificationHistory ",
 							obs_id,
 							result
+						);
+						log!(
+							info,
+							"️️️processed lock observation, next_notification_id is : {:?} ",
+							NextNotificationId::<T>::get()
 						);
 					},
 				}
