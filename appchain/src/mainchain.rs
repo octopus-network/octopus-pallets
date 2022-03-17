@@ -89,7 +89,7 @@ impl<T: Config> Pallet<T> {
 		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			log!(warn, "Unexpected status code: {}", response.code);
+			log!(warn, "Unexpected status code when get validator: {}", response.code);
 			return Err(http::Error::Unknown)
 		}
 
@@ -193,7 +193,7 @@ impl<T: Config> Pallet<T> {
 		let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			log!(warn, "Unexpected status code: {}", response.code);
+			log!(warn, "Unexpected status code when get notification: {}", response.code);
 			return Err(http::Error::Unknown)
 		}
 
