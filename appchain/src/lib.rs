@@ -53,6 +53,7 @@ pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 mod mainchain;
+mod version;
 pub mod weights;
 
 #[cfg(test)]
@@ -371,6 +372,9 @@ pub mod pallet {
 	pub type NotificationHistory<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type OctopusPalletVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
@@ -638,6 +642,7 @@ pub mod pallet {
 		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
 			ensure_root(origin)?;
 			<IsActivated<T>>::put(is_activated);
+			Self::set_version();
 			Ok(())
 		}
 
