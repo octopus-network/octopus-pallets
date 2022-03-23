@@ -1,5 +1,6 @@
-use super::*;
-use crate::{self as pallet_octopus_appchain, traits_default_impl::ExampleConvertor};
+#![cfg(test)]
+use pallet_octopus_appchain::traits_default_impl::ExampleConvertor;
+
 use sp_runtime::{
 	generic, impl_opaque_keys,
 	testing::TestXt,
@@ -74,7 +75,6 @@ impl pallet_timestamp::Config for Test {
 	type Moment = Moment;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
-	// type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Test>;
 	type WeightInfo = ();
 }
 
@@ -92,7 +92,6 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	// type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
 	type WeightInfo = ();
 }
 
@@ -176,7 +175,7 @@ parameter_types! {
 pub type AssetId = u32;
 pub type AssetBalance = u128;
 
-impl pallet_assets::Config for Test {
+impl pallet_assets::Config<pallet_assets::Instance1> for Test {
 	type Event = Event;
 	type Balance = AssetBalance;
 	type AssetId = AssetId;
@@ -246,7 +245,7 @@ construct_runtime!(
 		OctopusLpos: pallet_octopus_lpos::{Pallet, Call, Config, Storage, Event<T>},
 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Assets: pallet_assets::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -284,7 +283,7 @@ parameter_types! {
 	   pub const UpwardMessagesLimit: u32 = 10;
 }
 
-impl Config for Test {
+impl pallet_octopus_appchain::Config for Test {
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
 	type AssetIdByName = OctopusAppchain;
@@ -305,6 +304,8 @@ impl Config for Test {
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
 }
+
+impl crate::Config for Test {}
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};
 
@@ -333,7 +334,7 @@ pub fn advance_session() {
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
 }
 
-pub fn new_tester() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
@@ -365,3 +366,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
+// pub fn new_test_ext() -> sp_io::TestExternalities {
+// 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+// 	sp_io::TestExternalities::new(t)
+// }

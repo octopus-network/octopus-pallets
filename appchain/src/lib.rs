@@ -8,12 +8,12 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 
 use borsh::BorshSerialize;
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Decode, Encode, HasCompact};
 use frame_support::{
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	sp_std::fmt::Debug,
 	traits::{
-		tokens::fungibles,
+		tokens::{fungibles, nonfungibles},
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		OneSessionHandler, StorageVersion,
@@ -27,10 +27,10 @@ use frame_system::offchain::{
 use pallet_octopus_support::{
 	log,
 	traits::{
-		AppchainInterface, AssetIdAndNameProvider, LposInterface, UpwardMessagesInterface,
-		ValidatorsProvider,
+		AppchainInterface, AssetIdAndNameProvider, ConvertIntoNep171, LposInterface,
+		UpwardMessagesInterface, ValidatorsProvider,
 	},
-	types::{BurnAssetPayload, LockPayload, PayloadType},
+	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
 };
 use scale_info::TypeInfo;
 use serde::{de, Deserialize, Deserializer};
@@ -55,14 +55,13 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
 mod mainchain;
+pub mod traits_default_impl;
 pub mod weights;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-
-mod benchmarking;
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -125,6 +124,26 @@ pub struct BurnEvent<AccountId> {
 	amount: u128,
 }
 
+/// Appchain token burn event.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct BurnNftEvent<AccountId> {
+	#[serde(default)]
+	index: u32,
+	#[serde(rename = "sender_id_in_near")]
+	#[serde(with = "serde_bytes")]
+	sender_id: Vec<u8>,
+	#[serde(rename = "receiver_id_in_appchain")]
+	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	receiver: AccountId,
+	#[serde(rename = "class_id")]
+	#[serde(deserialize_with = "deserialize_from_str")]
+	class: u128,
+	#[serde(rename = "instance_id")]
+	#[serde(deserialize_with = "deserialize_from_str")]
+	instance: u128,
+}
+
 /// Token locked event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct LockAssetEvent<AccountId> {
@@ -144,6 +163,26 @@ pub struct LockAssetEvent<AccountId> {
 	amount: u128,
 }
 
+/// Appchain token lock event.
+#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct LockNftEvent<AccountId> {
+	#[serde(default)]
+	index: u32,
+	#[serde(rename = "sender_id_in_near")]
+	#[serde(with = "serde_bytes")]
+	sender_id: Vec<u8>,
+	#[serde(rename = "receiver_id_in_appchain")]
+	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	receiver: AccountId,
+	#[serde(rename = "class_id")]
+	#[serde(deserialize_with = "deserialize_from_str")]
+	class: u128,
+	#[serde(rename = "token_id")]
+	#[serde(deserialize_with = "deserialize_from_str")]
+	instance: u128,
+}
+
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "NearFungibleTokenLocked")]
@@ -153,6 +192,14 @@ pub enum AppchainNotification<AccountId> {
 	#[serde(rename = "WrappedAppchainTokenBurnt")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+
+	#[serde(rename = "WrappedNonFungibleTokenBurnt")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	BurnNft(BurnNftEvent<AccountId>),
+
+	#[serde(rename = "WrappedAppchainNFTLocked")]
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	LockNft(LockNftEvent<AccountId>),
 }
 
 #[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug, TypeInfo)]
@@ -161,6 +208,7 @@ pub enum NotificationResult {
 	UnlockFailed,
 	AssetMintFailed,
 	AssetGetFailed,
+	NftUnlockFailed,
 }
 
 fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -192,6 +240,10 @@ pub enum Observation<AccountId> {
 	LockAsset(LockAssetEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	BurnNft(BurnNftEvent<AccountId>),
+	#[serde(bound(deserialize = "AccountId: Decode"))]
+	LockNft(LockNftEvent<AccountId>),
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -199,6 +251,8 @@ pub enum ObservationType {
 	UpdateValidatorSet,
 	Burn,
 	LockAsset,
+	BurnNft,
+	LockNft,
 }
 
 impl<AccountId> Observation<AccountId> {
@@ -207,6 +261,8 @@ impl<AccountId> Observation<AccountId> {
 			Observation::UpdateValidatorSet(set) => set.set_id,
 			Observation::LockAsset(event) => event.index,
 			Observation::Burn(event) => event.index,
+			Observation::BurnNft(event) => event.index,
+			Observation::LockNft(event) => event.index,
 		}
 	}
 }
@@ -292,6 +348,24 @@ pub mod pallet {
 		type LposInterface: LposInterface<Self::AccountId>;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
+
+		/// Identifier for the class of nft asset.
+		type ClassId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
+
+		/// The type used to identify a unique nft asset within an asset class.
+		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
+
+		type Uniques: nonfungibles::Inspect<
+				Self::AccountId,
+				InstanceId = Self::InstanceId,
+				ClassId = Self::ClassId,
+			> + nonfungibles::Transfer<
+				Self::AccountId,
+				InstanceId = Self::InstanceId,
+				ClassId = Self::ClassId,
+			>;
+
+		type Convertor: ConvertIntoNep171<ClassId = Self::ClassId, InstanceId = Self::InstanceId>;
 
 		// Configuration parameters
 
@@ -481,6 +555,28 @@ pub mod pallet {
 			receiver: T::AccountId,
 			amount: BalanceOf<T>,
 		},
+
+		NftLocked {
+			sender: T::AccountId,
+			receiver: Vec<u8>,
+			class: T::ClassId,
+			instance: T::InstanceId,
+			sequence: u64,
+		},
+
+		NftUnlocked {
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			class: T::ClassId,
+			instance: T::InstanceId,
+		},
+
+		NftUnlockFailed {
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			class: T::ClassId,
+			instance: T::InstanceId,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -514,6 +610,8 @@ pub mod pallet {
 		AssetNameHasSet,
 		/// Asset id in use.
 		AssetIdInUse,
+		/// Not implement nep171 convertor.
+		ConvertorNotImplement,
 	}
 
 	#[pallet::hooks]
@@ -722,7 +820,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::mint_asset())]
 		#[transactional]
 		pub fn mint_asset(
 			origin: OriginFor<T>,
@@ -737,7 +835,7 @@ pub mod pallet {
 			Self::mint_asset_inner(asset_id, sender_id, receiver, amount)
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::burn_asset())]
 		#[transactional]
 		pub fn burn_asset(
 			origin: OriginFor<T>,
@@ -783,7 +881,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_asset_name())]
 		pub fn set_asset_name(
 			origin: OriginFor<T>,
 			asset_name: Vec<u8>,
@@ -812,7 +910,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::tranfer_from_pallet_account())]
 		pub fn tranfer_from_pallet_account(
 			origin: OriginFor<T>,
 			receiver: <T::Lookup as StaticLookup>::Source,
@@ -828,6 +926,61 @@ pub mod pallet {
 			Self::deposit_event(Event::TransferredFromPallet { receiver, amount });
 
 			Ok(())
+		}
+
+		// nft cross chain transfer:
+		// mainchain:mint() <- appchain:lock_nft()
+		// mainchain:burn() -> appchain:unlock_nft()
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn lock_nft(
+			origin: OriginFor<T>,
+			class: T::ClassId,
+			instance: T::InstanceId,
+			receiver_id: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
+
+			let receiver_id =
+				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
+
+			let metadata = match T::Convertor::convert_into_nep171_metadata(class, instance) {
+				Some(data) => data,
+				None => return Err(Error::<T>::ConvertorNotImplement.into()),
+			};
+
+			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+				&class,
+				&instance,
+				&Self::account_id(),
+			)?;
+
+			let prefix = String::from("0x");
+			let hex_sender = prefix + &hex::encode(who.encode());
+
+			let message = LockNftPayload {
+				sender: hex_sender.clone(),
+				receiver_id: receiver_id.clone(),
+				class: class.into(),
+				instance: instance.into(),
+				metadata,
+			};
+
+			let sequence = T::UpwardMessagesInterface::submit(
+				&who,
+				PayloadType::LockNft,
+				&message.try_to_vec().unwrap(),
+			)?;
+			Self::deposit_event(Event::NftLocked {
+				sender: who,
+				receiver: receiver_id.as_bytes().to_vec(),
+				class,
+				instance,
+				sequence,
+			});
+
+			Ok(().into())
 		}
 	}
 
@@ -1294,14 +1447,10 @@ pub mod pallet {
 						}
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
-							debug,
-							"save notification result {:?}:{:?} to NotificationHistory ",
-							obs_id,
-							result
-						);
-						log!(
 							info,
-							"️️️processed burn observation, next_notification_id is : {:?} ",
+							"️️️processed burn observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?} ",
+							obs_id,
+							result,
 							NextNotificationId::<T>::get()
 						);
 					},
@@ -1354,15 +1503,60 @@ pub mod pallet {
 
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
-							debug,
-							"save notification result {:?}:{:?} to NotificationHistory ",
+							info,
+							"️️️processed lock observation, obs_id is: {:?}, result is: {:?}, next_notification_id is : {:?} ",
 							obs_id,
-							result
+							result,
+							NextNotificationId::<T>::get()
 						);
+					},
+					Observation::BurnNft(_event) => {
+						Self::increase_next_notification_id()?;
+						let result = NotificationResult::Success;
+
+						//to do: for burn nft later
+
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							info,
-							"️️️processed lock observation, next_notification_id is : {:?} ",
-							NextNotificationId::<T>::get()
+							"️️️processed burn_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
+							obs_id,
+							result,
+							NextNotificationId::<T>::get(),
+						);
+					},
+					Observation::LockNft(event) => {
+						Self::increase_next_notification_id()?;
+						let mut result = NotificationResult::Success;
+						if let Err(error) = Self::unlock_nft_inner(
+							event.sender_id.clone(),
+							event.receiver.clone(),
+							event.class.into(),
+							event.instance.into(),
+						) {
+							log!(warn, "️️️failed to unlock nft, send_id: {:?}, receiver: {:?}, class: {:?}, instance: {:?}, error: {:?}",
+							event.sender_id.clone(),
+							event.receiver.clone(),
+							event.class,
+							event.instance,
+							error);
+
+							Self::deposit_event(Event::NftUnlockFailed {
+								sender: event.sender_id,
+								receiver: event.receiver,
+								class: event.class.into(),
+								instance: event.instance.into(),
+							});
+
+							result = NotificationResult::NftUnlockFailed;
+						}
+						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
+						log!(
+							info,
+							"️️️processed lock_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
+							obs_id,
+							result,
+							NextNotificationId::<T>::get(),
 						);
 					},
 				}
@@ -1378,6 +1572,8 @@ pub mod pallet {
 				Observation::UpdateValidatorSet(_) => return ObservationType::UpdateValidatorSet,
 				Observation::Burn(_) => return ObservationType::Burn,
 				Observation::LockAsset(_) => return ObservationType::LockAsset,
+				Observation::BurnNft(_) => return ObservationType::BurnNft,
+				Observation::LockNft(_) => return ObservationType::LockNft,
 			}
 		}
 
@@ -1419,6 +1615,26 @@ pub mod pallet {
 				// claim a reward.
 				.propagate(true)
 				.build()
+		}
+
+		fn unlock_nft_inner(
+			sender_id: Vec<u8>,
+			receiver: T::AccountId,
+			class: T::ClassId,
+			instance: T::InstanceId,
+		) -> DispatchResultWithPostInfo {
+			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+				&class, &instance, &receiver,
+			)?;
+
+			Self::deposit_event(Event::NftUnlocked {
+				sender: sender_id,
+				receiver,
+				class,
+				instance,
+			});
+
+			Ok(().into())
 		}
 	}
 

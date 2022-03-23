@@ -258,6 +258,42 @@ fn test_lock() {
 	});
 }
 
+#[test]
+pub fn test_lock_nft() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let origin = Origin::signed(alice.clone());
+	new_tester().execute_with(|| {
+		assert_ok!(Uniques::force_create(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(alice.clone()),
+			true
+		));
+		assert_ok!(Uniques::mint(
+			origin.clone(),
+			0,
+			42,
+			sp_runtime::MultiAddress::Id(alice.clone()),
+		));
+		assert_noop!(
+			OctopusAppchain::lock_nft(
+				origin.clone(),
+				0,
+				42,
+				"test-account.testnet".to_string().as_bytes().to_vec(),
+			),
+			Error::<Test>::NotActivated
+		);
+		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		assert_ok!(OctopusAppchain::lock_nft(
+			origin.clone(),
+			0,
+			42,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+		));
+	});
+}
+
 pub fn mock_payload_and_signature(
 	keyring: Keyring,
 ) -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature) {

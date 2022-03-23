@@ -1,3 +1,4 @@
+use crate::types::Nep171TokenMetadata;
 use frame_support::dispatch::DispatchError;
 use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
@@ -36,4 +37,24 @@ pub trait UpwardMessagesInterface<AccountId> {
 		payload_type: crate::types::PayloadType,
 		payload: &[u8],
 	) -> Result<u64, DispatchError>;
+}
+
+pub trait ConvertIntoNep171 {
+	type ClassId;
+	type InstanceId;
+	fn convert_into_nep171_metadata(
+		class: Self::ClassId,
+		instance: Self::InstanceId,
+	) -> Option<Nep171TokenMetadata>;
+}
+
+impl ConvertIntoNep171 for () {
+	type ClassId = u128;
+	type InstanceId = u128;
+	fn convert_into_nep171_metadata(
+		_class: Self::ClassId,
+		_instance: Self::InstanceId,
+	) -> Option<Nep171TokenMetadata> {
+		None
+	}
 }
