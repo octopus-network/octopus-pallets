@@ -1,49 +1,28 @@
-use std::{fs::File, io::prelude::*};
-
-fn get_git_hash() -> Option<String> {
-	use std::process::Command;
-	let commit = Command::new("git").arg("rev-parse").arg("HEAD").output();
-	if let Ok(commit_output) = commit {
-		let commit_hash = String::from_utf8_lossy(&commit_output.stdout);
-		return Some(commit_hash.into())
-	}
-	None
-}
-
-fn set_version_to_octopus_pallet() {
-	let version = get_git_hash().expect("Get commit hash error.");
-	let mut f = File::create("./src/version.rs").unwrap();
-
-	let mut content = br#"
-use super::*;
-impl<T: Config> Pallet<T> {
-    pub(super) fn set_version() {"#
-		.to_vec();
-
-	content.extend(
-		br#"
-        let v = 
-        ""#,
-	);
-	content.extend(&version.as_bytes().to_vec());
-	content.extend(br#"".trim();"#);
-	content.extend(
-		br#"
-		let v1 = hex::decode(v).expect("Decoding failed");"#,
-	);
-	content.extend(
-		br#"
-		<OctopusPalletVersion<T>>::put(v1);"#,
-	);
-	content.extend(
-		br#"
-    }
-}"#,
-	);
-
-	f.write_all(&content).unwrap();
-}
+use std::{env, fs::File, io::Write, path::Path, process::Command};
 
 fn main() {
-	set_version_to_octopus_pallet();
+	write_git_version();
+}
+
+fn write_git_version() {
+	let maybe_hash = get_git_hash();
+	let git_hash = maybe_hash.as_deref().unwrap_or("baaaaaad");
+
+	let dest_path = Path::new(&env::var("OUT_DIR").unwrap()).join("git_version");
+
+	let mut file = File::create(&dest_path).unwrap();
+	write!(file, "{}", git_hash).unwrap();
+
+	// TODO: are these right?
+	println!("cargo:rerun-if-changed=.git/HEAD");
+	println!("cargo:rerun-if-changed=.git/index");
+}
+
+fn get_git_hash() -> Option<String> {
+	let head = Command::new("git").arg("rev-parse").arg("HEAD").output();
+	if let Ok(h) = head {
+		let h = String::from_utf8_lossy(&h.stdout).trim().to_string();
+		return Some(h)
+	}
+	None
 }

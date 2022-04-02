@@ -52,8 +52,9 @@ pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
+pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
+
 mod mainchain;
-mod version;
 pub mod weights;
 
 #[cfg(test)]
@@ -372,8 +373,13 @@ pub mod pallet {
 	pub type NotificationHistory<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
+	#[pallet::type_value]
+	pub fn DefaultForGitVersion() -> Vec<u8> {
+		hex::decode(GIT_VERSION).unwrap_or_default()
+	}
+
 	#[pallet::storage]
-	pub type OctopusPalletVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery>;
+	pub type GitVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery, DefaultForGitVersion>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -642,7 +648,6 @@ pub mod pallet {
 		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
 			ensure_root(origin)?;
 			<IsActivated<T>>::put(is_activated);
-			Self::set_version();
 			Ok(())
 		}
 
