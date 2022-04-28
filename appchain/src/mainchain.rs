@@ -232,10 +232,6 @@ impl<T: Config> Pallet<T> {
 					event.index = n.index;
 					obs.push(Observation::BurnNft(event));
 				},
-				AppchainNotification::LockNft(mut event) => {
-					event.index = n.index;
-					obs.push(Observation::LockNft(event));
-				},
 			}
 		}
 

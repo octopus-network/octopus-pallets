@@ -124,25 +124,25 @@ pub struct BurnEvent<AccountId> {
 	amount: u128,
 }
 
-/// Appchain token burn event.
-#[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct BurnNftEvent<AccountId> {
-	#[serde(default)]
-	index: u32,
-	#[serde(rename = "sender_id_in_near")]
-	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
-	#[serde(rename = "receiver_id_in_appchain")]
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
-	#[serde(rename = "class_id")]
-	#[serde(deserialize_with = "deserialize_from_str")]
-	class: u128,
-	#[serde(rename = "instance_id")]
-	#[serde(deserialize_with = "deserialize_from_str")]
-	instance: u128,
-}
+// /// Appchain token burn event.
+// #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+// pub struct BurnNftEvent<AccountId> {
+// 	#[serde(default)]
+// 	index: u32,
+// 	#[serde(rename = "sender_id_in_near")]
+// 	#[serde(with = "serde_bytes")]
+// 	sender_id: Vec<u8>,
+// 	#[serde(rename = "receiver_id_in_appchain")]
+// 	#[serde(deserialize_with = "deserialize_from_hex_str")]
+// 	#[serde(bound(deserialize = "AccountId: Decode"))]
+// 	receiver: AccountId,
+// 	#[serde(rename = "class_id")]
+// 	#[serde(deserialize_with = "deserialize_from_str")]
+// 	class: u128,
+// 	#[serde(rename = "instance_id")]
+// 	#[serde(deserialize_with = "deserialize_from_str")]
+// 	instance: u128,
+// }
 
 /// Token locked event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -165,7 +165,7 @@ pub struct LockAssetEvent<AccountId> {
 
 /// Appchain token lock event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct LockNftEvent<AccountId> {
+pub struct BurnNftEvent<AccountId> {
 	#[serde(default)]
 	index: u32,
 	#[serde(rename = "sender_id_in_near")]
@@ -193,13 +193,10 @@ pub enum AppchainNotification<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	Burn(BurnEvent<AccountId>),
 
-	#[serde(rename = "WrappedNonFungibleTokenBurnt")]
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	BurnNft(BurnNftEvent<AccountId>),
-
+	// #[serde(rename = "WrappedNonFungibleTokenBurnt")]
 	#[serde(rename = "WrappedAppchainNFTLocked")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	LockNft(LockNftEvent<AccountId>),
+	BurnNft(BurnNftEvent<AccountId>),
 }
 
 #[derive(PartialEq, Encode, Decode, Clone, RuntimeDebug, TypeInfo)]
@@ -242,8 +239,6 @@ pub enum Observation<AccountId> {
 	Burn(BurnEvent<AccountId>),
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	BurnNft(BurnNftEvent<AccountId>),
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	LockNft(LockNftEvent<AccountId>),
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -252,7 +247,6 @@ pub enum ObservationType {
 	Burn,
 	LockAsset,
 	BurnNft,
-	LockNft,
 }
 
 impl<AccountId> Observation<AccountId> {
@@ -262,7 +256,6 @@ impl<AccountId> Observation<AccountId> {
 			Observation::LockAsset(event) => event.index,
 			Observation::Burn(event) => event.index,
 			Observation::BurnNft(event) => event.index,
-			Observation::LockNft(event) => event.index,
 		}
 	}
 }
@@ -1510,24 +1503,10 @@ pub mod pallet {
 							NextNotificationId::<T>::get()
 						);
 					},
-					Observation::BurnNft(_event) => {
-						Self::increase_next_notification_id()?;
-						let result = NotificationResult::Success;
-
-						//to do: for burn nft later
-
-						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
-						log!(
-							info,
-							"️️️processed burn_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
-							obs_id,
-							result,
-							NextNotificationId::<T>::get(),
-						);
-					},
-					Observation::LockNft(event) => {
+					Observation::BurnNft(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
+
 						if let Err(error) = Self::unlock_nft_inner(
 							event.sender_id.clone(),
 							event.receiver.clone(),
@@ -1550,10 +1529,11 @@ pub mod pallet {
 
 							result = NotificationResult::NftUnlockFailed;
 						}
+
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
 						log!(
 							info,
-							"️️️processed lock_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
+							"️️️processed burn_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
 							obs_id,
 							result,
 							NextNotificationId::<T>::get(),
@@ -1573,7 +1553,6 @@ pub mod pallet {
 				Observation::Burn(_) => return ObservationType::Burn,
 				Observation::LockAsset(_) => return ObservationType::LockAsset,
 				Observation::BurnNft(_) => return ObservationType::BurnNft,
-				Observation::LockNft(_) => return ObservationType::LockNft,
 			}
 		}
 
