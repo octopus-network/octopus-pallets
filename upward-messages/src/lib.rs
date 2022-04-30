@@ -34,7 +34,7 @@ mod tests;
 
 mod benchmarking;
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct Message {
 	nonce: u64,
 	payload_type: PayloadType,
@@ -70,6 +70,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -110,7 +111,7 @@ pub mod pallet {
 		fn commit() -> Weight {
 			let messages: Vec<Message> = MessageQueue::<T>::take();
 			if messages.is_empty() {
-				return 0
+				return 0;
 			}
 
 			let encoded_messages = messages.encode();
@@ -147,7 +148,7 @@ pub mod pallet {
 
 impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
 	fn submit(
-		_who: &T::AccountId,
+		_who: Option<T::AccountId>,
 		payload_type: PayloadType,
 		payload: &[u8],
 	) -> Result<u64, DispatchError> {
@@ -165,7 +166,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 			if let Some(v) = nonce.checked_add(1) {
 				*nonce = v;
 			} else {
-				return Err(Error::<T>::NonceOverflow.into())
+				return Err(Error::<T>::NonceOverflow.into());
 			}
 
 			MessageQueue::<T>::append(Message {

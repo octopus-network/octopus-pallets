@@ -90,7 +90,7 @@ impl<T: Config> Pallet<T> {
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log!(warn, "Unexpected status code when get validator: {}", response.code);
-			return Err(http::Error::Unknown)
+			return Err(http::Error::Unknown);
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.
@@ -194,7 +194,7 @@ impl<T: Config> Pallet<T> {
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log!(warn, "Unexpected status code when get notification: {}", response.code);
-			return Err(http::Error::Unknown)
+			return Err(http::Error::Unknown);
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes.

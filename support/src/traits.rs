@@ -33,7 +33,7 @@ pub trait LposInterface<AccountId> {
 
 pub trait UpwardMessagesInterface<AccountId> {
 	fn submit(
-		who: &AccountId,
+		who: Option<AccountId>,
 		payload_type: crate::types::PayloadType,
 		payload: &[u8],
 	) -> Result<u64, DispatchError>;

@@ -80,12 +80,18 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
 	individual: BTreeMap<AccountId, RewardPoint>,
+}
+
+impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
+	fn default() -> Self {
+		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.
@@ -136,7 +142,7 @@ where
 	) -> Option<<T as frame_system::Config>::AccountId> {
 		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
 		if who.is_none() {
-			return None
+			return None;
 		}
 
 		Self::validators().into_iter().find(|v| {
@@ -174,6 +180,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -498,14 +505,14 @@ impl<T: Config> Pallet<T> {
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				// The 5th session of the era.
-				if T::AppchainInterface::is_activated() &&
-					(era_length == T::SessionsPerEra::get() - 1)
+				if T::AppchainInterface::is_activated()
+					&& (era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
 					let message = PlanNewEraPayload { new_era: next_set_id };
 
 					let res = T::UpwardMessagesInterface::submit(
-						&T::AccountId::default(),
+						None,
 						PayloadType::PlanNewEra,
 						&message.try_to_vec().unwrap(),
 					);
@@ -516,7 +523,7 @@ impl<T: Config> Pallet<T> {
 						Self::deposit_event(Event::<T>::PlanNewEraFailed);
 					}
 				}
-				return None
+				return None;
 			}
 
 			// New era.
@@ -626,14 +633,14 @@ impl<T: Config> Pallet<T> {
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-			return
+			return;
 		}
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
 				log!(warn, "era reward {:?} has already been paid", active_era.index);
-				return
+				return;
 			}
 
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -666,7 +673,7 @@ impl<T: Config> Pallet<T> {
 			log!(debug, "Will send EraPayout message, era_payout is {:?}", <EraPayout<T>>::get());
 
 			let res = T::UpwardMessagesInterface::submit(
-				&T::AccountId::default(),
+				None,
 				PayloadType::EraPayout,
 				&message.try_to_vec().unwrap(),
 			);
@@ -856,8 +863,13 @@ where
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 1)])
 	}
-	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 1), (author, 1)])
+	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
+		// defensive-only: block author must exist.
+		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(block_author, 1), (uncle_author, 1)])
+		} else {
+			crate::log!(warn, "block author not set, this should never happen");
+		}
 	}
 }
 

@@ -22,7 +22,7 @@ fn get_git_hash() -> Option<String> {
 	let head = Command::new("git").arg("rev-parse").arg("HEAD").output();
 	if let Ok(h) = head {
 		let h = String::from_utf8_lossy(&h.stdout).trim().to_string();
-		return Some(h)
+		return Some(h);
 	}
 	None
 }

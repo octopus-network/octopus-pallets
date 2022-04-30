@@ -306,6 +306,7 @@ pub mod pallet {
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
 
+		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
 		type Currency: Currency<Self::AccountId>;
@@ -385,6 +386,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -433,8 +435,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn pallet_account)]
-	pub type PalletAccount<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
+	#[pallet::getter(fn octopus_pallet_id)]
+	pub type OctopusPalletId<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type NotificationHistory<T: Config> =
@@ -482,7 +484,7 @@ pub mod pallet {
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
-			<PalletAccount<T>>::put(account_id);
+			<OctopusPalletId<T>>::put(Some(account_id));
 			for (token_id, id) in self.asset_id_by_name.iter() {
 				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
 			}
@@ -620,18 +622,18 @@ pub mod pallet {
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let anchor_contract = Self::anchor_contract();
-			if !sp_io::offchain::is_validator() ||
-				!IsActivated::<T>::get() ||
-				anchor_contract.is_empty()
+			if !sp_io::offchain::is_validator()
+				|| !IsActivated::<T>::get()
+				|| anchor_contract.is_empty()
 			{
-				return
+				return;
 			}
 
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log!(debug, "Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			if !Self::should_send(block_number) {
-				return
+				return;
 			}
 
 			// Only communicate with mainchain if we are validators.
@@ -676,7 +678,7 @@ pub mod pallet {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into()
+					return InvalidTransaction::BadProof.into();
 				}
 				Self::validate_transaction_parameters(
 					&payload.block_number,
@@ -718,7 +720,7 @@ pub mod pallet {
 					"Not a validator in current validator set: {:?}",
 					payload.public.clone().into_account()
 				);
-				return Err(Error::<T>::NotValidator.into())
+				return Err(Error::<T>::NotValidator.into());
 			}
 			let val_id = val_id.expect("Validator is valid; qed").clone();
 
@@ -799,7 +801,7 @@ pub mod pallet {
 			};
 
 			let sequence = T::UpwardMessagesInterface::submit(
-				&who,
+				Some(who.clone()),
 				PayloadType::Lock,
 				&message.try_to_vec().unwrap(),
 			)?;
@@ -859,7 +861,7 @@ pub mod pallet {
 			};
 
 			let sequence = T::UpwardMessagesInterface::submit(
-				&sender,
+				Some(sender.clone()),
 				PayloadType::BurnAsset,
 				&message.try_to_vec().unwrap(),
 			)?;
@@ -884,7 +886,7 @@ pub mod pallet {
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
 			if let Ok(_asset_id) = <AssetIdByName<T>>::try_get(&asset_name) {
-				return Err(Error::<T>::AssetNameHasSet.into())
+				return Err(Error::<T>::AssetNameHasSet.into());
 			}
 
 			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id);
@@ -895,7 +897,7 @@ pub mod pallet {
 					token_id.unwrap(),
 					asset_id
 				);
-				return Err(Error::<T>::AssetIdInUse.into())
+				return Err(Error::<T>::AssetIdInUse.into());
 			}
 
 			<AssetIdByName<T>>::insert(asset_name, asset_id);
@@ -961,7 +963,7 @@ pub mod pallet {
 			};
 
 			let sequence = T::UpwardMessagesInterface::submit(
-				&who,
+				Some(who.clone()),
 				PayloadType::LockNft,
 				&message.try_to_vec().unwrap(),
 			)?;
@@ -997,7 +999,7 @@ pub mod pallet {
 		}
 	}
 	impl<T: Config> Pallet<T> {
-		fn account_id() -> T::AccountId {
+		pub fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account()
 		}
 
@@ -1025,14 +1027,14 @@ pub mod pallet {
 			) {
 				if let Ok(rpc_url) = String::from_utf8(data) {
 					log!(debug, "The configure url is {:?} ", rpc_url.clone());
-					return rpc_url
+					return rpc_url;
 				} else {
 					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::default_rpc_endpoint(is_testnet)
+					return Self::default_rpc_endpoint(is_testnet);
 				}
 			} else {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::default_rpc_endpoint(is_testnet)
+				return Self::default_rpc_endpoint(is_testnet);
 			}
 		}
 
@@ -1056,8 +1058,9 @@ pub mod pallet {
 					match last_send {
 						// If we already have a value in storage and the block number is recent
 						// enough we avoid sending another transaction at this time.
-						Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-							Err(RECENTLY_SENT),
+						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
+							Err(RECENTLY_SENT)
+						},
 						// In every other case we attempt to acquire the lock and send a
 						// transaction.
 						_ => Ok(block_number),
@@ -1098,9 +1101,9 @@ pub mod pallet {
 				);
 
 				if val_id.is_none() {
-					continue
+					continue;
 				}
-				return Some((public, val_id.unwrap()))
+				return Some((public, val_id.unwrap()));
 			}
 			None
 		}
@@ -1176,7 +1179,7 @@ pub mod pallet {
 
 			if obs.len() == 0 {
 				log!(debug, "No messages from mainchain.");
-				return Ok(())
+				return Ok(());
 			}
 
 			let result = Signer::<T, T::AuthorityId>::all_accounts()
@@ -1190,7 +1193,7 @@ pub mod pallet {
 					|payload, signature| Call::submit_observations { payload, signature },
 				);
 			if result.len() != 1 {
-				return Err("No account found")
+				return Err("No account found");
 			}
 			if result[0].1.is_err() {
 				log!(
@@ -1199,7 +1202,7 @@ pub mod pallet {
 					result[0].1
 				);
 
-				return Err("Failed to submit observations")
+				return Err("Failed to submit observations");
 			}
 
 			Ok(())
@@ -1246,7 +1249,7 @@ pub mod pallet {
 					*next_id = v;
 					log!(debug, "️️️increase next_notification_id: {:?} ", v);
 				} else {
-					return Err(Error::<T>::NextNotificationIdOverflow.into())
+					return Err(Error::<T>::NextNotificationIdOverflow.into());
 				}
 				Ok(().into())
 			})
@@ -1258,7 +1261,7 @@ pub mod pallet {
 					*next_id = v;
 					log!(debug, "️️️increase next_set_id: {:?} ", v);
 				} else {
-					return Err(Error::<T>::NextSetIdOverflow.into())
+					return Err(Error::<T>::NextSetIdOverflow.into());
 				}
 				Ok(().into())
 			})
@@ -1278,7 +1281,7 @@ pub mod pallet {
 							obs_id,
 							next_set_id
 						);
-						return Err(Error::<T>::WrongSetId.into())
+						return Err(Error::<T>::WrongSetId.into());
 					}
 				},
 				_ => {
@@ -1292,7 +1295,7 @@ pub mod pallet {
 							next_notification_id,
 							next_notification_id + limit
 						);
-						return Err(Error::<T>::InvalidNotificationId.into())
+						return Err(Error::<T>::InvalidNotificationId.into());
 					}
 				},
 			}
@@ -1308,7 +1311,7 @@ pub mod pallet {
 						obs_id,
 						observation_type
 					);
-					return Err(Error::<T>::ObservationsExceededLimit.into())
+					return Err(Error::<T>::ObservationsExceededLimit.into());
 				}
 			}
 
@@ -1569,7 +1572,7 @@ pub mod pallet {
 					current_block,
 					block_number
 				);
-				return InvalidTransaction::Future.into()
+				return InvalidTransaction::Future.into();
 			}
 
 			ValidTransaction::with_tag_prefix("OctopusAppchain")
