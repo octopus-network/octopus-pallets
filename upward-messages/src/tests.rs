@@ -1,5 +1,8 @@
 use super::*;
-use frame_support::{assert_noop, assert_ok, parameter_types};
+use frame_support::{
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 
 use sp_core::H256;
 use sp_keyring::AccountKeyring;
@@ -29,26 +32,22 @@ frame_support::construct_runtime!(
 pub type Signature = MultiSignature;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
-
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -57,6 +56,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
@@ -82,9 +82,17 @@ pub fn new_tester() -> sp_io::TestExternalities {
 fn test_submit() {
 	new_tester().execute_with(|| {
 		let who: AccountId = AccountKeyring::Alice.into();
-		assert_ok!(OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]));
+		assert_ok!(OctopusUpwardMessages::submit(
+			Some(who.clone()),
+			PayloadType::Lock,
+			&vec![0, 1, 2]
+		));
 		assert_eq!(<Nonce<Test>>::get(), 1);
-		assert_ok!(OctopusUpwardMessages::submit(&who, PayloadType::BurnAsset, &vec![0, 1, 2]));
+		assert_ok!(OctopusUpwardMessages::submit(
+			Some(who),
+			PayloadType::BurnAsset,
+			&vec![0, 1, 2]
+		));
 		assert_eq!(<Nonce<Test>>::get(), 2);
 	});
 }
@@ -96,11 +104,12 @@ fn test_submit_exceeds_queue_limit() {
 
 		let messages_limit = UpwardMessagesLimit::get();
 		(0..messages_limit).for_each(|_| {
-			OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]).unwrap();
+			OctopusUpwardMessages::submit(Some(who.clone()), PayloadType::Lock, &vec![0, 1, 2])
+				.unwrap();
 		});
 
 		assert_noop!(
-			OctopusUpwardMessages::submit(&who, PayloadType::BurnAsset, &vec![0, 1, 2]),
+			OctopusUpwardMessages::submit(Some(who), PayloadType::BurnAsset, &vec![0, 1, 2]),
 			Error::<Test>::QueueSizeLimitReached,
 		);
 	})
@@ -113,7 +122,7 @@ fn test_submit_fails_on_nonce_overflow() {
 
 		<Nonce<Test>>::set(u64::MAX);
 		assert_noop!(
-			OctopusUpwardMessages::submit(&who, PayloadType::Lock, &vec![0, 1, 2]),
+			OctopusUpwardMessages::submit(Some(who), PayloadType::Lock, &vec![0, 1, 2]),
 			Error::<Test>::NonceOverflow,
 		);
 	});

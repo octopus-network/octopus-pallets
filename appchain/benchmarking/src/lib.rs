@@ -16,12 +16,13 @@ use pallet_octopus_appchain::{
 use pallet_octopus_support::traits::{
 	AppchainInterface, AssetIdAndNameProvider, ValidatorsProvider,
 };
-use pallet_uniques::Config as UniquesConfig;
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion, StaticLookup};
 
 pub struct Pallet<T: Config>(pallet_octopus_appchain::Pallet<T>);
-pub trait Config: AppchainConfig + pallet_assets::Config<pallet_assets::Instance1>
-// + UniquesConfig
+pub trait Config:
+	AppchainConfig
+	+ pallet_assets::Config<pallet_assets::Instance1>
+	+ pallet_uniques::Config<pallet_uniques::Instance1>
 {
 }
 
@@ -40,6 +41,36 @@ fn create_default_asset<T: pallet_assets::Config<I>, I: 'static>(
 	)
 	.is_ok());
 	(caller, caller_lookup)
+}
+
+fn create_default_nft_class<T: pallet_uniques::Config<I>, I: 'static>(
+	class_id: T::ClassId,
+	is_free: bool,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+	let caller: T::AccountId = whitelisted_caller();
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let root = RawOrigin::Root.into();
+
+	assert!(pallet_uniques::Pallet::<T, I>::force_create(
+		root,
+		class_id,
+		caller_lookup.clone(),
+		is_free,
+	)
+	.is_ok());
+	(caller, caller_lookup)
+}
+
+fn mint_default_nft<T: pallet_uniques::Config<I>, I: 'static>(
+	class_id: T::ClassId,
+	instance_id: T::InstanceId,
+	owner: <T::Lookup as StaticLookup>::Source,
+) {
+	let receiver = T::Lookup::lookup(owner.clone()).unwrap();
+	let origin = RawOrigin::Signed(receiver.clone());
+	assert!(
+		pallet_uniques::Pallet::<T, I>::mint(origin.into(), class_id, instance_id, owner).is_ok()
+	);
 }
 
 fn assert_last_event<T: AppchainConfig>(generic_event: <T as AppchainConfig>::Event) {
@@ -90,7 +121,7 @@ benchmarks! {
 	}
 
 	lock {
-		let account = AppchainPallet::<T>::pallet_account();
+		let account = AppchainPallet::<T>::octopus_pallet_id().unwrap();
 		let pallet_account: OriginFor<T> = RawOrigin::Signed(account).into();
 		let min = <T as AppchainConfig>::Currency::minimum_balance();
 		AppchainPallet::<T>::force_set_is_activated(RawOrigin::Root.into(), true).unwrap();
@@ -154,7 +185,7 @@ benchmarks! {
 	}: {
 		let origin = RawOrigin::Signed(receiver.clone());
 		let _ = AppchainPallet::<T>::burn_asset(
-			origin.clone().into(),
+			origin.into(),
 			0u32.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			10000u32.into()
@@ -164,7 +195,7 @@ benchmarks! {
 		assert_last_event::<T>(AppchainEvent::AssetBurned {
 			asset_id: 0u32.into(),
 			sender: receiver.into(),
-			   receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
+			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
 			amount: 10000u32.into(),
 			sequence: 1u64,
 		}
@@ -224,9 +255,30 @@ benchmarks! {
 		.into());
 	}
 
-	// lock_nft {
-
-	// }
+	lock_nft {
+		AppchainPallet::<T>::force_set_is_activated(RawOrigin::Root.into(), true).unwrap();
+		let (caller, receiver) = create_default_nft_class::<T, pallet_uniques::Instance1>(Default::default(), true);
+		mint_default_nft::<T, pallet_uniques::Instance1>(Default::default(), Default::default(), receiver.clone());
+		let receiver = T::Lookup::lookup(receiver).unwrap();
+	}: {
+		let origin = RawOrigin::Signed(receiver.clone());
+		let _ = AppchainPallet::<T>::lock_nft(
+			origin.into(),
+			Default::default(),
+			Default::default(),
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+		);
+	}
+	verify {
+		assert_last_event::<T>(AppchainEvent::NftLocked{
+			sender: receiver.into(),
+			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
+			class: Default::default(),
+			instance: Default::default(),
+			sequence: 1u64,
+		}
+		.into());
+	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);
 }
