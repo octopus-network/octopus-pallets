@@ -229,16 +229,6 @@ fn test_lock() {
 			Error::<Test>::InvalidReceiverId
 		);
 
-		// TODO:
-		// assert_noop!(
-		// 	OctopusAppchain::lock(
-		// 		origin.clone(),
-		// 		"test-account.testnet".to_string().as_bytes().to_vec(),
-		// 		100000000000000000000000000000
-		// 	),
-		// 	Error::<Test>::AmountOverflow
-		// );
-
 		assert_noop!(
 			OctopusAppchain::lock(
 				origin.clone(),
@@ -248,7 +238,7 @@ fn test_lock() {
 			BalancesError::<Test>::InsufficientBalance
 		);
 
-		let account = OctopusAppchain::pallet_account();
+		let account = OctopusAppchain::octopus_pallet_id().unwrap();
 		let pallet_account = Origin::signed(account);
 		assert_ok!(OctopusAppchain::lock(
 			pallet_account.clone(),

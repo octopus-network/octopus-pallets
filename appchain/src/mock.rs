@@ -14,7 +14,10 @@ pub use frame_support::{
 	construct_runtime,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness, StorageInfo},
+	traits::{
+		ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness,
+		StorageInfo,
+	},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
 };
@@ -65,6 +68,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
@@ -183,6 +187,7 @@ impl pallet_assets::Config for Test {
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = ConstU128<DOLLARS>;
 	type MetadataDepositBase = MetadataDepositBase;
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
