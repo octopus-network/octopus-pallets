@@ -58,3 +58,7 @@ impl ConvertIntoNep171 for () {
 		None
 	}
 }
+
+pub trait GetMmrRootHash {
+	fn get_mmr_root_hash() -> sp_core::H256;
+}
