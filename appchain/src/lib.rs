@@ -286,7 +286,7 @@ impl<T: Config> AppchainInterface for Pallet<T> {
 }
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -660,6 +660,41 @@ pub mod pallet {
 					log!(warn, "Not a validator, skipping offchain worker");
 				},
 			}
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration in octopus appchain pallet with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 1 && onchain == 0 {
+				let translated = 1u64;
+				let account = <Pallet<T>>::account_id();
+				OctopusPalletId::<T>::put(Some(account));
+
+				log!(info, "updating to version 1 ",);
+
+				current.put::<Pallet<T>>();
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else {
+				log!(
+					info,
+					"MigrateToV1 being executed on the wrong storage version, expected V0_0_0"
+				);
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Ok(())
 		}
 	}
 
