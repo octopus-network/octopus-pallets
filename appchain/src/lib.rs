@@ -55,6 +55,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
 mod mainchain;
+pub mod migrations;
 pub mod traits_default_impl;
 pub mod weights;
 
@@ -286,7 +287,7 @@ impl<T: Config> AppchainInterface for Pallet<T> {
 }
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
