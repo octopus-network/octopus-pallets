@@ -1038,17 +1038,17 @@ pub mod pallet {
 			T::PalletId::get().into_account()
 		}
 
-		fn bsngate_rpc_endpoint(is_testnet: bool) -> String {
+		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://ca.bsngate.com/api/8803b555a830c4d2ac680a7fdefc46aeb7738c4f6f0513f0aec328768ad71002/Near-Testnet/rpc".to_string()
+				"https://rpc.testnet.near.org".to_string()
 			} else {
-				"https://ca.bsngate.com/api/edc6aab2f13e1dc049fab8b4bcae29cdae53ce84df2d8b352f9497f290a697e2/Near-Mainnet/rpc".to_string()
+				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
 			}
 		}
 
-		fn default_rpc_endpoint(is_testnet: bool) -> String {
+		fn primary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://rpc.testnet.near.org".to_string()
+				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
 			} else {
 				"https://rpc.mainnet.near.org".to_string()
 			}
@@ -1065,11 +1065,11 @@ pub mod pallet {
 					return rpc_url
 				} else {
 					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::default_rpc_endpoint(is_testnet)
+					return Self::primary_rpc_endpoint(is_testnet)
 				}
 			} else {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::default_rpc_endpoint(is_testnet)
+				return Self::primary_rpc_endpoint(is_testnet)
 			}
 		}
 
@@ -1170,7 +1170,7 @@ pub mod pallet {
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
 					obs = Self::get_validator_list_of(
-						&Self::bsngate_rpc_endpoint(
+						&Self::secondary_rpc_endpoint(
 							anchor_contract[anchor_contract.len() - 1] == 116,
 						), // last byte is 't'
 						anchor_contract.clone(),
@@ -1199,7 +1199,7 @@ pub mod pallet {
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						obs = Self::get_appchain_notification_histories(
-							&Self::bsngate_rpc_endpoint(
+							&Self::secondary_rpc_endpoint(
 								anchor_contract[anchor_contract.len() - 1] == 116,
 							), // last byte is 't'
 							anchor_contract,
