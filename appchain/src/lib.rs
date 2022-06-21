@@ -525,6 +525,7 @@ pub mod pallet {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
+			sequence: Option<u32>,
 		},
 		AssetBurned {
 			asset_id: T::AssetId,
@@ -538,6 +539,7 @@ pub mod pallet {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
+			sequence: Option<u32>,
 		},
 		AssetIdGetFailed {
 			token_id: Vec<u8>,
@@ -862,7 +864,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			let receiver = T::Lookup::lookup(receiver)?;
-			Self::mint_asset_inner(asset_id, sender_id, receiver, amount)
+			Self::mint_asset_inner(asset_id, sender_id, receiver, amount, None)
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::burn_asset())]
@@ -1265,6 +1267,7 @@ pub mod pallet {
 			sender_id: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
+			sequence: Option<u32>,
 		) -> DispatchResultWithPostInfo {
 			<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(asset_id, &receiver, amount)?;
 			Self::deposit_event(Event::AssetMinted {
@@ -1272,6 +1275,7 @@ pub mod pallet {
 				sender: sender_id,
 				receiver,
 				amount,
+				sequence,
 			});
 
 			Ok(().into())
@@ -1496,11 +1500,13 @@ pub mod pallet {
 								event.receiver,
 								event.amount,
 							);
+							let sequence = event.index;
 							if let Err(error) = Self::mint_asset_inner(
 								asset_id,
 								event.sender_id.clone(),
 								event.receiver.clone(),
 								event.amount.into(),
+								Some(sequence),
 							) {
 								log!(warn, "️️️failed to mint asset, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
 								asset_id,
@@ -1513,6 +1519,7 @@ pub mod pallet {
 									sender: event.sender_id,
 									receiver: event.receiver,
 									amount: event.amount.into(),
+									sequence: Some(sequence),
 								});
 								result = NotificationResult::AssetMintFailed;
 							}
