@@ -27,7 +27,7 @@ use frame_system::offchain::{
 use pallet_octopus_support::{
 	log,
 	traits::{
-		AppchainInterface, AssetIdAndNameProvider, ConvertIntoNep171, LposInterface,
+		AppchainInterface, ConvertIntoNep171, LposInterface, TokenIdAndAssetIdProvider,
 		UpwardMessagesInterface, ValidatorsProvider,
 	},
 	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
@@ -337,7 +337,7 @@ pub mod pallet {
 			Balance = Self::AssetBalance,
 		>;
 
-		type AssetIdByName: AssetIdAndNameProvider<Self::AssetId>;
+		type AssetIdByTokenId: TokenIdAndAssetIdProvider<Self::AssetId>;
 
 		type LposInterface: LposInterface<Self::AccountId>;
 
@@ -400,9 +400,17 @@ pub mod pallet {
 	pub(super) type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
+	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
-	pub type AssetIdByName<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
+	pub(super) type AssetIdByTokenId<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		Vec<u8>,
+		T::AssetId,
+		OptionQuery,
+		GetDefault,
+		ConstU32<300_000>,
+	>;
 
 	/// Whether the appchain is activated.
 	///
@@ -455,7 +463,7 @@ pub mod pallet {
 		pub anchor_contract: String,
 		pub validators: Vec<(T::AccountId, u128)>,
 		pub premined_amount: u128,
-		pub asset_id_by_name: Vec<(String, T::AssetId)>,
+		pub asset_id_by_token_id: Vec<(String, T::AssetId)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -465,7 +473,7 @@ pub mod pallet {
 				anchor_contract: String::new(),
 				validators: Vec::new(),
 				premined_amount: 0,
-				asset_id_by_name: Vec::new(),
+				asset_id_by_token_id: Vec::new(),
 			}
 		}
 	}
@@ -485,8 +493,8 @@ pub mod pallet {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
 			<OctopusPalletId<T>>::put(Some(account_id));
-			for (token_id, id) in self.asset_id_by_name.iter() {
-				<AssetIdByName<T>>::insert(token_id.as_bytes(), id);
+			for (token_id, asset_id) in self.asset_id_by_token_id.iter() {
+				<AssetIdByTokenId<T>>::insert(token_id.as_bytes(), asset_id);
 			}
 		}
 	}
@@ -589,8 +597,10 @@ pub mod pallet {
 		AmountOverflow,
 		/// Next notification Id overflow.
 		NextNotificationIdOverflow,
-		/// Wrong Asset Id.
-		WrongAssetId,
+		/// Token Id not exist.
+		NoTokenId,
+		/// Asset Id not exist.
+		NoAssetId,
 		/// Invalid active total stake.
 		InvalidActiveTotalStake,
 		/// Appchain is not activated.
@@ -603,9 +613,9 @@ pub mod pallet {
 		NextSetIdOverflow,
 		/// Observations exceeded limit.
 		ObservationsExceededLimit,
-		/// Asset name has been set.
-		AssetNameHasSet,
-		/// Asset id in use.
+		/// Token Id in use.
+		TokenIdInUse,
+		/// Asset Id in use.
 		AssetIdInUse,
 		/// Not implement nep171 convertor.
 		ConvertorNotImplement,
@@ -881,8 +891,8 @@ pub mod pallet {
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-			let token_id = T::AssetIdByName::try_get_asset_name(asset_id)
-				.map_err(|_| Error::<T>::WrongAssetId)?;
+			let token_id = T::AssetIdByTokenId::try_get_token_id(asset_id)
+				.map_err(|_| Error::<T>::NoAssetId)?;
 
 			let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
@@ -914,30 +924,25 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::set_asset_name())]
-		pub fn set_asset_name(
+		pub fn set_token_id(
 			origin: OriginFor<T>,
-			asset_name: Vec<u8>,
+			token_id: Vec<u8>,
 			asset_id: T::AssetId,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
-			if let Ok(_asset_id) = <AssetIdByName<T>>::try_get(&asset_name) {
-				return Err(Error::<T>::AssetNameHasSet.into())
-			}
-
-			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id);
-			if token_id.is_some() {
-				log!(
-					debug,
-					"Set asset name error, asset name: {:?} has used asset_id: {:?}!",
-					token_id.unwrap(),
-					asset_id
-				);
+			ensure!(
+				!AssetIdByTokenId::<T>::contains_key(token_id.clone()),
+				Error::<T>::TokenIdInUse
+			);
+			let asset = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id);
+			if asset.is_some() {
+				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset.unwrap(),);
 				return Err(Error::<T>::AssetIdInUse.into())
 			}
 
-			<AssetIdByName<T>>::insert(asset_name, asset_id);
+			<AssetIdByTokenId<T>>::insert(token_id, asset_id);
 
 			Ok(())
 		}
@@ -1016,22 +1021,20 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> AssetIdAndNameProvider<T::AssetId> for Pallet<T> {
+	impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
 		type Err = Error<T>;
 
-		fn try_get_asset_id(name: impl AsRef<[u8]>) -> Result<<T as Config>::AssetId, Self::Err> {
-			let asset_id = <AssetIdByName<T>>::try_get(name.as_ref().to_vec());
-			match asset_id {
-				Ok(id) => Ok(id),
-				_ => Err(Error::<T>::InvalidTokenId),
-			}
+		fn try_get_asset_id(
+			token_id: impl AsRef<[u8]>,
+		) -> Result<<T as Config>::AssetId, Self::Err> {
+			<AssetIdByTokenId<T>>::get(token_id.as_ref().to_vec()).ok_or(Error::<T>::NoTokenId)
 		}
 
-		fn try_get_asset_name(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
-			let token_id = <AssetIdByName<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
+		fn try_get_token_id(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
+			let token_id = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
 			match token_id {
 				Some(id) => Ok(id),
-				_ => Err(Error::<T>::WrongAssetId),
+				_ => Err(Error::<T>::NoAssetId),
 			}
 		}
 	}
@@ -1491,7 +1494,8 @@ pub mod pallet {
 					Observation::LockAsset(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
-						if let Ok(asset_id) = T::AssetIdByName::try_get_asset_id(&event.token_id) {
+						if let Ok(asset_id) = T::AssetIdByTokenId::try_get_asset_id(&event.token_id)
+						{
 							log!(
 								info,
 								"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
