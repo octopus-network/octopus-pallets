@@ -1,9 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 mod mock;
 
-extern crate alloc;
-
-use alloc::string::ToString;
+use scale_info::prelude::string::ToString;
 use frame_benchmarking::{
 	benchmarks,
 	frame_support::traits::{Currency, Get},

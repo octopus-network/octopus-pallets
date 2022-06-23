@@ -1,12 +1,9 @@
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::string::{String, ToString};
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
+use scale_info::{
+	TypeInfo,
+	prelude::string::String
+};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
