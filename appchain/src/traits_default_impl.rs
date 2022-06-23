@@ -149,3 +149,149 @@ where
 		Some(metadata)
 	}
 }
+
+// For the definition of base metadata, please refer to the following document:
+// 		https://github.com/rmrk-team/rmrk-spec/blob/master/standards/rmrk2.0.0/entities/metadata.md#schema-definition
+#[derive(Deserialize, RuntimeDebug)]
+struct RmrkBaseMetadata {
+	// NFT name, required
+	name: String,
+	// General notes, abstracts, or summaries about the contents of an NFT.
+	#[serde(default)]
+	description: String,
+	// A broad definition of the type of content of the NFT.
+	#[serde(default)]
+	types: String,
+	// Metadata locale in ISO 639-1 format. For translations and localisation. e.g. en-GB, en, fr
+	#[serde(default)]
+	locale: String,
+	// A statement about the NFT license.
+	#[serde(default)]
+	license: String,
+	// A URI to a statement of license.
+	#[serde(default)]
+	#[serde(rename = "licenseUri")]
+	license_uri: String,
+	// A URI to a main media file of the NFT.
+	#[serde(default)]
+	#[serde(rename = "mediaUri")]
+	media_uri: String,
+	// A URI to an image of the NFT for wallets and client applications to have a scaled down image
+	// to present to end-users.
+	#[serde(default)]
+	#[serde(rename = "thumbnailUri")]
+	thumbnail_uri: String,
+	// A URI with additional information about the subject or content of the NFT.
+	#[serde(default)]
+	#[serde(rename = "externalUri")]
+	external_uri: String,
+	// Custom attributes about the subject or content of the asset.
+	// properties (object)
+}
+
+pub struct RmrkBaseMetadataConvertor<T>(sp_std::marker::PhantomData<T>);
+impl<T> ConvertIntoNep171 for RmrkBaseMetadataConvertor<T>
+where
+	T: Config,
+{
+	type ClassId = <T as Config>::ClassId;
+	type InstanceId = <T as Config>::InstanceId;
+
+	fn convert_into_nep171_metadata(
+		class: Self::ClassId,
+		instance: Self::InstanceId,
+	) -> Option<Nep171TokenMetadata> {
+		let mut data: Vec<u8> = Vec::new();
+		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+			&class,
+			&instance,
+			&vec![],
+		) {
+			data.extend(attribute);
+		}
+
+		if data.is_empty() {
+			return None
+		}
+
+		let json_str = match String::from_utf8(data.clone()) {
+			Ok(v) => v,
+			Err(_) => {
+				log!(debug, "Parse metadata error, input is {:?} ", data);
+				return None
+			},
+		};
+
+		log!(debug, "The metadata is {:?} ", json_str.clone());
+
+		// parse vec to rmrk base metadata
+		let rmrk_metadata: RmrkBaseMetadata = match serde_json::from_str(&json_str) {
+			Ok(metadata) => metadata,
+			Err(_) => {
+				log!(warn, "data : {:?}", data);
+				log!(warn, "Failed to parse data to rmrk base metadata");
+				return None
+			},
+		};
+		log!(debug, "rmrk metadata is : {:?}", rmrk_metadata);
+
+		let title = {
+			// Need Check:
+			// 		Is there need a check for field name is not none?
+			if rmrk_metadata.name.len() != 0 {
+				Some(rmrk_metadata.name.clone())
+			} else {
+				log!(warn, "Rmrk base metadata must have field name");
+				return None
+			}
+		};
+
+		let description = {
+			if rmrk_metadata.description.len() != 0 {
+				Some(rmrk_metadata.description)
+			} else {
+				None
+			}
+		};
+
+		let media_uri = {
+			if rmrk_metadata.media_uri.len() != 0 {
+				Some(rmrk_metadata.media_uri)
+			} else {
+				None
+			}
+		};
+
+		let mut extra = "types: ".to_string();
+		extra += &rmrk_metadata.types;
+		extra += ", locale: ";
+		extra += &rmrk_metadata.locale;
+		extra += ", license: ";
+		extra += &rmrk_metadata.license;
+		extra += ", licenseUri: ";
+		extra += &rmrk_metadata.license_uri;
+		extra += ", thumbnailUri: ";
+		extra += &rmrk_metadata.thumbnail_uri;
+		extra += ", externalUri: ";
+		extra += &rmrk_metadata.external_uri;
+
+		// parse rmrk base metadata to nep171 format
+		let metadata = Nep171TokenMetadata {
+			title,
+			description,
+			media: media_uri,
+			media_hash: None,
+			copies: None,
+			issued_at: None,
+			expires_at: None,
+			starts_at: None,
+			updated_at: None,
+			extra: Some(extra),
+			reference: None,
+			reference_hash: None,
+		};
+		log!(debug, "After, the Nep171 media data is {:?} ", metadata.clone());
+
+		Some(metadata)
+	}
+}
