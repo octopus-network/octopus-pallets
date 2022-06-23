@@ -1,12 +1,6 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::string::{String, ToString};
-
 use borsh::BorshSerialize;
 use codec::{Codec, Decode, Encode, HasCompact};
 use frame_support::{
@@ -32,7 +26,10 @@ use pallet_octopus_support::{
 	},
 	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
 };
-use scale_info::TypeInfo;
+use scale_info::{
+	TypeInfo,
+	prelude::string::{String, ToString}
+};
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{

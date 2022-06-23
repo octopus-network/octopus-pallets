@@ -1,12 +1,6 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::string::{String, ToString};
-
 pub mod benchmarking;
 
 #[cfg(test)]
@@ -31,7 +25,10 @@ use pallet_octopus_support::{
 	types::{EraPayoutPayload, PayloadType, PlanNewEraPayload},
 };
 use pallet_session::historical;
-use scale_info::TypeInfo;
+use scale_info::{
+	TypeInfo,
+	prelude::string::String
+};
 use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, Convert, SaturatedConversion},
 	KeyTypeId, Perbill, RuntimeDebug,
