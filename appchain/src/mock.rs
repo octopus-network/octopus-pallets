@@ -292,7 +292,7 @@ parameter_types! {
 impl Config for Test {
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
-	type AssetIdByName = OctopusAppchain;
+	type AssetIdByTokenId = OctopusAppchain;
 	type AuthorityId = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
@@ -359,7 +359,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 			premined_amount: 1024 * DOLLARS,
-			asset_id_by_name: vec![
+			asset_id_by_token_id: vec![
 				("test-account.testnet".to_string(), 0),
 				("usdc.testnet".to_string(), 2),
 			],

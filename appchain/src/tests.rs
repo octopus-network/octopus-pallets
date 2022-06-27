@@ -80,7 +80,7 @@ fn test_set_asset_name() {
 	let _origin = Origin::signed(alice.clone());
 	new_tester().execute_with(|| {
 		assert_noop!(
-			OctopusAppchain::set_asset_name(
+			OctopusAppchain::set_token_id(
 				Origin::root(),
 				"usdc.testnet".to_string().as_bytes().to_vec(),
 				2,
@@ -90,16 +90,16 @@ fn test_set_asset_name() {
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 		assert_noop!(
-			OctopusAppchain::set_asset_name(
+			OctopusAppchain::set_token_id(
 				Origin::root(),
 				"usdc.testnet".to_string().as_bytes().to_vec(),
 				2,
 			),
-			Error::<Test>::AssetNameHasSet
+			Error::<Test>::TokenIdInUse
 		);
 
 		assert_noop!(
-			OctopusAppchain::set_asset_name(
+			OctopusAppchain::set_token_id(
 				Origin::root(),
 				"test.testnet".to_string().as_bytes().to_vec(),
 				2,
@@ -107,7 +107,7 @@ fn test_set_asset_name() {
 			Error::<Test>::AssetIdInUse
 		);
 
-		assert_ok!(OctopusAppchain::set_asset_name(
+		assert_ok!(OctopusAppchain::set_token_id(
 			Origin::root(),
 			"test.testnet".to_string().as_bytes().to_vec(),
 			1,

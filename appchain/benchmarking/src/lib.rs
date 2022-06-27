@@ -14,7 +14,7 @@ use pallet_octopus_appchain::{
 	Config as AppchainConfig, Event as AppchainEvent, Pallet as AppchainPallet,
 };
 use pallet_octopus_support::traits::{
-	AppchainInterface, AssetIdAndNameProvider, ValidatorsProvider,
+	AppchainInterface, TokenIdAndAssetIdProvider, ValidatorsProvider,
 };
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion, StaticLookup};
 
@@ -159,14 +159,15 @@ benchmarks! {
 			asset_id: 0u32.into(),
 			sender: "test-account.testnet".to_string().as_bytes().to_vec(),
 			receiver,
-			amount: 100000u32.into()
+			amount: 100000u32.into(),
+			sequence: None,
 		}
 		.into());
 	}
 
 	burn_asset {
 		AppchainPallet::<T>::force_set_is_activated(RawOrigin::Root.into(), true).unwrap();
-		let _ = AppchainPallet::<T>::set_asset_name(
+		let _ = AppchainPallet::<T>::set_token_id(
 			RawOrigin::Root.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			0u32.into()
@@ -206,20 +207,20 @@ benchmarks! {
 		AppchainPallet::<T>::force_set_is_activated(RawOrigin::Root.into(), true).unwrap();
 	}: {
 
-		let _ = AppchainPallet::<T>::set_asset_name(
+		let _ = AppchainPallet::<T>::set_token_id(
 			RawOrigin::Root.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			1u32.into()
 		);
 	}
 	verify {
-		let id = match <T as AppchainConfig>::AssetIdByName::try_get_asset_id(
+		let id = match <T as AppchainConfig>::AssetIdByTokenId::try_get_asset_id(
 			"test-account.testnet".to_string().as_bytes().to_vec()) {
 			Ok(v) => v,
 			Err(_) => 1000000u32.into(),
 		};
 		assert_eq!(id, 1u32.into());
-		let name = match <T as AppchainConfig>::AssetIdByName::try_get_asset_name(1u32.into()) {
+		let name = match <T as AppchainConfig>::AssetIdByTokenId::try_get_token_id(1u32.into()) {
 			Ok(v) => v,
 			Err(_) => "error.account".to_string().as_bytes().to_vec(),
 		};
@@ -262,12 +263,15 @@ benchmarks! {
 		let receiver = T::Lookup::lookup(receiver).unwrap();
 	}: {
 		let origin = RawOrigin::Signed(receiver.clone());
-		let _ = AppchainPallet::<T>::lock_nft(
+		let ret = AppchainPallet::<T>::lock_nft(
 			origin.into(),
 			Default::default(),
 			Default::default(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 		);
+
+		assert!(ret.is_ok());
+
 	}
 	verify {
 		assert_last_event::<T>(AppchainEvent::NftLocked{

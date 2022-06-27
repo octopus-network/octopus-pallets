@@ -286,7 +286,7 @@ impl<T: Config> AppchainInterface for Pallet<T> {
 }
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -411,6 +411,10 @@ pub mod pallet {
 		GetDefault,
 		ConstU32<300_000>,
 	>;
+
+	#[pallet::storage]
+	pub type AssetIdByName<T: Config> =
+		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
 
 	/// Whether the appchain is activated.
 	///
@@ -687,17 +691,22 @@ pub mod pallet {
 
 			if current == 1 && onchain == 0 {
 				let translated = 1u64;
-				let account = <Pallet<T>>::account_id();
-				OctopusPalletId::<T>::put(Some(account));
-
-				log!(info, "updating to version 1 ",);
-
+				Self::migration_to_v1();
+				current.put::<Pallet<T>>();
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else if current == 2 && onchain == 1 {
+				let translated = Self::migration_to_v2(1u64);
+				current.put::<Pallet<T>>();
+				T::DbWeight::get().reads_writes(translated, translated)
+			} else if current == 2 && onchain == 0 {
+				Self::migration_to_v1();
+				let translated = Self::migration_to_v2(1u64);
 				current.put::<Pallet<T>>();
 				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
 				log!(
 					info,
-					"MigrateToV1 being executed on the wrong storage version, expected V0_0_0"
+					"Migration being executed on the wrong storage version, expected V0 or V1"
 				);
 				T::DbWeight::get().reads(1)
 			}
@@ -1662,6 +1671,25 @@ pub mod pallet {
 			});
 
 			Ok(().into())
+		}
+
+		fn migration_to_v1() {
+			let account = <Pallet<T>>::account_id();
+			OctopusPalletId::<T>::put(Some(account));
+			log!(info, "updating to version 1 ");
+		}
+
+		fn migration_to_v2(translated: u64) -> u64 {
+			let mut translated = translated;
+			let _ = AssetIdByName::<T>::iter()
+				.map(|(token_id, asset_id)| {
+					AssetIdByTokenId::<T>::insert(token_id, asset_id);
+					translated += 1u64;
+				})
+				.collect::<Vec<_>>();
+
+			log!(info, "updating to version 2 ",);
+			translated
 		}
 	}
 
