@@ -15,12 +15,12 @@ pub trait ValidatorsProvider<AccountId> {
 	fn validators() -> Vec<(AccountId, u128)>;
 }
 
-pub trait AssetIdAndNameProvider<AssetId> {
+pub trait TokenIdAndAssetIdProvider<AssetId> {
 	type Err;
 
-	fn try_get_asset_id(name: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
+	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
 
-	fn try_get_asset_name(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
+	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
 }
 
 pub trait LposInterface<AccountId> {
