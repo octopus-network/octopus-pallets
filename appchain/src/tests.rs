@@ -116,6 +116,37 @@ fn test_set_asset_name() {
 }
 
 #[test]
+fn test_delete_token_id() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	new_tester().execute_with(|| {
+		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		assert_ok!(OctopusAppchain::set_token_id(
+			Origin::root(),
+			"test.testnet".to_string().as_bytes().to_vec(),
+			1,
+		));
+		assert_noop!(
+			OctopusAppchain::delete_token_id(
+				Origin::root(),
+				"gg.testnet".to_string().as_bytes().to_vec(),
+			),
+			Error::<Test>::TokenIdNotExist
+		);
+		assert_noop!(
+			OctopusAppchain::delete_token_id(
+				Origin::signed(alice),
+				"test.testnet".to_string().as_bytes().to_vec(),
+			),
+			BadOrigin
+		);
+		assert_ok!(OctopusAppchain::delete_token_id(
+			Origin::root(),
+			"test.testnet".to_string().as_bytes().to_vec(),
+		));
+	});
+}
+
+#[test]
 fn test_mint_asset() {
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
 	new_tester().execute_with(|| {
