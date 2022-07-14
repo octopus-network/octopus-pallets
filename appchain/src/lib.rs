@@ -27,8 +27,8 @@ use pallet_octopus_support::{
 	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
 };
 use scale_info::{
+	prelude::string::{String, ToString},
 	TypeInfo,
-	prelude::string::{String, ToString}
 };
 use serde::{de, Deserialize, Deserializer};
 use sp_core::crypto::KeyTypeId;
@@ -618,6 +618,8 @@ pub mod pallet {
 		TokenIdInUse,
 		/// Asset Id in use.
 		AssetIdInUse,
+		/// Token Id Not Exist.
+		TokenIdNotExist,
 		/// Not implement nep171 convertor.
 		ConvertorNotImplement,
 	}
@@ -1024,6 +1026,20 @@ pub mod pallet {
 			});
 
 			Ok(().into())
+		}
+
+		#[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
+		pub fn delete_token_id(origin: OriginFor<T>, token_id: Vec<u8>) -> DispatchResult {
+			ensure_root(origin)?;
+
+			ensure!(
+				AssetIdByTokenId::<T>::contains_key(token_id.clone()),
+				Error::<T>::TokenIdNotExist
+			);
+
+			AssetIdByTokenId::<T>::remove(token_id);
+
+			Ok(())
 		}
 	}
 

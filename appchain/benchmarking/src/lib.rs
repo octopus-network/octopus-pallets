@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 mod mock;
 
-use scale_info::prelude::string::ToString;
 use frame_benchmarking::{
 	benchmarks,
 	frame_support::traits::{Currency, Get},
@@ -14,6 +13,7 @@ use pallet_octopus_appchain::{
 use pallet_octopus_support::traits::{
 	AppchainInterface, TokenIdAndAssetIdProvider, ValidatorsProvider,
 };
+use scale_info::prelude::string::ToString;
 use sp_runtime::traits::{AccountIdConversion, CheckedConversion, StaticLookup};
 
 pub struct Pallet<T: Config>(pallet_octopus_appchain::Pallet<T>);
@@ -280,6 +280,31 @@ benchmarks! {
 			sequence: 1u64,
 		}
 		.into());
+	}
+
+
+	delete_token_id {
+		AppchainPallet::<T>::force_set_is_activated(RawOrigin::Root.into(), true).unwrap();
+		let _ = AppchainPallet::<T>::set_token_id(
+			RawOrigin::Root.into(),
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			1u32.into()
+		);
+	}: {
+		let _ = AppchainPallet::<T>::delete_token_id(
+			RawOrigin::Root.into(),
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+		);
+	}
+	verify {
+		let name = match <T as AppchainConfig>::AssetIdByTokenId::try_get_token_id(1u32.into()) {
+			Ok(v) => v,
+			Err(_) => "empty".to_string().as_bytes().to_vec(),
+		};
+		assert_eq!(
+			name,
+			"empty".to_string().as_bytes().to_vec(),
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);
