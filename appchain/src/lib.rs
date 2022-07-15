@@ -1164,9 +1164,10 @@ pub mod pallet {
 					<T as SigningTypes>::Signature,
 				>>::GenericPublic::from(key);
 				let public: <T as SigningTypes>::Public = generic_public.into();
+				log!(debug, "julian-debug public key: {:?}", public);
 
 				let val_id = T::LposInterface::is_active_validator(
-					KEY_TYPE,
+					EVM_KEY_TYPE,
 					&public.clone().into_account().encode(),
 				);
 
