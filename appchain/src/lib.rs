@@ -1159,17 +1159,17 @@ pub mod pallet {
 			.into_iter()
 			{
 				log!(debug, "julian-debug key: {:?}", key.to_raw_vec());
+
+				let val_id = T::LposInterface::is_active_validator(
+					EVM_KEY_TYPE,
+					&key.to_raw_vec(),
+				);
 				let generic_public = <T::AuthorityId as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
 				>>::GenericPublic::from(key);
 				let public: <T as SigningTypes>::Public = generic_public.into();
 				log!(debug, "julian-debug public key: {:?}", public);
-
-				let val_id = T::LposInterface::is_active_validator(
-					EVM_KEY_TYPE,
-					&public.clone().into_account().encode(),
-				);
 
 				if val_id.is_none() {
 					continue
