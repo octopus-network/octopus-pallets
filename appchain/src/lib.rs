@@ -78,8 +78,16 @@ mod crypto {
 	app_crypto!(sr25519, KEY_TYPE);
 }
 
+pub const EVM_KEY_TYPE: KeyTypeId = KeyTypeId(*b"eoct");
+
+mod evm_crypto {
+	use super::EVM_KEY_TYPE;
+	use sp_runtime::app_crypto::{app_crypto, ecdsa};
+	app_crypto!(ecdsa, EVM_KEY_TYPE);
+}
+
 /// Identity of an appchain authority.
-pub type AuthorityId = crypto::Public;
+pub type AuthorityId = evm_crypto::Public;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -1150,6 +1158,7 @@ pub mod pallet {
 			>>::RuntimeAppPublic::all()
 			.into_iter()
 			{
+				log!(debug, "julian-debug key: {:?}", key.to_raw_vec());
 				let generic_public = <T::AuthorityId as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
