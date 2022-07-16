@@ -87,7 +87,7 @@ mod evm_crypto {
 }
 
 /// Identity of an appchain authority.
-pub type AuthorityId = evm_crypto::Public;
+pub type AuthorityId = crypto::Public;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -1160,10 +1160,7 @@ pub mod pallet {
 			{
 				log!(debug, "julian-debug key: {:?}", key.to_raw_vec());
 
-				let val_id = T::LposInterface::is_active_validator(
-					EVM_KEY_TYPE,
-					&key.to_raw_vec(),
-				);
+				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key.to_raw_vec());
 				let generic_public = <T::AuthorityId as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
