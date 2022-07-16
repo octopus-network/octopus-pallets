@@ -72,22 +72,43 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"octo");
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
 /// the types with this pallet-specific identifier.
-mod crypto {
-	use super::KEY_TYPE;
-	use sp_runtime::app_crypto::{app_crypto, sr25519};
-	app_crypto!(sr25519, KEY_TYPE);
+pub mod sr25519 {
+	mod app_sr25519 {
+		use super::super::KEY_TYPE;
+		use sp_runtime::app_crypto::{app_crypto, sr25519};
+		app_crypto!(sr25519, KEY_TYPE);
+	}
+
+	sp_application_crypto::with_pair! {
+		/// An octopus keypair using sr25519 as its crypto.
+		pub type AuthorityPair = app_sr25519::Pair;
+	}
+
+	/// An octopus signature using sr25519 as its crypto.
+	pub type AuthoritySignature = app_sr25519::Signature;
+
+	/// An octopus identifier using sr25519 as its crypto.
+	pub type AuthorityId = app_sr25519::Public;
 }
 
-pub const EVM_KEY_TYPE: KeyTypeId = KeyTypeId(*b"eoct");
+pub mod ecdsa {
+	mod app_ecdsa {
+		use super::super::KEY_TYPE;
+		use sp_runtime::app_crypto::{app_crypto, ecdsa};
+		app_crypto!(ecdsa, KEY_TYPE);
+	}
 
-mod evm_crypto {
-	use super::EVM_KEY_TYPE;
-	use sp_runtime::app_crypto::{app_crypto, ecdsa};
-	app_crypto!(ecdsa, EVM_KEY_TYPE);
+	sp_application_crypto::with_pair! {
+		/// An octopus keypair using ecdsa as its crypto.
+		pub type AuthorityPair = app_ecdsa::Pair;
+	}
+
+	/// An octopus signature using ecdsa as its crypto.
+	pub type AuthoritySignature = app_ecdsa::Signature;
+
+	/// An octopus identifier using ecdsa as its crypto.
+	pub type AuthorityId = app_ecdsa::Public;
 }
-
-/// Identity of an appchain authority.
-pub type AuthorityId = crypto::Public;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -302,8 +323,11 @@ pub mod pallet {
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
+		/// Identity of an appchain authority.
+		type AuthorityId: Member + Parameter + RuntimeAppPublic + MaybeSerializeDeserialize;
+
 		/// The identifier type for an offchain worker.
-		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+		type AppCrypto: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -739,7 +763,7 @@ pub mod pallet {
 			// Firstly let's check that we call the right function.
 			if let Call::submit_observations { ref payload, ref signature } = call {
 				let signature_valid =
-					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+					SignedPayload::<T>::verify::<T::AppCrypto>(payload, signature.clone());
 				if !signature_valid {
 					return InvalidTransaction::BadProof.into()
 				}
@@ -1152,21 +1176,21 @@ pub mod pallet {
 		}
 
 		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, T::AccountId)> {
-			for key in <T::AuthorityId as AppCrypto<
+			for key in <T::AppCrypto as AppCrypto<
 				<T as SigningTypes>::Public,
 				<T as SigningTypes>::Signature,
 			>>::RuntimeAppPublic::all()
 			.into_iter()
 			{
-				log!(debug, "julian-debug key: {:?}", key.to_raw_vec());
+				log!(trace, "local key: {:?}", key.to_raw_vec());
 
 				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key.to_raw_vec());
-				let generic_public = <T::AuthorityId as AppCrypto<
+				let generic_public = <T::AppCrypto as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
 				>>::GenericPublic::from(key);
 				let public: <T as SigningTypes>::Public = generic_public.into();
-				log!(debug, "julian-debug public key: {:?}", public);
+				log!(trace, "local public key: {:?}", public);
 
 				if val_id.is_none() {
 					continue
@@ -1250,7 +1274,7 @@ pub mod pallet {
 				return Ok(())
 			}
 
-			let result = Signer::<T, T::AuthorityId>::all_accounts()
+			let result = Signer::<T, T::AppCrypto>::all_accounts()
 				.with_filter(vec![public])
 				.send_unsigned_transaction(
 					|account| ObservationsPayload {
@@ -1714,11 +1738,11 @@ pub mod pallet {
 	}
 
 	impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
-		type Public = AuthorityId;
+		type Public = T::AuthorityId;
 	}
 
 	impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
-		type Key = AuthorityId;
+		type Key = T::AuthorityId;
 
 		fn on_genesis_session<'a, I: 'a>(_authorities: I)
 		where
