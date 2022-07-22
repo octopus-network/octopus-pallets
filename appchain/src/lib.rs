@@ -291,6 +291,7 @@ pub struct ObservationsPayload<Public, BlockNumber, AccountId> {
 	public: Public,
 	block_number: BlockNumber,
 	observations: Vec<Observation<AccountId>>,
+	raw_key: Vec<u8>,
 }
 
 impl<T: SigningTypes> SignedPayload<T>
@@ -407,6 +408,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
 
+		/// A configuration for limit of request notification.
+		///
+		/// This is the limits for request notification histories.
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
 
@@ -685,8 +689,14 @@ pub mod pallet {
 
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
-				Some((public, validator_id)) => {
-					log!(debug, "public: {:?}, validator_id: {:?}", public, validator_id);
+				Some((public, validator_id, raw_key)) => {
+					log!(
+						debug,
+						"public: {:?}, validator_id: {:?}, raw_key: {:?}",
+						public,
+						validator_id,
+						raw_key,
+					);
 
 					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint(
 						anchor_contract[anchor_contract.len() - 1] == 116,
@@ -699,6 +709,7 @@ pub mod pallet {
 						anchor_contract,
 						public,
 						validator_id,
+						raw_key,
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
 					}
@@ -796,16 +807,14 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
-			let val_id = T::LposInterface::is_active_validator(
-				KEY_TYPE,
-				&payload.public.clone().into_account().encode(),
-			);
+
+			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.raw_key);
 
 			if val_id.is_none() {
 				log!(
 					warn,
-					"Not a validator in current validator set: {:?}",
-					payload.public.clone().into_account()
+					"Not a validator in current validator set, key_data: {:?}",
+					payload.raw_key
 				);
 				return Err(Error::<T>::NotValidator.into())
 			}
@@ -1175,7 +1184,7 @@ pub mod pallet {
 			}
 		}
 
-		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, T::AccountId)> {
+		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, T::AccountId, Vec<u8>)> {
 			for key in <T::AppCrypto as AppCrypto<
 				<T as SigningTypes>::Public,
 				<T as SigningTypes>::Signature,
@@ -1183,6 +1192,7 @@ pub mod pallet {
 			.into_iter()
 			{
 				log!(trace, "local key: {:?}", key.to_raw_vec());
+				let raw_key = key.to_raw_vec();
 
 				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key.to_raw_vec());
 				let generic_public = <T::AppCrypto as AppCrypto<
@@ -1195,7 +1205,7 @@ pub mod pallet {
 				if val_id.is_none() {
 					continue
 				}
-				return Some((public, val_id.unwrap()))
+				return Some((public, val_id.unwrap(), raw_key))
 			}
 			None
 		}
@@ -1206,6 +1216,7 @@ pub mod pallet {
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
 			_validator_id: T::AccountId,
+			raw_key: Vec<u8>,
 		) -> Result<(), &'static str> {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
 			let next_notification_id = NextNotificationId::<T>::get();
@@ -1281,6 +1292,7 @@ pub mod pallet {
 						public: account.public.clone(),
 						block_number,
 						observations: obs.clone(),
+						raw_key: raw_key.clone(),
 					},
 					|payload, signature| Call::submit_observations { payload, signature },
 				);
