@@ -15,28 +15,25 @@ use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
-	weights::Weight,
 	PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::{
 	log,
 	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
-	types::{EraPayoutPayload, PayloadType, PlanNewEraPayload},
+	types::{EraPayoutPayload, OffenceReport, PayloadType, PlanNewEraPayload},
 };
 use pallet_session::historical;
 use scale_info::{
+	prelude::string::{String, ToString},
 	TypeInfo,
-	prelude::string::String
 };
 use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, Convert, SaturatedConversion},
-	KeyTypeId, Perbill, RuntimeDebug,
+	KeyTypeId, RuntimeDebug,
 };
 use sp_staking::{
-	offence::{
-		DisableStrategy, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence,
-	},
+	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
@@ -316,6 +313,12 @@ pub mod pallet {
 	#[pallet::getter(fn era_payout)]
 	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
 
+	/// Reports that to be reported to mainchain.
+	#[pallet::storage]
+	#[pallet::getter(fn reports)]
+	pub type Reports<T: Config> =
+		StorageValue<_, Vec<(Vec<T::AccountId>, Kind, Vec<u8>, Vec<T::AccountId>)>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub history_depth: u32,
@@ -351,6 +354,9 @@ pub mod pallet {
 		EraPayout { era_index: EraIndex, excluded_validators: Vec<T::AccountId> },
 		/// Failed to notify the mainchain to pay the validator rewards of `era_index`.
 		EraPayoutFailed { era_index: EraIndex },
+		/// An old slashing report from a prior era was discarded because it could
+		/// not be processed. \[session_index\]
+		OldSlashingReportDiscarded(SessionIndex),
 	}
 
 	#[pallet::error]
@@ -657,12 +663,39 @@ impl<T: Config> Pallet<T> {
 					hex_validator
 				})
 				.collect::<Vec<String>>();
+			let reports = <Reports<T>>::take()
+				.iter()
+				.map(|report| OffenceReport {
+					reporters: report
+						.0
+						.iter()
+						.map(|id| {
+							let prefix = String::from("0x");
+							let hex_id = prefix + &hex::encode(id.encode());
+							hex_id
+						})
+						.collect::<Vec<String>>(),
+
+					kind: String::from_utf8_lossy(&report.1).trim().to_string(),
+					time_slot: report.2.clone(),
+					offenders: report
+						.3
+						.iter()
+						.map(|id| {
+							let prefix = String::from("0x");
+							let hex_id = prefix + &hex::encode(id.encode());
+							hex_id
+						})
+						.collect::<Vec<String>>(),
+				})
+				.collect::<Vec<OffenceReport>>();
 
 			log!(debug, "Exclude validators: {:?}", excluded_validators_str.clone());
 
 			let message = EraPayoutPayload {
 				end_era: active_era.set_id,
 				excluded_validators: excluded_validators_str.clone(),
+				reports,
 			};
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
@@ -884,61 +917,58 @@ impl<T: Config> Convert<T::AccountId, Option<u128>> for ExposureOf<T> {
 	}
 }
 
-/// This is intended to be used with `FilterHistoricalOffences`.
-impl<T: Config>
-	OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>
-	for Pallet<T>
-where
-	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
-	T: pallet_session::historical::Config<
-		FullIdentification = u128,
-		FullIdentificationOf = ExposureOf<T>,
-	>,
-	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
-	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
-	T::ValidatorIdOf: Convert<
-		<T as frame_system::Config>::AccountId,
-		Option<<T as frame_system::Config>::AccountId>,
-	>,
-{
-	fn on_offence(
-		_offenders: &[OffenceDetails<
-			T::AccountId,
-			pallet_session::historical::IdentificationTuple<T>,
-		>],
-		_slash_fraction: &[Perbill],
-		_slash_session: SessionIndex,
-		_disable_strategy: DisableStrategy,
-	) -> Weight {
-		0
-	}
-}
-
 /// Filter historical offences out and only allow those from the bonding period.
 pub struct FilterHistoricalOffences<T, R> {
 	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
-impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
+impl<T, R, O> ReportOffence<T::AccountId, pallet_session::historical::IdentificationTuple<T>, O>
 	for FilterHistoricalOffences<Pallet<T>, R>
 where
 	T: Config,
-	R: ReportOffence<Reporter, Offender, O>,
-	O: Offence<Offender>,
+	R: ReportOffence<T::AccountId, pallet_session::historical::IdentificationTuple<T>, O>,
+	O: Offence<pallet_session::historical::IdentificationTuple<T>>,
+	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
+	T: pallet_session::historical::Config<
+		FullIdentification = u128,
+		FullIdentificationOf = ExposureOf<T>,
+	>,
 {
-	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::<T>::get();
 
 		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
-			R::report_offence(reporters, offence)
+			let time_slot = offence.time_slot();
+			let offenders: Vec<_> = offence.offenders().iter().map(|x| x.0.clone()).collect();
+
+			log!(
+				info,
+				"report offence: kind: {:?}, time_slot: {:?}, offenders: {:?}",
+				O::ID,
+				time_slot.encode(),
+				offenders
+			);
+			let result = R::report_offence(reporters.clone(), offence);
+			if result.is_ok() {
+				<Reports<T>>::mutate(|reports| {
+					// TODO: check max length
+					reports.push((reporters, O::ID, time_slot.encode(), offenders));
+					Ok(())
+				})?;
+			}
+			result
 		} else {
+			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
 			Ok(())
 		}
 	}
 
-	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
+	fn is_known_offence(
+		offenders: &[pallet_session::historical::IdentificationTuple<T>],
+		time_slot: &O::TimeSlot,
+	) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
 }
