@@ -1,9 +1,6 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use codec::{Decode, Encode};
-use scale_info::{
-	TypeInfo,
-	prelude::string::String
-};
+use scale_info::{prelude::string::String, TypeInfo};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -37,9 +34,18 @@ pub struct PlanNewEraPayload {
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct OffenceReport {
+	pub reporters: Vec<String>,
+	pub kind: String,
+	pub time_slot: Vec<u8>,
+	pub offenders: Vec<String>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EraPayoutPayload {
 	pub end_era: u32,
 	pub excluded_validators: Vec<String>,
+	pub reports: Vec<OffenceReport>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
