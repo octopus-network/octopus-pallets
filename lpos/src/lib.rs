@@ -21,7 +21,7 @@ use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::
 use pallet_octopus_support::{
 	log,
 	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
-	types::{EraPayoutPayload, OffenceReport, PayloadType, PlanNewEraPayload},
+	types::{EraPayoutPayload, Offender, PayloadType, PlanNewEraPayload},
 };
 use pallet_session::historical;
 use scale_info::{
@@ -313,11 +313,11 @@ pub mod pallet {
 	#[pallet::getter(fn era_payout)]
 	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
 
-	/// Reports that to be reported to mainchain.
+	/// Offenders that to be reported to mainchain.
 	#[pallet::storage]
-	#[pallet::getter(fn reports)]
-	pub type Reports<T: Config> =
-		StorageValue<_, Vec<(Vec<T::AccountId>, Kind, Vec<u8>, Vec<T::AccountId>)>, ValueQuery>;
+	#[pallet::getter(fn offenders)]
+	pub type Offenders<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, Kind, Twox64Concat, T::AccountId, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -663,39 +663,25 @@ impl<T: Config> Pallet<T> {
 					hex_validator
 				})
 				.collect::<Vec<String>>();
-			let reports = <Reports<T>>::take()
-				.iter()
-				.map(|report| OffenceReport {
-					reporters: report
-						.0
-						.iter()
-						.map(|id| {
-							let prefix = String::from("0x");
-							let hex_id = prefix + &hex::encode(id.encode());
-							hex_id
-						})
-						.collect::<Vec<String>>(),
-
-					kind: String::from_utf8_lossy(&report.1).trim().to_string(),
-					time_slot: report.2.clone(),
-					offenders: report
-						.3
-						.iter()
-						.map(|id| {
-							let prefix = String::from("0x");
-							let hex_id = prefix + &hex::encode(id.encode());
-							hex_id
-						})
-						.collect::<Vec<String>>(),
-				})
-				.collect::<Vec<OffenceReport>>();
-
 			log!(debug, "Exclude validators: {:?}", excluded_validators_str.clone());
+
+			let offenders = <Offenders<T>>::drain()
+				.map(|offender| {
+					let prefix = String::from("0x");
+					let hex_id = prefix + &hex::encode(offender.1.encode());
+					Offender {
+						kind: String::from_utf8_lossy(&offender.0).trim().to_string(),
+						who: hex_id,
+						offences: offender.2,
+					}
+				})
+				.collect::<Vec<Offender>>();
+			log!(debug, "Offenders: {:?}", offenders);
 
 			let message = EraPayoutPayload {
 				end_era: active_era.set_id,
 				excluded_validators: excluded_validators_str.clone(),
-				reports,
+				offenders,
 			};
 
 			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
@@ -952,11 +938,10 @@ where
 			);
 			let result = R::report_offence(reporters.clone(), offence);
 			if result.is_ok() {
-				<Reports<T>>::mutate(|reports| {
+				offenders.iter().for_each(|offender| {
 					// TODO: check max length
-					reports.push((reporters, O::ID, time_slot.encode(), offenders));
-					Ok(())
-				})?;
+					Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
+				});
 			}
 			result
 		} else {
