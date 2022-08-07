@@ -34,18 +34,17 @@ pub struct PlanNewEraPayload {
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct OffenceReport {
-	pub reporters: Vec<String>,
+pub struct Offender {
 	pub kind: String,
-	pub time_slot: Vec<u8>,
-	pub offenders: Vec<String>,
+	pub who: String,
+	pub offences: u32,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EraPayoutPayload {
 	pub end_era: u32,
 	pub excluded_validators: Vec<String>,
-	pub reports: Vec<OffenceReport>,
+	pub offenders: Vec<Offender>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
