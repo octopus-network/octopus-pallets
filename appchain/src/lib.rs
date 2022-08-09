@@ -289,6 +289,7 @@ impl<AccountId> Observation<AccountId> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ObservationsPayload<Public, BlockNumber, AccountId> {
 	public: Public,
+	key_data: Vec<u8>,
 	block_number: BlockNumber,
 	observations: Vec<Observation<AccountId>>,
 }
@@ -407,6 +408,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
 
+		/// A configuration for limit of request notification.
+		///
+		/// This is the limits for request notification histories.
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
 
@@ -685,8 +689,14 @@ pub mod pallet {
 
 			// Only communicate with mainchain if we are validators.
 			match Self::get_validator_id() {
-				Some((public, validator_id)) => {
-					log!(debug, "public: {:?}, validator_id: {:?}", public, validator_id);
+				Some((public, key_data, validator_id)) => {
+					log!(
+						debug,
+						"public: {:?}, key_data: {:?}, validator_id: {:?}",
+						public,
+						key_data,
+						validator_id,
+					);
 
 					let mainchain_rpc_endpoint = Self::get_mainchain_rpc_endpoint(
 						anchor_contract[anchor_contract.len() - 1] == 116,
@@ -698,6 +708,7 @@ pub mod pallet {
 						&mainchain_rpc_endpoint,
 						anchor_contract,
 						public,
+						key_data,
 						validator_id,
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
@@ -796,16 +807,14 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
-			let val_id = T::LposInterface::is_active_validator(
-				KEY_TYPE,
-				&payload.public.clone().into_account().encode(),
-			);
+
+			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data);
 
 			if val_id.is_none() {
 				log!(
 					warn,
-					"Not a validator in current validator set: {:?}",
-					payload.public.clone().into_account()
+					"Not a validator in current validator set, key_data: {:?}",
+					payload.key_data
 				);
 				return Err(Error::<T>::NotValidator.into())
 			}
@@ -817,7 +826,7 @@ pub mod pallet {
 
 			for observation in payload.observations.iter() {
 				if let Err(e) = Self::submit_observation(&val_id, observation.clone()) {
-					log!(warn, "OCTOPUS-ALERT-DISCORD submit_observation: Error: {:?}", e);
+					log!(warn, "OCTOPUS-ALERT submit_observation: Error: {:?}", e);
 				}
 			}
 
@@ -1176,16 +1185,17 @@ pub mod pallet {
 			}
 		}
 
-		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, T::AccountId)> {
+		fn get_validator_id() -> Option<(<T as SigningTypes>::Public, Vec<u8>, T::AccountId)> {
 			for key in <T::AppCrypto as AppCrypto<
 				<T as SigningTypes>::Public,
 				<T as SigningTypes>::Signature,
 			>>::RuntimeAppPublic::all()
 			.into_iter()
 			{
-				log!(trace, "local key: {:?}", key.to_raw_vec());
+				let key_data = key.to_raw_vec();
+				log!(trace, "local key: {:?}", key_data);
 
-				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key.to_raw_vec());
+				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key_data);
 				let generic_public = <T::AppCrypto as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
@@ -1196,7 +1206,7 @@ pub mod pallet {
 				if val_id.is_none() {
 					continue
 				}
-				return Some((public, val_id.unwrap()))
+				return Some((public, key_data, val_id.unwrap()))
 			}
 			None
 		}
@@ -1206,6 +1216,7 @@ pub mod pallet {
 			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
+			key_data: Vec<u8>,
 			_validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
 			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
@@ -1280,6 +1291,7 @@ pub mod pallet {
 				.send_unsigned_transaction(
 					|account| ObservationsPayload {
 						public: account.public.clone(),
+						key_data: key_data.clone(),
 						block_number,
 						observations: obs.clone(),
 					},
@@ -1289,11 +1301,7 @@ pub mod pallet {
 				return Err("No account found")
 			}
 			if result[0].1.is_err() {
-				log!(
-					warn,
-					"OCTOPUS-ALERT-DISCORD Failed to submit observations: {:?}",
-					result[0].1
-				);
+				log!(warn, "OCTOPUS-ALERT Failed to submit observations: {:?}", result[0].1);
 
 				return Err("Failed to submit observations")
 			}
