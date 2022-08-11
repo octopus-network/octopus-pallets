@@ -47,9 +47,9 @@ pub use weights::WeightInfo;
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
+pub const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
-pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
+pub const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
 mod mainchain;
 pub mod traits_default_impl;
@@ -420,18 +420,18 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
+	pub fn DefaultForAnchorContract() -> Vec<u8> {
 		Vec::new()
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
-	pub(super) type AnchorContract<T: Config> =
+	pub type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
-	pub(super) type AssetIdByTokenId<T: Config> = StorageMap<
+	pub type AssetIdByTokenId<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		Vec<u8>,
@@ -449,7 +449,7 @@ pub mod pallet {
 	///
 	/// Only an active appchain will communicate with the mainchain and pay block rewards.
 	#[pallet::storage]
-	pub(super) type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::storage]
 	pub type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -1200,7 +1200,7 @@ pub mod pallet {
 			None
 		}
 
-		pub(crate) fn observing_mainchain(
+		pub fn observing_mainchain(
 			block_number: T::BlockNumber,
 			mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,

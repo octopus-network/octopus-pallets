@@ -44,7 +44,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-lpos";
+pub const LOG_TARGET: &'static str = "runtime::octopus-lpos";
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
@@ -226,7 +226,7 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
-	pub(crate) fn HistoryDepthOnEmpty() -> u32 {
+	pub fn HistoryDepthOnEmpty() -> u32 {
 		84u32
 	}
 
@@ -239,7 +239,7 @@ pub mod pallet {
 	/// guaranteed.
 	#[pallet::storage]
 	#[pallet::getter(fn history_depth)]
-	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
+	pub type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
 	/// The current era index.
 	///
@@ -301,7 +301,7 @@ pub mod pallet {
 	/// Must contains information for eras for the range:
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
-	pub(crate) type BondedEras<T: Config> =
+	pub type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
 
 	/// The last planned session scheduled by the session pallet.

@@ -28,7 +28,7 @@ pub struct AppchainNotificationHistory<AccountId> {
 impl<T: Config> Pallet<T> {
 	/// Gets a validator set by the specified era number.
 	/// Returns an empty list if the validator set has not been generated.
-	pub(super) fn get_validator_list_of(
+	pub fn get_validator_list_of(
 		rpc_endpoint: &str,
 		anchor_contract: Vec<u8>,
 		set_id: u32,
@@ -121,7 +121,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
+	pub fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"era_number\":\"");
 		let era = era.to_string();
 		let b = String::from("\"}");
@@ -131,7 +131,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Fetch the notifications from anchor contract.
-	pub(super) fn get_appchain_notification_histories(
+	pub fn get_appchain_notification_histories(
 		rpc_endpoint: &str,
 		anchor_contract: Vec<u8>,
 		index: u32,
@@ -240,7 +240,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+	pub fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");

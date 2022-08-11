@@ -19,7 +19,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
+pub const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
 pub mod weights;
 

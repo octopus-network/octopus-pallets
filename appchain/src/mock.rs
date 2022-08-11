@@ -24,7 +24,7 @@ pub use frame_support::{
 
 use frame_system::EnsureRoot;
 
-pub(crate) type BlockNumber = u32;
+pub type BlockNumber = u32;
 pub type Signature = MultiSignature;
 pub type Balance = u128;
 pub type Moment = u64;
@@ -140,8 +140,8 @@ impl pallet_session::historical::Config for Test {
 	type FullIdentificationOf = pallet_octopus_lpos::ExposureOf<Test>;
 }
 
-pub(crate) type Extrinsic = TestXt<Call, ()>;
-pub(crate) type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type Extrinsic = TestXt<Call, ()>;
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 impl frame_system::offchain::SigningTypes for Test {
 	type Public = <Signature as Verify>::Signer;
