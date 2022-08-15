@@ -420,18 +420,18 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForAnchorContract() -> Vec<u8> {
+	pub(crate) fn DefaultForAnchorContract() -> Vec<u8> {
 		Vec::new()
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
-	pub(super) type AnchorContract<T: Config> =
+	pub(crate) type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
-	pub(super) type AssetIdByTokenId<T: Config> = StorageMap<
+	pub(crate) type AssetIdByTokenId<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		Vec<u8>,
@@ -442,26 +442,26 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub type AssetIdByName<T: Config> =
+	pub(crate) type AssetIdByName<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
 
 	/// Whether the appchain is activated.
 	///
 	/// Only an active appchain will communicate with the mainchain and pay block rewards.
 	#[pallet::storage]
-	pub(super) type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub(crate) type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::storage]
-	pub type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	pub type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
+	pub(crate) type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	pub type Observations<T: Config> = StorageDoubleMap<
+	pub(crate) type Observations<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		ObservationType,
@@ -472,24 +472,24 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub type Observing<T: Config> =
+	pub(crate) type Observing<T: Config> =
 		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn octopus_pallet_id)]
-	pub type OctopusPalletId<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
+	pub(crate) type OctopusPalletId<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type NotificationHistory<T: Config> =
+	pub(crate) type NotificationHistory<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
 	#[pallet::type_value]
-	pub fn DefaultForGitVersion() -> Vec<u8> {
+	pub(crate) fn DefaultForGitVersion() -> Vec<u8> {
 		hex::decode(GIT_VERSION).unwrap_or_default()
 	}
 
 	#[pallet::storage]
-	pub type GitVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery, DefaultForGitVersion>;
+	pub(crate) type GitVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery, DefaultForGitVersion>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

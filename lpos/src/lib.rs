@@ -53,8 +53,9 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 /// The balance type of this pallet.
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+/// Nerver used.
+// type BalanceOf<T> =
+// 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
@@ -309,12 +310,12 @@ pub mod pallet {
 	/// This is basically in sync with the call to [`SessionManager::new_session`].
 	#[pallet::storage]
 	#[pallet::getter(fn current_planned_session)]
-	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
+	pub(crate) type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// The payout for validators and the system for the current era.
 	#[pallet::storage]
 	#[pallet::getter(fn era_payout)]
-	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
+	pub(crate) type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
