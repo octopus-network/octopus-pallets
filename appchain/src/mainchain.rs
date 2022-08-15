@@ -19,8 +19,6 @@ struct ResponseResult {
 pub struct AppchainNotificationHistory<AccountId> {
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	appchain_notification: AppchainNotification<AccountId>,
-	block_height: u64,
-	timestamp: u64,
 	#[serde(deserialize_with = "deserialize_from_str")]
 	index: u32,
 }
