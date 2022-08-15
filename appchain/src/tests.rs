@@ -12,6 +12,7 @@ use sp_runtime::{
 use std::sync::Arc;
 
 type Public = <Signature as Verify>::Signer;
+const TEST_KEY_TYPE: KeyTypeId = KeyTypeId(*b"octo"); //move to mock
 
 #[test]
 fn test_force_set_params() {
@@ -617,12 +618,12 @@ fn test_submit_validator_sets_on_chain() {
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
-		crate::crypto::Public::ID,
+		TEST_KEY_TYPE ,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, TEST_KEY_TYPE )
 		.get(0)
 		.unwrap()
 		.clone();
@@ -667,7 +668,7 @@ fn test_submit_validator_sets_on_chain() {
 				<Test as SigningTypes>::Public,
 				<Test as frame_system::Config>::BlockNumber,
 				<Test as frame_system::Config>::AccountId,
-			> as SignedPayload<Test>>::verify::<<Test as Config>::AuthorityId>(
+			> as SignedPayload<Test>>::verify::<<Test as Config>::AppCrypto>(
 				&obs_payload, signature
 			);
 
@@ -687,12 +688,12 @@ fn test_submit_notifies_on_chain() {
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
-		crate::crypto::Public::ID,
+		TEST_KEY_TYPE ,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, TEST_KEY_TYPE )
 		.get(0)
 		.unwrap()
 		.clone();
@@ -738,7 +739,7 @@ fn test_submit_notifies_on_chain() {
 				<Test as SigningTypes>::Public,
 				<Test as frame_system::Config>::BlockNumber,
 				<Test as frame_system::Config>::AccountId,
-			> as SignedPayload<Test>>::verify::<<Test as Config>::AuthorityId>(
+			> as SignedPayload<Test>>::verify::<<Test as Config>::AppCrypto>(
 				&obs_payload, signature
 			);
 
