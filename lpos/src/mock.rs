@@ -243,25 +243,6 @@ pub type AssetId = u32;
 pub type AssetBalance = u128;
 
 impl pallet_octopus_appchain::Config for Test {
-	// type ClassId = ClassId;
-	// type InstanceId = InstanceId;
-	// type Uniques = Uniques;
-	// type Convertor = ();
-	// type AssetId = AssetId;
-	// type AssetBalance = AssetBalance;
-	// // type AssetIdByName = OctopusAppchain;
-	// type AuthorityId = OctopusAppCrypto;
-	// type Event = Event;
-	// type Call = Call;
-	// type PalletId = OctopusAppchainPalletId;
-	// type LposInterface = OctopusLpos;
-	// type UpwardMessagesInterface = OctopusUpwardMessages;
-	// type Currency = Balances;
-	// type Assets = Assets;
-	// type GracePeriod = GracePeriod;
-	// type UnsignedPriority = UnsignedPriority;
-	// type RequestEventLimit = RequestEventLimit;
-	// type WeightInfo = ();
 	
 	type AuthorityId = OctopusId;
 	type AppCrypto = OctopusAppCrypto ;
@@ -272,7 +253,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type AssetId = AssetId ;
 	type AssetBalance = AssetBalance ;
 	type Assets = Assets ;
-	type AssetIdByTokenId = OctopusAppchain ; //TODO why is OctopusAppchain
+	type AssetIdByTokenId = OctopusAppchain ; 
 	type LposInterface = OctopusLpos ;
 	type UpwardMessagesInterface = OctopusUpwardMessages ;
 	type ClassId = ClassId ;

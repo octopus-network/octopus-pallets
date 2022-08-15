@@ -10,9 +10,11 @@ use sp_runtime::{
 	MultiSigner,
 };
 use std::sync::Arc;
+use pallet_octopus_appchain::KEY_TYPE ;
 
 type Public = <Signature as Verify>::Signer;
-const TEST_KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
+// const TEST_KEY_TYPE: KeyTypeId = KeyTypeId(*b"octo");
+const TEST_KEY_TYPE: KeyTypeId = KEY_TYPE ;
 
 #[test]
 fn test_force_set_params() {
