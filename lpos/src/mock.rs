@@ -98,7 +98,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-use pallet_octopus_appchain::AuthorityId as OctopusId;
+use pallet_octopus_appchain::sr25519::AuthorityId as OctopusId;
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub octopus: OctopusAppchain,
@@ -198,7 +198,7 @@ pub struct OctopusAppCrypto;
 impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	for OctopusAppCrypto
 {
-	type RuntimeAppPublic = pallet_octopus_appchain::AuthorityId;
+	type RuntimeAppPublic = pallet_octopus_appchain::sr25519::AuthorityId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
@@ -212,6 +212,7 @@ impl pallet_octopus_upward_messages::Config for Test {
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
 construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -242,25 +243,46 @@ pub type AssetId = u32;
 pub type AssetBalance = u128;
 
 impl pallet_octopus_appchain::Config for Test {
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
-	type Uniques = Uniques;
-	type Convertor = ();
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
-	type AssetIdByName = OctopusAppchain;
-	type AuthorityId = OctopusAppCrypto;
-	type Event = Event;
-	type Call = Call;
-	type PalletId = OctopusAppchainPalletId;
-	type LposInterface = OctopusLpos;
-	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type Currency = Balances;
-	type Assets = Assets;
-	type GracePeriod = GracePeriod;
-	type UnsignedPriority = UnsignedPriority;
-	type RequestEventLimit = RequestEventLimit;
-	type WeightInfo = ();
+	// type ClassId = ClassId;
+	// type InstanceId = InstanceId;
+	// type Uniques = Uniques;
+	// type Convertor = ();
+	// type AssetId = AssetId;
+	// type AssetBalance = AssetBalance;
+	// // type AssetIdByName = OctopusAppchain;
+	// type AuthorityId = OctopusAppCrypto;
+	// type Event = Event;
+	// type Call = Call;
+	// type PalletId = OctopusAppchainPalletId;
+	// type LposInterface = OctopusLpos;
+	// type UpwardMessagesInterface = OctopusUpwardMessages;
+	// type Currency = Balances;
+	// type Assets = Assets;
+	// type GracePeriod = GracePeriod;
+	// type UnsignedPriority = UnsignedPriority;
+	// type RequestEventLimit = RequestEventLimit;
+	// type WeightInfo = ();
+	
+	type AuthorityId = OctopusId;
+	type AppCrypto = OctopusAppCrypto ;
+	type Event = Event ;
+	type Call = Call ;
+	type PalletId = OctopusAppchainPalletId ;
+	type Currency = Balances ;
+	type AssetId = AssetId ;
+	type AssetBalance = AssetBalance ;
+	type Assets = Assets ;
+	type AssetIdByTokenId = OctopusAppchain ; //TODO why is OctopusAppchain
+	type LposInterface = OctopusLpos ;
+	type UpwardMessagesInterface = OctopusUpwardMessages ;
+	type ClassId = ClassId ;
+	type InstanceId = InstanceId ;
+	type Uniques = Uniques ;
+	type Convertor = () ;
+	type GracePeriod = GracePeriod ;
+	type UnsignedPriority = UnsignedPriority ;
+	type RequestEventLimit = RequestEventLimit ;
+	type WeightInfo = () ;
 }
 
 type ClassId = u128;
@@ -352,7 +374,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 			premined_amount: 1024 * DOLLARS,
-			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
+			asset_id_by_token_id: vec![("usdc.testnet".to_string(), 2)],
 		},
 		session: pallet_session::GenesisConfig { keys },
 	}

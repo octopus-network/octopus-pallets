@@ -69,10 +69,10 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	pub type MessageQueue<T: Config> = StorageValue<_, Vec<Message>, ValueQuery>;
+	pub(crate) type MessageQueue<T: Config> = StorageValue<_, Vec<Message>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

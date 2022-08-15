@@ -83,7 +83,7 @@ pub mod sr25519 {
 		/// An octopus keypair using sr25519 as its crypto.
 		pub type AuthorityPair = app_sr25519::Pair;
 	}
-
+	
 	/// An octopus signature using sr25519 as its crypto.
 	pub type AuthoritySignature = app_sr25519::Signature;
 
