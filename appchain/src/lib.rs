@@ -1082,6 +1082,21 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn force_set_next_notification_id(
+			origin: OriginFor<T>,
+			next_notification_id: u32,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			<NextNotificationId<T>>::put(next_notification_id);
+			log!(
+				info,
+				"️️️force set next_notification_id, next_notification_id is : {:?} ",
+				NextNotificationId::<T>::get()
+			);
+			Ok(())
+		}
 	}
 
 	impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
