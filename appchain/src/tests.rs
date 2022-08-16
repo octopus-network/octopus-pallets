@@ -12,6 +12,7 @@ use sp_runtime::{
 use std::sync::Arc;
 
 type Public = <Signature as Verify>::Signer;
+const KEY_TYPE_ID : KeyTypeId = <Test as Config>::AuthorityId::ID;
 
 #[test]
 fn test_force_set_params() {
@@ -320,7 +321,11 @@ pub fn mock_payload_and_signature(
 ) -> (ObservationsPayload<Public, BlockNumber, AccountId>, Signature) {
 	let public = MultiSigner::from(keyring);
 	let obs_payload =
-		ObservationsPayload { public, block_number: 2, observations: vec![expected_burn_notify()] };
+		ObservationsPayload { 
+			public : public.clone(), 
+			block_number: 2, 		
+			key_data : public.clone().into_account().encode(),
+			observations: vec![expected_burn_notify()] };
 	let sig = keyring.sign(&vec![1, 2]);
 	let msig = sp_runtime::MultiSignature::from(sig);
 	(obs_payload, msig)
@@ -617,12 +622,12 @@ fn test_submit_validator_sets_on_chain() {
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
-		crate::crypto::Public::ID,
+		KEY_TYPE_ID ,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, KEY_TYPE_ID )
 		.get(0)
 		.unwrap()
 		.clone();
@@ -638,7 +643,8 @@ fn test_submit_validator_sets_on_chain() {
 	let account = public.clone().into_account();
 	let obs_payload = ObservationsPayload {
 		public: public.clone(),
-		block_number: 2,
+		block_number: 2,		
+		key_data : public.clone().into_account().encode(),
 		observations: vec![expected_val_set()],
 	};
 
@@ -648,7 +654,8 @@ fn test_submit_validator_sets_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
-			public,
+			public.clone()  ,
+			public.clone().into_account().encode() , 	// default value.
 			account,
 		)
 		.unwrap();
@@ -667,7 +674,7 @@ fn test_submit_validator_sets_on_chain() {
 				<Test as SigningTypes>::Public,
 				<Test as frame_system::Config>::BlockNumber,
 				<Test as frame_system::Config>::AccountId,
-			> as SignedPayload<Test>>::verify::<<Test as Config>::AuthorityId>(
+			> as SignedPayload<Test>>::verify::<<Test as Config>::AppCrypto >(
 				&obs_payload, signature
 			);
 
@@ -687,12 +694,12 @@ fn test_submit_notifies_on_chain() {
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
-		crate::crypto::Public::ID,
+		KEY_TYPE_ID ,
 		Some(&format!("{}/hunter1", PHRASE)),
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, KEY_TYPE_ID )
 		.get(0)
 		.unwrap()
 		.clone();
@@ -710,6 +717,7 @@ fn test_submit_notifies_on_chain() {
 	let obs_payload = ObservationsPayload {
 		public: public.clone(),
 		block_number: 2,
+		key_data : public.clone().into_account().encode() ,
 		observations: vec![expected_burn_notify()],
 	};
 
@@ -719,7 +727,8 @@ fn test_submit_notifies_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
-			public,
+			public.clone() , 
+			public.clone().into_account().encode() ,
 			account,
 		)
 		.unwrap();
@@ -738,7 +747,7 @@ fn test_submit_notifies_on_chain() {
 				<Test as SigningTypes>::Public,
 				<Test as frame_system::Config>::BlockNumber,
 				<Test as frame_system::Config>::AccountId,
-			> as SignedPayload<Test>>::verify::<<Test as Config>::AuthorityId>(
+			> as SignedPayload<Test>>::verify::<<Test as Config>::AppCrypto>(
 				&obs_payload, signature
 			);
 
