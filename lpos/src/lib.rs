@@ -50,8 +50,9 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 /// The balance type of this pallet.
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+// nerver used.
+// pub(crate) type BalanceOf<T> =
+// 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
@@ -244,7 +245,7 @@ pub mod pallet {
 	/// set, it might be active or not.
 	#[pallet::storage]
 	#[pallet::getter(fn current_era)]
-	pub type CurrentEra<T> = StorageValue<_, EraIndex>;
+	pub(crate) type CurrentEra<T> = StorageValue<_, EraIndex>;
 
 	/// The active era information, it holds index and start.
 	///
@@ -252,7 +253,7 @@ pub mod pallet {
 	/// equal to [`SessionInterface::validators`].
 	#[pallet::storage]
 	#[pallet::getter(fn active_era)]
-	pub type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
+	pub(crate) type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
 
 	/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
 	///
@@ -260,7 +261,7 @@ pub mod pallet {
 	/// for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_start_session_index)]
-	pub type ErasStartSessionIndex<T> = StorageMap<_, Twox64Concat, EraIndex, SessionIndex>;
+	pub(crate) type ErasStartSessionIndex<T> = StorageMap<_, Twox64Concat, EraIndex, SessionIndex>;
 
 	/// Exposure of validator at era.
 	///
@@ -270,7 +271,7 @@ pub mod pallet {
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers)]
-	pub type ErasStakers<T: Config> =
+	pub(crate) type ErasStakers<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, u128, ValueQuery>;
 
 	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
@@ -278,20 +279,20 @@ pub mod pallet {
 	/// Eras that haven't finished yet or has been removed doesn't have reward.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_reward)]
-	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128>;
+	pub(crate) type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128>;
 
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
-	pub type ErasRewardPoints<T: Config> =
+	pub(crate) type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
 
 	/// The total amount staked for the last `HISTORY_DEPTH` eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_total_stake)]
-	pub type ErasTotalStake<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128, ValueQuery>;
+	pub(crate) type ErasTotalStake<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128, ValueQuery>;
 
 	/// A mapping from still-bonded eras to the first session index of that era.
 	///
@@ -306,17 +307,17 @@ pub mod pallet {
 	/// This is basically in sync with the call to [`SessionManager::new_session`].
 	#[pallet::storage]
 	#[pallet::getter(fn current_planned_session)]
-	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
+	pub(crate) type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// The payout for validators and the system for the current era.
 	#[pallet::storage]
 	#[pallet::getter(fn era_payout)]
-	pub type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
+	pub(crate) type EraPayout<T> = StorageValue<_, u128, ValueQuery>;
 
 	/// Offenders that to be reported to mainchain.
 	#[pallet::storage]
 	#[pallet::getter(fn offenders)]
-	pub type Offenders<T: Config> =
+	pub(crate) type Offenders<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, Kind, Twox64Concat, T::AccountId, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
