@@ -198,7 +198,7 @@ pub struct OctopusAppCrypto;
 impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	for OctopusAppCrypto
 {
-	type RuntimeAppPublic = OctopusId ;
+	type RuntimeAppPublic = OctopusId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
@@ -249,8 +249,8 @@ impl pallet_octopus_appchain::Config for Test {
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
 	type AuthorityId = OctopusId;
-	type AppCrypto = OctopusAppCrypto ;
-	type AssetIdByTokenId = OctopusAppchain ; 
+	type AppCrypto = OctopusAppCrypto;
+	type AssetIdByTokenId = OctopusAppchain;
 	type Event = Event;
 	type Call = Call;
 	type PalletId = OctopusAppchainPalletId;

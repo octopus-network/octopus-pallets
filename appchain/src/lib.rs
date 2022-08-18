@@ -459,7 +459,8 @@ pub mod pallet {
 	pub(crate) type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	pub(crate) type PlannedValidators<T: Config> = StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
+	pub(crate) type PlannedValidators<T: Config> =
+		StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -493,7 +494,8 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub(crate) type GitVersion<T: Config> = StorageValue<_, Vec<u8>, ValueQuery, DefaultForGitVersion>;
+	pub(crate) type GitVersion<T: Config> =
+		StorageValue<_, Vec<u8>, ValueQuery, DefaultForGitVersion>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

@@ -292,7 +292,8 @@ pub mod pallet {
 	/// If total hasn't been set or has been removed then 0 stake is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_total_stake)]
-	pub(crate) type ErasTotalStake<T: Config> = StorageMap<_, Twox64Concat, EraIndex, u128, ValueQuery>;
+	pub(crate) type ErasTotalStake<T: Config> =
+		StorageMap<_, Twox64Concat, EraIndex, u128, ValueQuery>;
 
 	/// A mapping from still-bonded eras to the first session index of that era.
 	///
