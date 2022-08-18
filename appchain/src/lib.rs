@@ -117,7 +117,7 @@ type BalanceOf<T> =
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Validator<AccountId> {
 	/// The validator's id.
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	validator_id_in_appchain: AccountId,
 	/// The total stake of this validator in mainchain's staking system.
@@ -143,7 +143,7 @@ pub struct BurnEvent<AccountId> {
 	#[serde(with = "serde_bytes")]
 	sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
@@ -159,7 +159,7 @@ pub struct BurnEvent<AccountId> {
 // 	#[serde(with = "serde_bytes")]
 // 	sender_id: Vec<u8>,
 // 	#[serde(rename = "receiver_id_in_appchain")]
-// 	#[serde(deserialize_with = "deserialize_from_hex_str")]
+// 	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 // 	#[serde(bound(deserialize = "AccountId: Decode"))]
 // 	receiver: AccountId,
 // 	#[serde(rename = "class_id")]
@@ -182,7 +182,7 @@ pub struct LockAssetEvent<AccountId> {
 	#[serde(with = "serde_bytes")]
 	sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
@@ -198,7 +198,7 @@ pub struct BurnNftEvent<AccountId> {
 	#[serde(with = "serde_bytes")]
 	sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
-	#[serde(deserialize_with = "deserialize_from_hex_str")]
+	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
 	receiver: AccountId,
 	#[serde(rename = "class_id")]
@@ -234,7 +234,7 @@ pub enum NotificationResult {
 	NftUnlockFailed,
 }
 
-fn deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
+fn account_deserialize_from_hex_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
 where
 	S: Decode,
 	D: Deserializer<'de>,
@@ -435,16 +435,10 @@ pub mod pallet {
 
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
-	pub(crate) type AssetIdByTokenId<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		Vec<u8>,
-		T::AssetId,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
-	>;
+	pub(super) type AssetIdByTokenId<T: Config> =
+		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, OptionQuery, GetDefault>;
 
+	/// A storage discarded after StorageVersion 2.
 	#[pallet::storage]
 	pub(crate) type AssetIdByName<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
@@ -705,9 +699,19 @@ pub mod pallet {
 					); // last byte is 't'
 					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
 
+					let secondary_mainchain_rpc_endpoint = Self::secondary_rpc_endpoint(
+						anchor_contract[anchor_contract.len() - 1] == 116,
+					); // last byte is 't'
+					log!(
+						debug,
+						"current secondary_mainchain_rpc_endpoint {:?}",
+						secondary_mainchain_rpc_endpoint
+					);
+
 					if let Err(e) = Self::observing_mainchain(
 						block_number,
 						&mainchain_rpc_endpoint,
+						&secondary_mainchain_rpc_endpoint,
 						anchor_contract,
 						public,
 						key_data,
@@ -811,7 +815,6 @@ pub mod pallet {
 			let who = payload.public.clone().into_account();
 
 			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data);
-
 			if val_id.is_none() {
 				log!(
 					warn,
@@ -879,7 +882,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			receiver_id: Vec<u8>,
 			amount: BalanceOf<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
@@ -910,7 +913,7 @@ pub mod pallet {
 				sequence,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::mint_asset())]
@@ -921,7 +924,7 @@ pub mod pallet {
 			sender_id: Vec<u8>,
 			receiver: <T::Lookup as StaticLookup>::Source,
 			amount: T::AssetBalance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			let receiver = T::Lookup::lookup(receiver)?;
@@ -935,7 +938,7 @@ pub mod pallet {
 			asset_id: T::AssetId,
 			receiver_id: Vec<u8>,
 			amount: T::AssetBalance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
@@ -971,7 +974,7 @@ pub mod pallet {
 				sequence,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::set_asset_name())]
@@ -1026,7 +1029,7 @@ pub mod pallet {
 			class: T::ClassId,
 			instance: T::InstanceId,
 			receiver_id: Vec<u8>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
 
@@ -1068,7 +1071,7 @@ pub mod pallet {
 				sequence,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
@@ -1231,12 +1234,12 @@ pub mod pallet {
 		pub fn observing_mainchain(
 			block_number: T::BlockNumber,
 			mainchain_rpc_endpoint: &str,
+			secondary_mainchain_rpc_endpoint: &str,
 			anchor_contract: Vec<u8>,
 			public: <T as SigningTypes>::Public,
 			key_data: Vec<u8>,
 			_validator_id: T::AccountId,
 		) -> Result<(), &'static str> {
-			let mut obs: Vec<Observation<<T as frame_system::Config>::AccountId>>;
 			let next_notification_id = NextNotificationId::<T>::get();
 			log!(debug, "next_notification_id: {}", next_notification_id);
 			let next_set_id = NextSetId::<T>::get();
@@ -1250,22 +1253,18 @@ pub mod pallet {
 				next_set_id,
 			);
 
-			match ret {
-				Ok(observations) => {
-					obs = observations;
-				},
+			let mut obs = match ret {
+				Ok(observations) => observations,
 				Err(_) => {
 					log!(debug, "retry with failsafe endpoint to get validators");
-					obs = Self::get_validator_list_of(
-						&Self::secondary_rpc_endpoint(
-							anchor_contract[anchor_contract.len() - 1] == 116,
-						), // last byte is 't'
+					Self::get_validator_list_of(
+						secondary_mainchain_rpc_endpoint,
 						anchor_contract.clone(),
 						next_set_id,
 					)
-					.map_err(|_| "Failed to get_validator_list_of")?;
+					.map_err(|_| "Failed to get_validator_list_of")?
 				},
-			}
+			};
 
 			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
@@ -1279,23 +1278,19 @@ pub mod pallet {
 					T::RequestEventLimit::get(),
 				);
 
-				match ret {
-					Ok(observations) => {
-						obs = observations;
-					},
+				obs = match ret {
+					Ok(observations) => observations,
 					Err(_) => {
 						log!(debug, "retry with failsafe endpoint to get notify");
-						obs = Self::get_appchain_notification_histories(
-							&Self::secondary_rpc_endpoint(
-								anchor_contract[anchor_contract.len() - 1] == 116,
-							), // last byte is 't'
+						Self::get_appchain_notification_histories(
+							secondary_mainchain_rpc_endpoint,
 							anchor_contract,
 							next_notification_id,
 							T::RequestEventLimit::get(),
 						)
-						.map_err(|_| "Failed to get_appchain_notification_histories")?;
+						.map_err(|_| "Failed to get_appchain_notification_histories")?
 					},
-				}
+				};
 			}
 
 			if obs.len() == 0 {
@@ -1350,7 +1345,7 @@ pub mod pallet {
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
 			sequence: Option<u32>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(asset_id, &receiver, amount)?;
 			Self::deposit_event(Event::AssetMinted {
 				asset_id,
@@ -1360,7 +1355,7 @@ pub mod pallet {
 				sequence,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 
 		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
@@ -1676,10 +1671,10 @@ pub mod pallet {
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
 			match observation.clone() {
-				Observation::UpdateValidatorSet(_) => return ObservationType::UpdateValidatorSet,
-				Observation::Burn(_) => return ObservationType::Burn,
-				Observation::LockAsset(_) => return ObservationType::LockAsset,
-				Observation::BurnNft(_) => return ObservationType::BurnNft,
+				Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+				Observation::Burn(_) => ObservationType::Burn,
+				Observation::LockAsset(_) => ObservationType::LockAsset,
+				Observation::BurnNft(_) => ObservationType::BurnNft,
 			}
 		}
 
