@@ -8,7 +8,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
 		OpaqueKeys, Verify,
 	},
-	MultiSignature,
+	KeyTypeId, MultiSignature,
 };
 
 pub use frame_support::{
@@ -201,7 +201,7 @@ pub struct OctopusAppCrypto;
 impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	for OctopusAppCrypto
 {
-	type RuntimeAppPublic = pallet_octopus_appchain::AuthorityId;
+	type RuntimeAppPublic = pallet_octopus_appchain::sr25519::AuthorityId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
@@ -280,6 +280,24 @@ impl pallet_uniques::Config for Test {
 	type WeightInfo = ();
 }
 
+pub struct MockLpos<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for MockLpos<T> {
+	fn is_active_validator(
+		_id: KeyTypeId,
+		_key_data: &[u8],
+	) -> Option<<T as frame_system::Config>::AccountId> {
+		Some(authority_keys_from_seed("Alice"))
+	}
+
+	fn active_stake_of(who: &<T as frame_system::Config>::AccountId) -> u128 {
+		100u128
+	}
+
+	fn active_total_stake() -> Option<u128> {
+		Some(100u128)
+	}
+}
+
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
 	   pub const GracePeriod: u32 = 10;
@@ -289,14 +307,13 @@ parameter_types! {
 }
 
 impl pallet_octopus_appchain::Config for Test {
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
-	type AssetIdByTokenId = OctopusAppchain;
-	type AuthorityId = OctopusAppCrypto;
+	type AuthorityId = pallet_octopus_appchain::sr25519::AuthorityId;
+	type AppCrypto = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
 	type PalletId = OctopusAppchainPalletId;
-	type LposInterface = OctopusLpos;
+	// type LposInterface = OctopusLpos;
+	type LposInterface = MockLpos<Test>;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type ClassId = ClassId;
 	type InstanceId = InstanceId;
@@ -304,6 +321,9 @@ impl pallet_octopus_appchain::Config for Test {
 	type Convertor = ExampleConvertor<Test>;
 	type Currency = Balances;
 	type Assets = Assets;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type AssetIdByTokenId = OctopusAppchain;
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
@@ -343,8 +363,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let initial_authorities: Vec<(AccountId, OctopusId)> =
-		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")];
+	let initial_authorities: Vec<(AccountId, OctopusId)> = vec![
+		authority_keys_from_seed("Alice"),
+		// authority_keys_from_seed("Bob"),
+	];
 	let validators = initial_authorities.iter().map(|x| (x.0.clone(), stash)).collect::<Vec<_>>();
 
 	let keys: Vec<_> = initial_authorities

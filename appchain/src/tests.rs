@@ -72,6 +72,12 @@ fn test_force_set_params() {
 			BadOrigin
 		);
 		assert_eq!(OctopusAppchain::next_set_id(), 1);
+
+		assert_ok!(OctopusAppchain::force_set_next_notification_id(Origin::root(), 10));
+		assert_noop!(
+			OctopusAppchain::force_set_next_notification_id(Origin::signed(ferdie.clone()), 12),
+			BadOrigin
+		);
 	});
 }
 
