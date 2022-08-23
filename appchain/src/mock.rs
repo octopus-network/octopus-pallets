@@ -100,7 +100,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-use pallet_octopus_appchain::AuthorityId as OctopusId;
+use pallet_octopus_appchain::sr25519::AuthorityId as OctopusId;
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub octopus: OctopusAppchain,
@@ -202,7 +202,7 @@ pub struct OctopusAppCrypto;
 impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	for OctopusAppCrypto
 {
-	type RuntimeAppPublic = pallet_octopus_appchain::AuthorityId;
+	type RuntimeAppPublic = OctopusId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
@@ -293,7 +293,8 @@ impl Config for Test {
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
 	type AssetIdByTokenId = OctopusAppchain;
-	type AuthorityId = OctopusAppCrypto;
+	type AuthorityId = OctopusId;
+	type AppCrypto = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
 	type PalletId = OctopusAppchainPalletId;

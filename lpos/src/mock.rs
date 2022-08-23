@@ -98,7 +98,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-use pallet_octopus_appchain::AuthorityId as OctopusId;
+use pallet_octopus_appchain::sr25519::AuthorityId as OctopusId;
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub octopus: OctopusAppchain,
@@ -198,7 +198,7 @@ pub struct OctopusAppCrypto;
 impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	for OctopusAppCrypto
 {
-	type RuntimeAppPublic = pallet_octopus_appchain::AuthorityId;
+	type RuntimeAppPublic = OctopusId;
 	type GenericSignature = sp_core::sr25519::Signature;
 	type GenericPublic = sp_core::sr25519::Public;
 }
@@ -248,8 +248,9 @@ impl pallet_octopus_appchain::Config for Test {
 	type Convertor = ();
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
-	type AssetIdByName = OctopusAppchain;
-	type AuthorityId = OctopusAppCrypto;
+	type AuthorityId = OctopusId;
+	type AppCrypto = OctopusAppCrypto;
+	type AssetIdByTokenId = OctopusAppchain;
 	type Event = Event;
 	type Call = Call;
 	type PalletId = OctopusAppchainPalletId;
@@ -352,7 +353,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 			premined_amount: 1024 * DOLLARS,
-			asset_id_by_name: vec![("usdc.testnet".to_string(), 2)],
+			asset_id_by_token_id: vec![("usdc.testnet".to_string(), 2)],
 		},
 		session: pallet_session::GenesisConfig { keys },
 	}
