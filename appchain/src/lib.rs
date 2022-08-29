@@ -528,9 +528,11 @@ pub mod pallet {
 			let min = T::Currency::minimum_balance();
 			let amount =
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
-			if amount >= min {
-				T::Currency::make_free_balance_be(&account_id, amount);
-			}
+
+			let init_amount = min + amount;
+
+			T::Currency::make_free_balance_be(&account_id, init_amount);
+
 			<OctopusPalletId<T>>::put(Some(account_id));
 			for (token_id, asset_id) in self.asset_id_by_token_id.iter() {
 				<AssetIdByTokenId<T>>::insert(token_id.as_bytes(), asset_id);
