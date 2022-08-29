@@ -559,12 +559,14 @@ pub mod pallet {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: BalanceOf<T>,
+			sequence: u32,
 		},
 		/// An `amount` unlock to `receiver` from `sender` failed.
 		UnlockFailed {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: BalanceOf<T>,
+			sequence: u32,
 		},
 
 		AssetMinted {
@@ -593,6 +595,7 @@ pub mod pallet {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
+			sequence: u32,
 		},
 
 		TransferredFromPallet {
@@ -613,6 +616,7 @@ pub mod pallet {
 			receiver: T::AccountId,
 			class: T::ClassId,
 			instance: T::InstanceId,
+			sequence: u32,
 		},
 
 		NftUnlockFailed {
@@ -620,6 +624,7 @@ pub mod pallet {
 			receiver: T::AccountId,
 			class: T::ClassId,
 			instance: T::InstanceId,
+			sequence: u32,
 		},
 	}
 
@@ -1331,6 +1336,7 @@ pub mod pallet {
 			sender_id: Vec<u8>,
 			receiver: T::AccountId,
 			amount: u128,
+			sequence: u32,
 		) -> DispatchResultWithPostInfo {
 			let amount_unwrapped = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 			// unlock native token
@@ -1339,6 +1345,7 @@ pub mod pallet {
 				sender: sender_id,
 				receiver,
 				amount: amount_unwrapped,
+				sequence,
 			});
 
 			Ok(().into())
@@ -1546,8 +1553,10 @@ pub mod pallet {
 							event.sender_id.clone(),
 							event.receiver.clone(),
 							event.amount,
+							event.index,
 						) {
-							log!(warn, "️️️failed to unlock native token, send_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+							log!(warn, "️️️failed to unlock native token, sequence: {:?}, send_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+							event.index,
 							event.sender_id.clone(),
 							event.receiver.clone(),
 							event.amount,
@@ -1558,6 +1567,7 @@ pub mod pallet {
 								sender: event.sender_id,
 								receiver: event.receiver,
 								amount: amount_unwrapped,
+								sequence: event.index,
 							});
 							result = NotificationResult::UnlockFailed;
 						}
@@ -1577,7 +1587,8 @@ pub mod pallet {
 						{
 							log!(
 								info,
-								"️️️mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
+								"️️️sequence: {:?}, mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
+								event.index,
 								asset_id,
 								event.sender_id,
 								event.receiver,
@@ -1591,7 +1602,8 @@ pub mod pallet {
 								event.amount.into(),
 								Some(sequence),
 							) {
-								log!(warn, "️️️failed to mint asset, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+								log!(warn, "️️️failed to mint asset, sequence: {:?}, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+								event.index,
 								asset_id,
 								event.sender_id.clone(),
 								event.receiver.clone(),
@@ -1609,7 +1621,8 @@ pub mod pallet {
 						} else {
 							log!(
 								warn,
-								"️️️failed to mint asset, token_id: {:?}, error: AssetIdGetFailed",
+								"️️️failed to mint asset, sequence: {:?}, token_id: {:?}, error: AssetIdGetFailed",
+								event.index,
 								event.token_id
 							);
 							Self::deposit_event(Event::AssetIdGetFailed {
@@ -1617,6 +1630,7 @@ pub mod pallet {
 								sender: event.sender_id,
 								receiver: event.receiver,
 								amount: event.amount.into(),
+								sequence: event.index,
 							});
 							result = NotificationResult::AssetGetFailed;
 						}
@@ -1639,8 +1653,10 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.class.into(),
 							event.instance.into(),
+							event.index,
 						) {
-							log!(warn, "️️️failed to unlock nft, send_id: {:?}, receiver: {:?}, class: {:?}, instance: {:?}, error: {:?}",
+							log!(warn, "️️️failed to unlock nft, sequence: {:?}, send_id: {:?}, receiver: {:?}, class: {:?}, instance: {:?}, error: {:?}",
+							event.index,
 							event.sender_id.clone(),
 							event.receiver.clone(),
 							event.class,
@@ -1652,6 +1668,7 @@ pub mod pallet {
 								receiver: event.receiver,
 								class: event.class.into(),
 								instance: event.instance.into(),
+								sequence: event.index,
 							});
 
 							result = NotificationResult::NftUnlockFailed;
@@ -1728,6 +1745,7 @@ pub mod pallet {
 			receiver: T::AccountId,
 			class: T::ClassId,
 			instance: T::InstanceId,
+			sequence: u32,
 		) -> DispatchResultWithPostInfo {
 			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
 				&class, &instance, &receiver,
@@ -1738,6 +1756,7 @@ pub mod pallet {
 				receiver,
 				class,
 				instance,
+				sequence,
 			});
 
 			Ok(().into())
