@@ -1554,13 +1554,23 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.amount,
 							error);
-							let min = T::Currency::minimum_balance();
-							let amount_unwrapped = event.amount.checked_into().unwrap_or(min); //Check: should not return error.
-							Self::deposit_event(Event::UnlockFailed {
-								sender: event.sender_id,
-								receiver: event.receiver,
-								amount: amount_unwrapped,
-							});
+							match event.amount.checked_into() {
+								Some(v) => {
+									Self::deposit_event(Event::UnlockFailed {
+										sender: event.sender_id,
+										receiver: event.receiver,
+										amount: v,
+									});
+								},
+								None => {
+									log!(
+										warn,
+										"faild to convert amount in burn , amount : {:?}",
+										event.amount
+									);
+									// min
+								},
+							};
 							result = NotificationResult::UnlockFailed;
 						}
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
