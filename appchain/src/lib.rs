@@ -1554,23 +1554,23 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.amount,
 							error);
-							match event.amount.checked_into() {
-								Some(v) => {
-									Self::deposit_event(Event::UnlockFailed {
-										sender: event.sender_id,
-										receiver: event.receiver,
-										amount: v,
-									});
-								},
+							let amount_unwrapped = match event.amount.checked_into() {
+								Some(v) => v,
 								None => {
 									log!(
 										warn,
 										"faild to convert amount in burn , amount : {:?}",
 										event.amount
 									);
-									// min
+									0u128.checked_into().unwrap()
 								},
 							};
+
+							Self::deposit_event(Event::UnlockFailed {
+								sender: event.sender_id,
+								receiver: event.receiver,
+								amount: amount_unwrapped,
+							}); 
 							result = NotificationResult::UnlockFailed;
 						}
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
