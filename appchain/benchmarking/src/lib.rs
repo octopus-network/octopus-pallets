@@ -155,11 +155,7 @@ benchmarks! {
 	}
 
 	force_set_next_set_id {
-		let b in 2 .. 100000u32;
-		let mut next_set_id:u32 = 1;
-		for i in 2 .. b{
-			next_set_id = i;
-		}
+		let next_set_id:u32 = 1;
 	}: {
 		let _ = AppchainPallet::<T>::force_set_next_set_id(RawOrigin::Root.into(), next_set_id);
 	}
@@ -401,11 +397,7 @@ benchmarks! {
 	}
 
 	force_set_next_notification_id {
-		let b in 2 .. 100000u32;
-		let mut next_notification_id:u32 = 1;
-		for i in 2 .. b{
-			next_notification_id = i;
-		}
+		let next_notification_id:u32 = 1;
 	}: {
 		let ret = AppchainPallet::<T>::force_set_next_notification_id(RawOrigin::Root.into(), next_notification_id);
 		assert!(ret.is_ok());

@@ -831,7 +831,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id(*next_set_id))]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id())]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
@@ -1074,7 +1074,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id(*next_notification_id))]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
 		pub fn force_set_next_notification_id(
 			origin: OriginFor<T>,
 			next_notification_id: u32,
