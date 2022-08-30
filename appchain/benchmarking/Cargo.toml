@@ -38,6 +38,8 @@ pallet-session = { git = "https://github.com/paritytech/substrate.git", branch =
 pallet-octopus-lpos = { path = "../../lpos" }
 pallet-octopus-upward-messages = { path = "../../upward-messages" }
 
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.18" }
+
 [features]
 default = ["std"]
 std = [

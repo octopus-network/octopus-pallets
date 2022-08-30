@@ -119,35 +119,35 @@ pub struct Validator<AccountId> {
 	/// The validator's id.
 	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	validator_id_in_appchain: AccountId,
+	pub validator_id_in_appchain: AccountId,
 	/// The total stake of this validator in mainchain's staking system.
 	#[serde(deserialize_with = "deserialize_from_str")]
-	total_stake: u128,
+	pub total_stake: u128,
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ValidatorSet<AccountId> {
 	/// The anchor era that this set belongs to.
-	set_id: u32,
+	pub set_id: u32,
 	/// Validators in this set.
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	validators: Vec<Validator<AccountId>>,
+	pub validators: Vec<Validator<AccountId>>,
 }
 
 /// Appchain token burn event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnEvent<AccountId> {
 	#[serde(default)]
-	index: u32,
+	pub index: u32,
 	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
+	pub sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
 	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
+	pub receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
+	pub amount: u128,
 }
 
 // /// Appchain token burn event.
@@ -174,39 +174,39 @@ pub struct BurnEvent<AccountId> {
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct LockAssetEvent<AccountId> {
 	#[serde(default)]
-	index: u32,
+	pub index: u32,
 	#[serde(rename = "contract_account")]
 	#[serde(with = "serde_bytes")]
-	token_id: Vec<u8>,
+	pub token_id: Vec<u8>,
 	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
+	pub sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
 	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
+	pub receiver: AccountId,
 	#[serde(deserialize_with = "deserialize_from_str")]
-	amount: u128,
+	pub amount: u128,
 }
 
 /// Appchain token lock event.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct BurnNftEvent<AccountId> {
 	#[serde(default)]
-	index: u32,
+	pub index: u32,
 	#[serde(rename = "sender_id_in_near")]
 	#[serde(with = "serde_bytes")]
-	sender_id: Vec<u8>,
+	pub sender_id: Vec<u8>,
 	#[serde(rename = "receiver_id_in_appchain")]
 	#[serde(deserialize_with = "account_deserialize_from_hex_str")]
 	#[serde(bound(deserialize = "AccountId: Decode"))]
-	receiver: AccountId,
+	pub receiver: AccountId,
 	#[serde(rename = "class_id")]
 	#[serde(deserialize_with = "deserialize_from_str")]
-	class: u128,
+	pub class: u128,
 	#[serde(rename = "token_id")]
 	#[serde(deserialize_with = "deserialize_from_str")]
-	instance: u128,
+	pub instance: u128,
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -288,10 +288,10 @@ impl<AccountId> Observation<AccountId> {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ObservationsPayload<Public, BlockNumber, AccountId> {
-	public: Public,
-	key_data: Vec<u8>,
-	block_number: BlockNumber,
-	observations: Vec<Observation<AccountId>>,
+	pub public: Public,
+	pub key_data: Vec<u8>,
+	pub block_number: BlockNumber,
+	pub observations: Vec<Observation<AccountId>>,
 }
 
 impl<T: SigningTypes> SignedPayload<T>
@@ -742,12 +742,7 @@ pub mod pallet {
 				onchain
 			);
 
-			if current == 1 && onchain == 0 {
-				let translated = 1u64;
-				Self::migration_to_v1();
-				current.put::<Pallet<T>>();
-				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
-			} else if current == 2 && onchain == 1 {
+			if current == 2 && onchain == 1 {
 				let translated = Self::migration_to_v2(1u64);
 				current.put::<Pallet<T>>();
 				T::DbWeight::get().reads_writes(translated, translated)
@@ -763,12 +758,6 @@ pub mod pallet {
 				);
 				T::DbWeight::get().reads(1)
 			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
-			Ok(())
 		}
 	}
 
@@ -805,7 +794,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit observations.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
 		pub fn submit_observations(
 			origin: OriginFor<T>,
 			payload: ObservationsPayload<
@@ -850,7 +839,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id(*next_set_id))]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id())]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
@@ -1093,7 +1082,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
 		pub fn force_set_next_notification_id(
 			origin: OriginFor<T>,
 			next_notification_id: u32,
