@@ -302,7 +302,6 @@ impl Config for Test {
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
-	type BlocksPerEra = BlocksPerEra;
 	type SessionInterface = Self;
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;

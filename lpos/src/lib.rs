@@ -203,9 +203,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type SessionsPerEra: Get<SessionIndex>;
 
-		#[pallet::constant]
-		type BlocksPerEra: Get<u32>;
-
 		/// Number of eras that staked funds must remain bonded for.
 		#[pallet::constant]
 		type BondingDuration: Get<EraIndex>;
@@ -615,8 +612,24 @@ impl<T: Config> Pallet<T> {
 			.collect::<Vec<T::AccountId>>();
 
 		log!(debug, "All validators: {:?}", validators.clone());
-		let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 80 / 100;
+
 		let era_reward_points = <ErasRewardPoints<T>>::get(index);
+
+		// All validators did not produce blocks, so they should be excluded.
+		if era_reward_points.individual.is_empty() {
+			log!(warn, "Era {:?}, no validator produce block", index);
+			return validators
+		}
+
+		let expect_points = era_reward_points.total / validators.len() as u32 * 80 / 100;
+		log!(
+			debug,
+			"Era {:?}, total points: {:?}, worked validators len: {:?}",
+			index,
+			era_reward_points.total,
+			era_reward_points.individual.len()
+		);
+
 		let qualified_validators = era_reward_points
 			.individual
 			.into_iter()
