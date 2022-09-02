@@ -16,3 +16,6 @@ Collection of pallets used in Octopus Network
 
 ## [pallet-octopus-upward-messages](https://github.com/octopus-network/octopus-pallets/tree/main/upward-messages)
 - This pallet manages the cross-chain messages sent from appchain to mainchain.
+
+## [pallet-chainbeidge](https://github.com/octopus-network/octopus-pallets/tree/feature/add-chainbridge)
+- This pallet enable crosschain transfer between Ethereum And Appchain.
