@@ -7,7 +7,7 @@ use codec::{Decode, Encode};
 use frame_support::{
     dispatch::DispatchError,
     ensure,
-    traits::{Get, StorageVersion, EnsureOrigin},
+    traits::{EnsureOrigin, Get, StorageVersion},
     PalletId,
 };
 use pallet_octopus_support::log;
@@ -238,151 +238,204 @@ pub mod pallet {
     // Dispatchable functions must be annotated with a weight and must return a DispatchResult.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-		
-		#[pallet::weight(195_000_0000)]
-		pub fn set_threshold(origin: OriginFor<T>, threshold: u32) -> DispatchResult {
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn set_threshold(origin: OriginFor<T>, threshold: u32) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn set_resource(origin: OriginFor<T>, id: ResourceId, method: Vec<u8>) -> DispatchResult {
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn set_resource(
+            origin: OriginFor<T>,
+            id: ResourceId,
+            method: Vec<u8>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn whitelist_chain(origin: OriginFor<T>, id: ChainId) -> DispatchResult {
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn whitelist_chain(origin: OriginFor<T>, id: ChainId) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn add_relayer(origin: OriginFor<T>, v: T::AccountId) -> DispatchResult {
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn add_relayer(origin: OriginFor<T>, v: T::AccountId) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn remove_relayer(origin: OriginFor<T>, v: T::AccountId) -> DispatchResult {
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn remove_relayer(origin: OriginFor<T>, v: T::AccountId) -> DispatchResult {
+            todo!()
+        }
 
-		// TODO: need handle weight
-		#[pallet::weight(195_000_0000)]
-		pub fn acknowledge_proposal(origin: OriginFor<T>, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Config>::Proposal>) -> DispatchResult { 
-			todo!()
-		}
+        // TODO: need handle weight
+        #[pallet::weight(195_000_0000)]
+        pub fn acknowledge_proposal(
+            origin: OriginFor<T>,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            r_id: ResourceId,
+            call: Box<<T as Config>::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn reject_proposal(origin: OriginFor<T>, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Config>::Proposal>) -> DispatchResult { 
-			todo!()
-		}
+        #[pallet::weight(195_000_0000)]
+        pub fn reject_proposal(
+            origin: OriginFor<T>,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            r_id: ResourceId,
+            call: Box<<T as Config>::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		#[pallet::weight(195_000_0000)]
-		pub fn eval_vote_state(origin: OriginFor<T>, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Config>::Proposal>) -> DispatchResult { 
-			todo!()
-		}
-	}
+        #[pallet::weight(195_000_0000)]
+        pub fn eval_vote_state(
+            origin: OriginFor<T>,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            r_id: ResourceId,
+            call: Box<<T as Config>::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
+    }
 
     impl<T: Config> Pallet<T> {
-		// *** Utility methods ***
-		
-		pub fn ensure_admin(o: T::Origin) -> DispatchResult {
-			todo!()
-		}
+        // *** Utility methods ***
 
-		pub fn is_relayer(who: &T::AccountId) -> bool {
-			todo!()
-		}
+        pub fn ensure_admin(o: T::Origin) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn account_id() -> T::AccountId {
-			todo!()
-		}
+        pub fn is_relayer(who: &T::AccountId) -> bool {
+            todo!()
+        }
 
-		pub fn resource_exists(id: ResourceId) -> bool {
-			todo!()
-		}
+        pub fn account_id() -> T::AccountId {
+            todo!()
+        }
 
-		pub fn chain_whitelisted(id: ChainId) -> bool {
-			todo!()
-		}
+        pub fn resource_exists(id: ResourceId) -> bool {
+            todo!()
+        }
 
-		fn bump_nonce(id: ChainId) -> DispatchResult {
-			todo!()
-		}
+        pub fn chain_whitelisted(id: ChainId) -> bool {
+            todo!()
+        }
 
-		// *** Admin methods *** 
+        fn bump_nonce(id: ChainId) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn set_relayer_threshold(threshold: u32) -> DispatchResult {
-			todo!()
-		}
+        // *** Admin methods ***
 
-		pub fn register_resource(id: ResourceId, method: Vec<u8>) -> DispatchResult {
-			todo!()
-		}
+        pub fn set_relayer_threshold(threshold: u32) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn unregister_resource(id: ResourceId) -> DispatchResult {
-			todo!()
-		}
+        pub fn register_resource(id: ResourceId, method: Vec<u8>) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn whitelist(id: ChainId) -> DispatchResult {
-			todo!()
-		}
+        pub fn unregister_resource(id: ResourceId) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn register_relayer(relayer: T::AccountId) -> DispatchResult {
-			todo!()
-		}
+        pub fn whitelist(id: ChainId) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn unregister_relayer(relayer: T::AccountId) -> DispatchResult {
-			todo!()
-		}
+        pub fn register_relayer(relayer: T::AccountId) -> DispatchResult {
+            todo!()
+        }
 
-		// ** Proposal voting and execution methods ***
+        pub fn unregister_relayer(relayer: T::AccountId) -> DispatchResult {
+            todo!()
+        }
 
-		fn commit_vote(who: T::AccountId, nonce: DepositNonce, src_id: ChainId, prop: Box<T::Proposal>, in_favour: bool) -> DispatchResult{
-			todo!()
-		}
+        // ** Proposal voting and execution methods ***
 
-		fn try_resolve_proposal(nonce: DepositNonce, src_id: ChainId, prop: Box<T::Proposal>) -> DispatchResult {
-			todo!()
-		}
+        fn commit_vote(
+            who: T::AccountId,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            prop: Box<T::Proposal>,
+            in_favour: bool,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		fn vote_for(who: T::AccountId, nonce: DepositNonce, src_id: ChainId, prop: Box<T::Proposal>) -> DispatchResult {
-			todo!()
-		}
+        fn try_resolve_proposal(
+            nonce: DepositNonce,
+            src_id: ChainId,
+            prop: Box<T::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		fn vote_against(who: T::AccountId, nonce: DepositNonce, src_id: ChainId, prop: Box<T::Proposal>) -> DispatchResult {
-			todo!()
-		}
+        fn vote_for(
+            who: T::AccountId,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            prop: Box<T::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		fn cancel_execution(src_id: ChainId, nonce: DepositNonce) -> DispatchResult {
-			todo!()
-		}
+        fn vote_against(
+            who: T::AccountId,
+            nonce: DepositNonce,
+            src_id: ChainId,
+            prop: Box<T::Proposal>,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn transfer_fungible(dest_id: ChainId, resource_id: ResourceId, to: Vec<u8>, amount: H256) -> DispatchResult {
-			todo!()
-		}
+        fn cancel_execution(src_id: ChainId, nonce: DepositNonce) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn transfer_nonfungible(dest_id: ChainId, resource_id: ResourceId, token_id: Vec<u8>, to: Vec<u8>, metadata: Vec<u8>) -> DispatchResult {
-			todo!()
-		}
+        pub fn transfer_fungible(
+            dest_id: ChainId,
+            resource_id: ResourceId,
+            to: Vec<u8>,
+            amount: H256,
+        ) -> DispatchResult {
+            todo!()
+        }
 
-		pub fn transfer_generic(dest_id: ChainId, resource_id: ResourceId, metadata: Vec<u8>) -> DispatchResult {
-			todo!()
-		}
-	}
+        pub fn transfer_nonfungible(
+            dest_id: ChainId,
+            resource_id: ResourceId,
+            token_id: Vec<u8>,
+            to: Vec<u8>,
+            metadata: Vec<u8>,
+        ) -> DispatchResult {
+            todo!()
+        }
+
+        pub fn transfer_generic(
+            dest_id: ChainId,
+            resource_id: ResourceId,
+            metadata: Vec<u8>,
+        ) -> DispatchResult {
+            todo!()
+        }
+    }
 }
-
 
 pub struct EnsureBridge<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> EnsureOrigin<T::Origin> for EnsureBridge<T> {
-	type Success = T::AccountId;
+    type Success = T::AccountId;
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
-		todo!()
-	}
+    fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+        todo!()
+    }
 
-	#[cfg(feature = "runtime-benchmarks")]
+    #[cfg(feature = "runtime-benchmarks")]
     fn successful_origin() -> T::Origin {
-        T::Origin::from(
-            frame_system::RawOrigin::Signed(<Module<T>>::account_id())
-        )
+        T::Origin::from(frame_system::RawOrigin::Signed(<Module<T>>::account_id()))
     }
 }
