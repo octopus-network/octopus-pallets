@@ -6,4 +6,5 @@ members = [
 	"lpos",
 	"support",
 	"upward-messages",
+	"chainbridge",
 ]
