@@ -659,6 +659,7 @@ fn test_submit_validator_sets_on_chain() {
 		OctopusAppchain::observing_mainchain(
 			2,
 			"https://rpc.testnet.near.org",
+			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
 			public.clone(),
 			public.into_account().encode(), // default value.
@@ -731,6 +732,7 @@ fn test_submit_notifies_on_chain() {
 		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
 		OctopusAppchain::observing_mainchain(
 			2,
+			"https://rpc.testnet.near.org",
 			"https://rpc.testnet.near.org",
 			b"oct-test.testnet".to_vec(),
 			public.clone(),
