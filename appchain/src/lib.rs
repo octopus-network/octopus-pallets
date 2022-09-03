@@ -348,6 +348,7 @@ pub mod pallet {
 			+ Copy
 			+ Debug
 			+ Default
+			+ MaxEncodedLen
 			+ MaybeSerializeDeserialize;
 
 		type AssetBalance: Parameter
@@ -359,6 +360,7 @@ pub mod pallet {
 			+ Into<u128>
 			+ Copy
 			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
 			+ Debug;
 
 		type Assets: fungibles::Mutate<
@@ -379,15 +381,8 @@ pub mod pallet {
 		/// The type used to identify a unique nft asset within an asset class.
 		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
 
-		type Uniques: nonfungibles::Inspect<
-				Self::AccountId,
-				InstanceId = Self::InstanceId,
-				ClassId = Self::ClassId,
-			> + nonfungibles::Transfer<
-				Self::AccountId,
-				InstanceId = Self::InstanceId,
-				ClassId = Self::ClassId,
-			>;
+		type Uniques: nonfungibles::Inspect<Self::AccountId>
+			+ nonfungibles::Transfer<Self::AccountId>;
 
 		type Convertor: ConvertIntoNep171<ClassId = Self::ClassId, InstanceId = Self::InstanceId>;
 
@@ -1035,11 +1030,11 @@ pub mod pallet {
 				None => return Err(Error::<T>::ConvertorNotImplement.into()),
 			};
 
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-				&class,
-				&instance,
-				&Self::account_id(),
-			)?;
+			// <T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+			// 	&class,
+			// 	&instance,
+			// 	&Self::account_id(),
+			// )?;
 
 			let prefix = String::from("0x");
 			let hex_sender = prefix + &hex::encode(who.encode());
@@ -1118,7 +1113,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn account_id() -> T::AccountId {
-			T::PalletId::get().into_account()
+			T::PalletId::get().into_account_truncating()
 		}
 
 		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
@@ -1731,9 +1726,9 @@ pub mod pallet {
 			instance: T::InstanceId,
 			sequence: u32,
 		) -> DispatchResultWithPostInfo {
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-				&class, &instance, &receiver,
-			)?;
+			// <T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+			// 	&class, &instance, &receiver,
+			// )?;
 
 			Self::deposit_event(Event::NftUnlocked {
 				sender: sender_id,
