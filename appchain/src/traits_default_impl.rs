@@ -19,7 +19,7 @@ where
 
 	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
 	/// (or somehow has no owner).
-	fn owner(collection: &Self::CollectionId, item: &Self::ItemId) -> Option<AccountId> {
+	fn owner(_collection: &Self::CollectionId, _item: &Self::ItemId) -> Option<AccountId> {
 		None
 	}
 }
@@ -30,9 +30,9 @@ where
 {
 	/// Transfer `item` of `collection` into `destination` account.
 	fn transfer(
-		collection: &Self::CollectionId,
-		item: &Self::ItemId,
-		destination: &AccountId,
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
+		_destination: &AccountId,
 	) -> DispatchResult {
 		log!(debug, "Should not go there for every: not impl trait nonfungibles::Transfer.");
 		Err(sp_runtime::DispatchError::Other("NoUniquesImpl"))
@@ -118,8 +118,8 @@ where
 	type InstanceId = <T as Config>::InstanceId;
 
 	fn convert_into_nep171_metadata(
-		class: Self::ClassId,
-		instance: Self::InstanceId,
+		_class: Self::ClassId,
+		_instance: Self::InstanceId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
 		// if let Some(class_attribute) =
@@ -206,10 +206,10 @@ where
 	type InstanceId = <T as Config>::InstanceId;
 
 	fn convert_into_nep171_metadata(
-		class: Self::ClassId,
-		instance: Self::InstanceId,
+		_class: Self::ClassId,
+		_instance: Self::InstanceId,
 	) -> Option<Nep171TokenMetadata> {
-		let mut data: Vec<u8> = Vec::new();
+		let data: Vec<u8> = Vec::new();
 		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
 		// 	&class,
 		// 	&instance,
