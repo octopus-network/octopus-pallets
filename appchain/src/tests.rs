@@ -705,18 +705,18 @@ fn test_submit_validator_sets_on_chain() {
         observations: vec![expected_val_set()],
     };
 
-	t.execute_with(|| {
-		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
-		OctopusAppchain::observing_mainchain(
-			2,
-			"https://rpc.testnet.near.org",
-			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
-			public.clone(),
-			public.into_account().encode(), // default value.
-			account,
-		)
-		.unwrap();
+    t.execute_with(|| {
+        assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
+        OctopusAppchain::observing_mainchain(
+            2,
+            "https://rpc.testnet.near.org",
+            "https://rpc.testnet.near.org",
+            b"oct-test.testnet".to_vec(),
+            public.clone(),
+            public.into_account().encode(), // default value.
+            account,
+        )
+        .unwrap();
 
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -780,19 +780,18 @@ fn test_submit_notifies_on_chain() {
         observations: vec![expected_burn_notify()],
     };
 
-
-	t.execute_with(|| {
-		assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
-		OctopusAppchain::observing_mainchain(
-			2,
-			"https://rpc.testnet.near.org",
-			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
-			public.clone(),
-			public.into_account().encode(),
-			account,
-		)
-		.unwrap();
+    t.execute_with(|| {
+        assert_ok!(OctopusAppchain::force_set_next_set_id(Origin::root(), 1));
+        OctopusAppchain::observing_mainchain(
+            2,
+            "https://rpc.testnet.near.org",
+            "https://rpc.testnet.near.org",
+            b"oct-test.testnet".to_vec(),
+            public.clone(),
+            public.into_account().encode(),
+            account,
+        )
+        .unwrap();
 
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();

@@ -214,18 +214,18 @@ parameter_types! {
 }
 
 impl pallet_octopus_lpos::Config for Test {
-	type Currency = Balances;
-	type UnixTime = Timestamp;
-	type Event = Event;
-	type Reward = (); // rewards are minted from the void
-	type SessionsPerEra = SessionsPerEra;
-	type BondingDuration = BondingDuration;
-	type SessionInterface = Self;
-	type AppchainInterface = OctopusAppchain;
-	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
-	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
+    type Currency = Balances;
+    type UnixTime = Timestamp;
+    type Event = Event;
+    type Reward = (); // rewards are minted from the void
+    type SessionsPerEra = SessionsPerEra;
+    type BondingDuration = BondingDuration;
+    type SessionInterface = Self;
+    type AppchainInterface = OctopusAppchain;
+    type UpwardMessagesInterface = OctopusUpwardMessages;
+    type PalletId = OctopusAppchainPalletId;
+    type ValidatorsProvider = OctopusAppchain;
+    type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
 }
 
 impl pallet_octopus_upward_messages::Config for Test {

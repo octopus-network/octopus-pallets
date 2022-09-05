@@ -151,8 +151,7 @@ pub mod pallet {
     /// All whitelisted chains and their respective transaction counts
     #[pallet::storage]
     #[pallet::getter(fn chains)]
-    pub type ChainNonces<T: Config> =
-        StorageMap<_, Blake2_128Concat, ChainId, DepositNonce>;
+    pub type ChainNonces<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, DepositNonce>;
 
     #[pallet::type_value]
     pub fn DefaultRelayerThreshold() -> u32 {
@@ -271,7 +270,6 @@ pub mod pallet {
     // Dispatchable functions must be annotated with a weight and must return a DispatchResult.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-
         /// Sets the vote threshold for proposals.
         ///
         /// This threshold is used to determine how many votes are required
@@ -326,7 +324,6 @@ pub mod pallet {
             Self::whitelist(id)
         }
 
-
         /// Adds a new relayer to the relayer set.
         ///
         /// # <weight>
@@ -337,7 +334,6 @@ pub mod pallet {
             Self::ensure_admin(origin)?;
             Self::register_relayer(v)
         }
-
 
         /// Removes an existing relayer from the set.
         ///
@@ -369,12 +365,17 @@ pub mod pallet {
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
             ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
-            ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-            ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
+            ensure!(
+                Self::chain_whitelisted(src_id),
+                Error::<T>::ChainNotWhitelisted
+            );
+            ensure!(
+                Self::resource_exists(r_id),
+                Error::<T>::ResourceDoesNotExist
+            );
 
             Self::vote_for(who, nonce, src_id, call)
         }
-
 
         /// Commits a vote against a provided proposal.
         ///
@@ -391,12 +392,17 @@ pub mod pallet {
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
             ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
-            ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-            ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
+            ensure!(
+                Self::chain_whitelisted(src_id),
+                Error::<T>::ChainNotWhitelisted
+            );
+            ensure!(
+                Self::resource_exists(r_id),
+                Error::<T>::ResourceDoesNotExist
+            );
 
             Self::vote_against(who, nonce, src_id, call)
         }
-
 
         /// Evaluate the state of a proposal given the current vote threshold.
         ///
@@ -484,7 +490,10 @@ pub mod pallet {
             // Cannot whitelist this chain
             ensure!(id != T::ChainId::get(), Error::<T>::InvalidChainId);
             // Cannot whitelist with an existing entry
-            ensure!(!Self::chain_whitelisted(id), Error::<T>::ChainAlreadyWhitelisted);
+            ensure!(
+                !Self::chain_whitelisted(id),
+                Error::<T>::ChainAlreadyWhitelisted
+            );
             ChainNonces::<T>::insert(&id, 0);
             Self::deposit_event(Event::<T>::ChainWhitelisted(id));
             Ok(().into())
@@ -492,7 +501,10 @@ pub mod pallet {
 
         /// Adds a new relayer to the set
         pub fn register_relayer(relayer: T::AccountId) -> DispatchResult {
-            ensure!(!Self::is_relayer(&relayer), Error::<T>::RelayerAlreadyExists);
+            ensure!(
+                !Self::is_relayer(&relayer),
+                Error::<T>::RelayerAlreadyExists
+            );
             Relayers::<T>::insert(&relayer, true);
             let relayer_count = RelayerCount::<T>::get();
             RelayerCount::<T>::put(relayer_count + 1);
@@ -559,13 +571,14 @@ pub mod pallet {
                 ensure!(!votes.is_complete(), Error::<T>::ProposalAlreadyComplete);
                 ensure!(!votes.is_expired(now), Error::<T>::ProposalExpired);
 
-                let status = votes.try_to_complete(RelayerThreshold::<T>::get(), RelayerCount::<T>::get());
+                let status =
+                    votes.try_to_complete(RelayerThreshold::<T>::get(), RelayerCount::<T>::get());
                 Votes::<T>::insert(src_id, (nonce, prop.clone()), votes.clone());
 
                 match status {
                     ProposalStatus::Approved => Self::finalize_execution(src_id, nonce, prop),
                     ProposalStatus::Rejected => Self::cancel_execution(src_id, nonce),
-                    _ => Ok(().into())
+                    _ => Ok(().into()),
                 }
             } else {
                 Err(Error::<T>::ProposalDoesNotExist.into())
@@ -622,14 +635,17 @@ pub mod pallet {
             to: Vec<u8>,
             amount: H256,
         ) -> DispatchResult {
-            ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+            ensure!(
+                Self::chain_whitelisted(dest_id),
+                Error::<T>::ChainNotWhitelisted
+            );
             let nonce = Self::bump_nonce(dest_id);
             Self::deposit_event(Event::<T>::FougibleTransfer(
                 dest_id,
                 nonce,
                 resource_id,
                 amount,
-                to
+                to,
             ));
 
             Ok(().into())
@@ -643,7 +659,10 @@ pub mod pallet {
             to: Vec<u8>,
             metadata: Vec<u8>,
         ) -> DispatchResult {
-            ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+            ensure!(
+                Self::chain_whitelisted(dest_id),
+                Error::<T>::ChainNotWhitelisted
+            );
             let nonce = Self::bump_nonce(dest_id);
             Self::deposit_event(Event::<T>::NonFougibleTransfer(
                 dest_id,
@@ -651,7 +670,8 @@ pub mod pallet {
                 resource_id,
                 token_id,
                 to,
-                metadata));
+                metadata,
+            ));
 
             Ok(().into())
         }
@@ -662,9 +682,17 @@ pub mod pallet {
             resource_id: ResourceId,
             metadata: Vec<u8>,
         ) -> DispatchResult {
-            ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+            ensure!(
+                Self::chain_whitelisted(dest_id),
+                Error::<T>::ChainNotWhitelisted
+            );
             let nonce = Self::bump_nonce(dest_id);
-            Self::deposit_event(Event::<T>::GenericTransfer(dest_id, nonce, resource_id, metadata));
+            Self::deposit_event(Event::<T>::GenericTransfer(
+                dest_id,
+                nonce,
+                resource_id,
+                metadata,
+            ));
             Ok(().into())
         }
     }

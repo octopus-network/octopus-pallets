@@ -3,6 +3,16 @@
 use super::*;
 
 use frame_support::{assert_ok, ord_parameter_types, parameter_types, weights::Weight};
+pub use frame_support::{
+    construct_runtime,
+    pallet_prelude::GenesisBuild,
+    traits::{
+        ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness,
+        StorageInfo,
+    },
+    weights::IdentityFee,
+    PalletId, StorageValue,
+};
 use frame_system::{self as system};
 use sp_core::H256;
 use sp_runtime::Perbill;
@@ -15,18 +25,7 @@ use sp_runtime::{
     },
     MultiSignature,
 };
-pub use frame_support::{
-    construct_runtime,
-    pallet_prelude::GenesisBuild,
-    traits::{
-        ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness,
-        StorageInfo,
-    },
-    weights::IdentityFee,
-    PalletId, StorageValue,
-};
 use sp_runtime::{traits::AccountIdConversion, AccountId32};
-
 
 use crate::{self as pallet_chainbridge, Config};
 pub use pallet_balances;
@@ -141,8 +140,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     pallet_balances::GenesisConfig::<Test> {
         balances: vec![(bridge_id, ENDOWED_BALANCE)],
     }
-        .assimilate_storage(&mut t)
-        .unwrap();
+    .assimilate_storage(&mut t)
+    .unwrap();
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
