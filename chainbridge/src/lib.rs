@@ -27,6 +27,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::chainbridge";
 mod tests;
 
 mod benchmarking;
+mod mock;
 
 const DEFAULT_RELAYER_THRESHOLD: u32 = 1;
 const MODULE_ID: PalletId = PalletId(*b"oc/bridg");
@@ -78,7 +79,7 @@ impl<AccountId: PartialEq, BlockNumber: PartialOrd + Default>
         }
     }
 
-    /// Returns true if the prorosal has been rejected or approved, otherwise false.
+    /// Returns true if the proposal has been rejected or approved, otherwise false.
     fn is_complete(&self) -> bool {
         self.status != ProposalStatus::Initiated
     }
@@ -410,7 +411,6 @@ pub mod pallet {
             origin: OriginFor<T>,
             nonce: DepositNonce,
             src_id: ChainId,
-            r_id: ResourceId,
             prop: Box<<T as Config>::Proposal>,
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
