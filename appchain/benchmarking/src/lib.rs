@@ -291,7 +291,7 @@ benchmarks! {
 
 		let ass: Balance<T> = (1000_000_000_000_0000u128).checked_into().unwrap();
 		let amount: Balance<T> = (1000_000_000_000_000_000u128).checked_into().unwrap();
-		let account_id = <T as AppchainConfig>::PalletId::get().into_account();
+		let account_id = <T as AppchainConfig>::PalletId::get().into_account_truncating();
 		<T as AppchainConfig>::Currency::deposit_creating(&account_id, ass);
 
 		let caller: T::AccountId = whitelisted_caller();

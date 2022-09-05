@@ -134,14 +134,14 @@ where
         <pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
     }
 
-    fn is_active_validator(
-        id: KeyTypeId,
-        key_data: &[u8],
-    ) -> Option<<T as frame_system::Config>::AccountId> {
-        let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
-        if who.is_none() {
-            return None;
-        }
+	fn is_active_validator(
+		id: KeyTypeId,
+		key_data: &[u8],
+	) -> Option<<T as frame_system::Config>::AccountId> {
+		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
+		if who.is_none() {
+			return None;
+		}
 
         Self::validators().into_iter().find(|v| {
             log!(debug, "check {:#?} == {:#?}", v, who);
@@ -206,12 +206,9 @@ pub mod pallet {
         #[pallet::constant]
         type SessionsPerEra: Get<SessionIndex>;
 
-        #[pallet::constant]
-        type BlocksPerEra: Get<u32>;
-
-        /// Number of eras that staked funds must remain bonded for.
-        #[pallet::constant]
-        type BondingDuration: Get<EraIndex>;
+		/// Number of eras that staked funds must remain bonded for.
+		#[pallet::constant]
+		type BondingDuration: Get<EraIndex>;
 
         /// Interface for interacting with a session pallet.
         type SessionInterface: self::SessionInterface<Self::AccountId>;
@@ -499,9 +496,9 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-    fn account_id() -> T::AccountId {
-        T::PalletId::get().into_account()
-    }
+	fn account_id() -> T::AccountId {
+		T::PalletId::get().into_account_truncating()
+	}
 
     /// Plan a new session potentially trigger a new era.
     fn new_session(session_index: SessionIndex, _is_genesis: bool) -> Option<Vec<T::AccountId>> {
@@ -517,33 +514,29 @@ impl<T: Config> Pallet<T> {
                 .checked_sub(current_era_start_session_index)
                 .unwrap_or(0); // Must never happen.
 
-            log!(info, "Era length: {:?}", era_length);
-            if era_length < T::SessionsPerEra::get() {
-                // The 5th session of the era.
-                if T::AppchainInterface::is_activated()
-                    && (era_length == T::SessionsPerEra::get() - 1)
-                {
-                    let next_set_id = T::AppchainInterface::next_set_id();
-                    let message = PlanNewEraPayload {
-                        new_era: next_set_id,
-                    };
+			log!(info, "Era length: {:?}", era_length);
+			if era_length < T::SessionsPerEra::get() {
+				// The 5th session of the era.
+				if T::AppchainInterface::is_activated()
+					&& (era_length == T::SessionsPerEra::get() - 1)
+				{
+					let next_set_id = T::AppchainInterface::next_set_id();
+					let message = PlanNewEraPayload { new_era: next_set_id };
 
-                    let res = T::UpwardMessagesInterface::submit(
-                        None,
-                        PayloadType::PlanNewEra,
-                        &message.try_to_vec().unwrap(),
-                    );
-                    log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
-                    if res.is_ok() {
-                        Self::deposit_event(Event::<T>::PlanNewEra {
-                            era_index: next_set_id,
-                        });
-                    } else {
-                        Self::deposit_event(Event::<T>::PlanNewEraFailed);
-                    }
-                }
-                return None;
-            }
+					let res = T::UpwardMessagesInterface::submit(
+						None,
+						PayloadType::PlanNewEra,
+						&message.try_to_vec().unwrap(),
+					);
+					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
+					if res.is_ok() {
+						Self::deposit_event(Event::<T>::PlanNewEra { era_index: next_set_id });
+					} else {
+						Self::deposit_event(Event::<T>::PlanNewEraFailed);
+					}
+				}
+				return None;
+			}
 
             // New era.
             Self::try_trigger_new_era(session_index)
@@ -630,41 +623,56 @@ impl<T: Config> Pallet<T> {
             .map(|(k, _)| k)
             .collect::<Vec<T::AccountId>>();
 
-        log!(debug, "All validators: {:?}", validators.clone());
-        let expect_points = T::BlocksPerEra::get() / validators.len() as u32 * 80 / 100;
-        let era_reward_points = <ErasRewardPoints<T>>::get(index);
-        let qualified_validators = era_reward_points
-            .individual
-            .into_iter()
-            .filter_map(|(validator, points)| {
-                if points >= expect_points {
-                    Some(validator)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<T::AccountId>>();
+		log!(debug, "All validators: {:?}", validators.clone());
+
+		let era_reward_points = <ErasRewardPoints<T>>::get(index);
+
+		// All validators did not produce blocks, so they should be excluded.
+		if era_reward_points.individual.is_empty() {
+			log!(warn, "Era {:?}, no validator produce block", index);
+			return validators;
+		}
+
+		let expect_points = era_reward_points.total / validators.len() as u32 * 80 / 100;
+		log!(
+			debug,
+			"Era {:?}, total points: {:?}, worked validators len: {:?}",
+			index,
+			era_reward_points.total,
+			era_reward_points.individual.len()
+		);
+
+		let qualified_validators = era_reward_points
+			.individual
+			.into_iter()
+			.filter_map(
+				|(validator, points)| {
+					if points >= expect_points {
+						Some(validator)
+					} else {
+						None
+					}
+				},
+			)
+			.collect::<Vec<T::AccountId>>();
 
         validators.retain(|v| !(qualified_validators.iter().any(|val| val == v)));
         validators
     }
 
-    /// Compute payout for era.
-    fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
-        if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-            return;
-        }
 
-        // Note: active_era_start can be None if end era is called during genesis config.
-        if let Some(active_era_start) = active_era.start {
-            if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
-                log!(
-                    warn,
-                    "era reward {:?} has already been paid",
-                    active_era.index
-                );
-                return;
-            }
+	/// Compute payout for era.
+	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
+		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
+			return;
+		}
+
+		// Note: active_era_start can be None if end era is called during genesis config.
+		if let Some(active_era_start) = active_era.start {
+			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
+				log!(warn, "era reward {:?} has already been paid", active_era.index);
+				return;
+			}
 
             let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
             let _era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();

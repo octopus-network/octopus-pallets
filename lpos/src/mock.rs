@@ -296,19 +296,18 @@ parameter_types! {
 }
 
 impl Config for Test {
-    type Currency = Balances;
-    type UnixTime = Timestamp;
-    type Event = Event;
-    type Reward = ();
-    type SessionsPerEra = SessionsPerEra;
-    type BondingDuration = BondingDuration;
-    type BlocksPerEra = BlocksPerEra;
-    type SessionInterface = Self;
-    type AppchainInterface = OctopusAppchain;
-    type UpwardMessagesInterface = OctopusUpwardMessages;
-    type PalletId = OctopusAppchainPalletId;
-    type ValidatorsProvider = OctopusAppchain;
-    type WeightInfo = ();
+	type Currency = Balances;
+	type UnixTime = Timestamp;
+	type Event = Event;
+	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type PalletId = OctopusAppchainPalletId;
+	type ValidatorsProvider = OctopusAppchain;
+	type WeightInfo = ();
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

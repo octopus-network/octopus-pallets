@@ -10,29 +10,33 @@ impl<T, AccountId> nonfungibles::Inspect<AccountId> for UnImplementUniques<T>
 where
     T: Config,
 {
-    type InstanceId = T::InstanceId;
-    type ClassId = T::ClassId;
+	/// Type for identifying an item.
+	type ItemId = T::InstanceId;
 
-    fn owner(_class: &Self::ClassId, _instance: &Self::InstanceId) -> Option<AccountId> {
-        None
-    }
+	/// Type for identifying a collection (an identifier for an independent collection of
+	/// items).
+	type CollectionId = T::ClassId;
+
+	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
+	/// (or somehow has no owner).
+	fn owner(collection: &Self::CollectionId, item: &Self::ItemId) -> Option<AccountId> {
+		None
+	}
 }
 
 impl<T, AccountId> nonfungibles::Transfer<AccountId> for UnImplementUniques<T>
 where
     T: Config,
 {
-    fn transfer(
-        _class: &Self::ClassId,
-        _instance: &Self::InstanceId,
-        _destination: &AccountId,
-    ) -> DispatchResult {
-        log!(
-            debug,
-            "Should not go there for every: not impl trait nonfungibles::Transfer."
-        );
-        Err(sp_runtime::DispatchError::Other("NoUniquesImpl"))
-    }
+	/// Transfer `item` of `collection` into `destination` account.
+	fn transfer(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		destination: &AccountId,
+	) -> DispatchResult {
+		log!(debug, "Should not go there for every: not impl trait nonfungibles::Transfer.");
+		Err(sp_runtime::DispatchError::Other("NoUniquesImpl"))
+	}
 }
 
 pub struct UnImplementAssets<T>(sp_std::marker::PhantomData<T>);
@@ -64,13 +68,14 @@ where
         0u32.into()
     }
 
-    fn can_deposit(
-        _asset: Self::AssetId,
-        _who: &AccountId,
-        _amount: Self::Balance,
-    ) -> DepositConsequence {
-        DepositConsequence::CannotCreate
-    }
+	fn can_deposit(
+		_asset: Self::AssetId,
+		_who: &AccountId,
+		_amount: Self::Balance,
+		_mint: bool,
+	) -> DepositConsequence {
+		DepositConsequence::CannotCreate
+	}
 
     fn can_withdraw(
         _asset: Self::AssetId,
@@ -118,23 +123,23 @@ where
     type ClassId = <T as Config>::ClassId;
     type InstanceId = <T as Config>::InstanceId;
 
-    fn convert_into_nep171_metadata(
-        class: Self::ClassId,
-        instance: Self::InstanceId,
-    ) -> Option<Nep171TokenMetadata> {
-        let mut data: Vec<u8> = Vec::new();
-        if let Some(class_attribute) =
-            <T::Uniques as nonfungibles::Inspect<T::AccountId>>::class_attribute(&class, &vec![])
-        {
-            data.extend(class_attribute);
-        }
-        if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
-            &class,
-            &instance,
-            &vec![],
-        ) {
-            data.extend(attribute);
-        }
+	fn convert_into_nep171_metadata(
+		class: Self::ClassId,
+		instance: Self::InstanceId,
+	) -> Option<Nep171TokenMetadata> {
+		let mut data: Vec<u8> = Vec::new();
+		// if let Some(class_attribute) =
+		// 	<T::Uniques as nonfungibles::Inspect<T::AccountId>>::class_attribute(&class, &vec![])
+		// {
+		// 	data.extend(class_attribute);
+		// }
+		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		// 	&class,
+		// 	&instance,
+		// 	&vec![],
+		// ) {
+		// 	data.extend(attribute);
+		// }
 
         if data.is_empty() {
             data.extend("example hash".to_string().as_bytes().to_vec());
@@ -206,18 +211,18 @@ where
     type ClassId = <T as Config>::ClassId;
     type InstanceId = <T as Config>::InstanceId;
 
-    fn convert_into_nep171_metadata(
-        class: Self::ClassId,
-        instance: Self::InstanceId,
-    ) -> Option<Nep171TokenMetadata> {
-        let mut data: Vec<u8> = Vec::new();
-        if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
-            &class,
-            &instance,
-            &vec![],
-        ) {
-            data.extend(attribute);
-        }
+	fn convert_into_nep171_metadata(
+		class: Self::ClassId,
+		instance: Self::InstanceId,
+	) -> Option<Nep171TokenMetadata> {
+		let mut data: Vec<u8> = Vec::new();
+		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		// 	&class,
+		// 	&instance,
+		// 	&vec![],
+		// ) {
+		// 	data.extend(attribute);
+		// }
 
         if data.is_empty() {
             return None;
