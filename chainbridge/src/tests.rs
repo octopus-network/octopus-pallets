@@ -63,8 +63,17 @@ parameter_types! {
     pub const UpwardMessagesLimit: u32 = 10;
 }
 
+// TODO: support
 impl Config for Test {
     type Event = Event;
+
+    type AdminOrigin = ();
+
+    type Proposal = ();
+
+    type ChainId = ();
+
+    type ProposalLifetime = ();
 }
 
 pub fn new_tester() -> sp_io::TestExternalities {
