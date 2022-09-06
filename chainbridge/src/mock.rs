@@ -124,11 +124,11 @@ pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);
 pub const RELAYER_B: AccountId32 = AccountId32::new([3u8; 32]);
 pub const RELAYER_C: AccountId32 = AccountId32::new([4u8; 32]);
-pub const ENDOWED_BALANCE: u128 = 100_000_000;
+pub const ENDOWED_BALANCE: Balance = 100 * DOLLARS;
 pub const TEST_THRESHOLD: u32 = 2;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-    let bridge_id = PalletId(*b"cb/bridg").into_account_truncating();
+    let bridge_id = PalletId(*b"oc/bridg").into_account_truncating();
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();

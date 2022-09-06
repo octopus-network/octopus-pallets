@@ -176,6 +176,7 @@ pub mod pallet {
 
     /// Number of relayers in set
     #[pallet::storage]
+    #[pallet::getter(fn relayer_count)]
     pub type RelayerCount<T: Config> = StorageValue<_, u32, ValueQuery, DefaultRelayerCount>;
 
     /// All known proposals.
@@ -208,9 +209,9 @@ pub mod pallet {
         /// Relayer removed from set
         RelayerRemoved(T::AccountId),
         /// FunglibleTransfer is for relaying fungibles (dest_id, nonce, resource_id, amount, recipient, metadata)
-        FougibleTransfer(ChainId, DepositNonce, ResourceId, H256, Vec<u8>),
+        FungibleTransfer(ChainId, DepositNonce, ResourceId, H256, Vec<u8>),
         /// NonFungibleTransfer is for relaying NFTS (dest_id, nonce, resource_id, token_id, recipient, metadata)
-        NonFougibleTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
+        NonFungibleTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
         /// GenericTransfer is for a generic data payload(dest_id, nonce, resource_id, metadata)
         GenericTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>),
         /// Vote submitted in favour of proposal
@@ -640,7 +641,7 @@ pub mod pallet {
                 Error::<T>::ChainNotWhitelisted
             );
             let nonce = Self::bump_nonce(dest_id);
-            Self::deposit_event(Event::<T>::FougibleTransfer(
+            Self::deposit_event(Event::<T>::FungibleTransfer(
                 dest_id,
                 nonce,
                 resource_id,
@@ -664,7 +665,7 @@ pub mod pallet {
                 Error::<T>::ChainNotWhitelisted
             );
             let nonce = Self::bump_nonce(dest_id);
-            Self::deposit_event(Event::<T>::NonFougibleTransfer(
+            Self::deposit_event(Event::<T>::NonFungibleTransfer(
                 dest_id,
                 nonce,
                 resource_id,
