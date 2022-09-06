@@ -42,14 +42,7 @@ pub const CENTS: Balance = 1_000 * MILLICENTS;
 pub const DOLLARS: Balance = 100 * CENTS;
 
 parameter_types! {
-    pub const BlockHashCount: u64 = 250;
-    pub const MaximumBlockWeight: Weight = 1024;
-    pub const MaximumBlockLength: u32 = 2 * 1024;
-    pub const AvailableBlockRatio: Perbill = Perbill::one();
-    pub const MaxLocks: u32 = 100;
-}
-
-parameter_types! {
+    pub const BlockHashCount: BlockNumber = 2400;
     pub const SS58Prefix: u16 = 42;
 }
 
@@ -82,8 +75,10 @@ impl frame_system::Config for Test {
 
 parameter_types! {
     pub const ExistentialDeposit: Balance = 1 * DOLLARS;
+    pub const MaxLocks: u32 = 50;
     pub const MaxReserves: u32 = 50;
 }
+
 impl pallet_balances::Config for Test {
     type MaxLocks = MaxLocks;
     type MaxReserves = MaxReserves;
