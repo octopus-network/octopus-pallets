@@ -8,4 +8,5 @@ members = [
 	"upward-messages",
 	"chainbridge",
 	"example-erc721",
+	"example-pallet",
 ]

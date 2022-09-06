@@ -1,5 +1,5 @@
 [package]
-name = "example-erc721"
+name = "example-pallet"
 version = "0.1.0"
 edition = "2021"
 authors = ["Parity Technologies <admin@parity.io>", "Octopus Network <hi@oct.network>"]
