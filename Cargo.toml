@@ -7,4 +7,5 @@ members = [
 	"support",
 	"upward-messages",
 	"chainbridge",
+	"example-erc721",
 ]

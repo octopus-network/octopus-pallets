@@ -1,0 +1,48 @@
+[package]
+name = "example-erc721"
+version = "4.0.0-pre.0"
+edition = "2021"
+authors = ["Parity Technologies <admin@parity.io>", "Octopus Network <hi@oct.network>"]
+license = "Apache-2.0"
+homepage = "https://oct.network"
+repository = "https://github.com/octopus-network/octopus-pallets.git"
+description = "FRAME pallet LPoS"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+log = { version = "0.4.14", default-features = false }
+
+frame-support = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+
+pallet-octopus-support = { path = "../support", default-features = false }
+
+[dev-dependencies]
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"hex/std",
+	"log/std",
+	"scale-info/std",
+	"frame-support/std",
+	"frame-system/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"pallet-octopus-support/std",
+]
+try-runtime = ["frame-support/try-runtime"]
