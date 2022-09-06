@@ -6,11 +6,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-
 use codec::{Decode, Encode};
 use frame_support::{
     pallet_prelude::*,
-    traits::{Get, StorageVersion}
+    traits::{Get, StorageVersion},
 };
 use frame_system::{ensure_root, pallet_prelude::*};
 
@@ -35,8 +34,8 @@ pub struct Erc721Token {
 
 #[frame_support::pallet]
 pub mod pallet {
-    use sp_core::U256;
     use super::*;
+    use sp_core::U256;
 
     #[pallet::pallet]
     #[pallet::generate_store(pub (super) trait Store)]
@@ -102,7 +101,12 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Creates a new token with the given token ID and metadata, and gives ownership to owner
         #[pallet::weight(195_000_0000)]
-        pub fn mint(origin: OriginFor<T>, owner: T::AccountId, id: TokenId, metadata: Vec<u8>) -> DispatchResult {
+        pub fn mint(
+            origin: OriginFor<T>,
+            owner: T::AccountId,
+            id: TokenId,
+            metadata: Vec<u8>,
+        ) -> DispatchResult {
             ensure_root(origin)?;
 
             Self::mint_token(owner, id, metadata)?;
@@ -136,7 +140,10 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Creates a new token in the system.
         pub fn mint_token(owner: T::AccountId, id: TokenId, metadata: Vec<u8>) -> DispatchResult {
-            ensure!(!Tokens::<T>::contains_key(id), Error::<T>::TokenAlreadyExists);
+            ensure!(
+                !Tokens::<T>::contains_key(id),
+                Error::<T>::TokenAlreadyExists
+            );
 
             let new_token = Erc721Token { id, metadata };
 

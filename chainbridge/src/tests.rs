@@ -4,8 +4,8 @@ use super::mock::{
 };
 use super::*;
 use crate::mock::new_test_ext_initialized;
-use frame_support::{assert_noop, assert_ok};
 use crate::Event as ChainBridgeEvent;
+use frame_support::{assert_noop, assert_ok};
 
 #[test]
 fn derive_ids() {

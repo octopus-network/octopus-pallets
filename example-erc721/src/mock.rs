@@ -2,10 +2,7 @@ use super::*;
 use crate as example_erc721;
 use sp_runtime::{
     generic,
-    traits::{
-        AccountIdLookup, BlakeTwo256, IdentifyAccount,
-        Verify,
-    },
+    traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
     MultiSignature,
 };
 
@@ -23,9 +20,8 @@ pub use frame_support::{
 use sp_core::blake2_128;
 use sp_runtime::AccountId32;
 
-
-use pallet_chainbridge as bridge;
 pub use pallet_balances as balances;
+use pallet_chainbridge as bridge;
 
 pub(crate) type BlockNumber = u32;
 pub type Signature = MultiSignature;
@@ -33,7 +29,6 @@ pub type Balance = u128;
 pub type Index = u64;
 pub type Hash = sp_core::H256;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
 
 pub const MILLICENTS: Balance = 10_000_000_000;
 pub const CENTS: Balance = 1_000 * MILLICENTS;
@@ -124,8 +119,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     pallet_balances::GenesisConfig::<Test> {
         balances: vec![(USER_A, ENDOWED_BALANCE)],
     }
-        .assimilate_storage(&mut t)
-        .unwrap();
+    .assimilate_storage(&mut t)
+    .unwrap();
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext

@@ -3,10 +3,7 @@ use crate as example_pallet;
 use pallet_chainbridge as bridge;
 use sp_runtime::{
     generic,
-    traits::{
-        AccountIdLookup, BlakeTwo256, IdentifyAccount,
-        Verify,
-    },
+    traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
     MultiSignature,
 };
 
@@ -30,7 +27,6 @@ pub type Balance = u128;
 pub type Index = u64;
 pub type Hash = sp_core::H256;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
 
 pub const MILLICENTS: Balance = 10_000_000_000;
 pub const CENTS: Balance = 1_000 * MILLICENTS;
@@ -83,7 +79,6 @@ construct_runtime!(
     }
 );
 
-
 parameter_types! {
     pub const TestChainId: u8 = 5;
     pub const ProposalLifetime: u32 = 50;
@@ -135,8 +130,6 @@ impl Config for Test {
     type Erc721Id = Erc721Id;
 }
 
-
-
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);
 pub const RELAYER_B: AccountId32 = AccountId32::new([3u8; 32]);
 pub const RELAYER_C: AccountId32 = AccountId32::new([4u8; 32]);
@@ -150,8 +143,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     pallet_balances::GenesisConfig::<Test> {
         balances: vec![(bridge_id, ENDOWED_BALANCE), (RELAYER_A, ENDOWED_BALANCE)],
     }
-        .assimilate_storage(&mut t)
-        .unwrap();
+    .assimilate_storage(&mut t)
+    .unwrap();
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext

@@ -1,31 +1,38 @@
 #![cfg(test)]
 
 use super::mock::{
-    assert_events, event_exists, expect_event, new_test_ext, Balances, Bridge, Call,
-    Erc721, Erc721Id, Event, Example, HashId, NativeTokenId, Origin, ProposalLifetime, Test,
+    assert_events, event_exists, expect_event, new_test_ext, Balances, Bridge, Call, Erc721,
+    Erc721Id, Event, Example, HashId, NativeTokenId, Origin, ProposalLifetime, Test,
     ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 };
 use super::*;
 use frame_support::dispatch::DispatchError;
 use frame_support::{assert_noop, assert_ok};
 
-use codec::Encode;
-use example_erc721::Erc721Token;
-use sp_core::{blake2_256, H256};
-use sp_core::crypto::AccountId32;
 use crate::mock::{Balance, DOLLARS};
 use crate::Event as ExampleEvent;
+use codec::Encode;
+use example_erc721::Erc721Token;
+use sp_core::crypto::AccountId32;
+use sp_core::{blake2_256, H256};
 
 const TEST_THRESHOLD: u32 = 2;
 
 fn make_remark_proposal(hash: H256) -> Call {
     let resource_id = HashId::get();
-    Call::Example(crate::Call::remark { hash, r_id: resource_id })
+    Call::Example(crate::Call::remark {
+        hash,
+        r_id: resource_id,
+    })
 }
 
 fn make_transfer_proposal(to: AccountId32, amount: u64) -> Call {
     let resource_id = HashId::get();
-    Call::Example(crate::Call::transfer{to, amount: amount.into(), r_id: resource_id})
+    Call::Example(crate::Call::transfer {
+        to,
+        amount: amount.into(),
+        r_id: resource_id,
+    })
 }
 
 #[test]

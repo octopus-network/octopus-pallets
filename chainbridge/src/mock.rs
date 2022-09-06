@@ -2,7 +2,7 @@
 
 use super::*;
 
-use frame_support::{assert_ok,  parameter_types};
+use frame_support::{assert_ok, parameter_types};
 pub use frame_support::{
     construct_runtime,
     pallet_prelude::GenesisBuild,
@@ -17,10 +17,7 @@ use frame_system::{self as system};
 use sp_core::H256;
 use sp_runtime::{
     generic,
-    traits::{
-        AccountIdLookup, BlakeTwo256,  IdentifyAccount,
-        Verify,
-    },
+    traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
     MultiSignature,
 };
 use sp_runtime::{traits::AccountIdConversion, AccountId32};
