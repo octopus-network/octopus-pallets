@@ -12,7 +12,7 @@ use frame_support::{
 };
 use pallet_octopus_support::log;
 use scale_info::TypeInfo;
-use sp_core::H256;
+use sp_core::U256;
 use sp_runtime::{
     traits::{AccountIdConversion, Dispatchable, Hash, Keccak256},
     DigestItem, RuntimeDebug,
@@ -209,7 +209,7 @@ pub mod pallet {
         /// Relayer removed from set
         RelayerRemoved(T::AccountId),
         /// FunglibleTransfer is for relaying fungibles (dest_id, nonce, resource_id, amount, recipient, metadata)
-        FungibleTransfer(ChainId, DepositNonce, ResourceId, H256, Vec<u8>),
+        FungibleTransfer(ChainId, DepositNonce, ResourceId, U256, Vec<u8>),
         /// NonFungibleTransfer is for relaying NFTS (dest_id, nonce, resource_id, token_id, recipient, metadata)
         NonFungibleTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
         /// GenericTransfer is for a generic data payload(dest_id, nonce, resource_id, metadata)
@@ -634,7 +634,7 @@ pub mod pallet {
             dest_id: ChainId,
             resource_id: ResourceId,
             to: Vec<u8>,
-            amount: H256,
+            amount: U256,
         ) -> DispatchResult {
             ensure!(
                 Self::chain_whitelisted(dest_id),

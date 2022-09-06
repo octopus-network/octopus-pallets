@@ -129,7 +129,7 @@ fn asset_transfer_success() {
         let to = vec![2];
         let resource_id = [1; 32];
         let metadata = vec![];
-        let amount = H256::random(); // need exists value
+        let amount = U256::one();
         let token_id = vec![1, 2, 3, 4];
 
         assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
@@ -195,7 +195,7 @@ fn asset_transfer_invalid_chain() {
         ))]);
 
         assert_noop!(
-            Bridge::transfer_fungible(bad_dest_id, resource_id.clone(), vec![], H256::zero()),
+            Bridge::transfer_fungible(bad_dest_id, resource_id.clone(), vec![], U256::zero()),
             Error::<Test>::ChainNotWhitelisted
         );
 

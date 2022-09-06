@@ -21,8 +21,12 @@ pub use frame_support::{
     weights::{IdentityFee, Weight},
     PalletId, StorageValue,
 };
+use sp_core::blake2_128;
+use sp_runtime::{traits::AccountIdConversion, AccountId32};
 
 use frame_system::EnsureRoot;
+use pallet_chainbridge as bridge;
+pub use pallet_balances as balances;
 
 pub(crate) type BlockNumber = u32;
 pub type Signature = MultiSignature;
@@ -66,11 +70,29 @@ impl frame_system::Config for Test {
     type PalletInfo = PalletInfo;
     type OnNewAccount = ();
     type OnKilledAccount = ();
-    type AccountData = ();
+    type AccountData = pallet_balances::AccountData<Balance>;
     type SystemWeightInfo = ();
     type SS58Prefix = SS58Prefix;
     type OnSetCode = ();
     type MaxConsumers = ConstU32<16>;
+}
+
+parameter_types! {
+    pub const ExistentialDeposit: Balance = 1 * DOLLARS;
+    pub const MaxLocks: u32 = 50;
+    pub const MaxReserves: u32 = 50;
+}
+
+impl pallet_balances::Config for Test {
+    type MaxLocks = MaxLocks;
+    type MaxReserves = MaxReserves;
+    type ReserveIdentifier = [u8; 8];
+    type Balance = Balance;
+    type Event = Event;
+    type DustRemoval = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
+    type WeightInfo = ();
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -82,10 +104,36 @@ construct_runtime!(
         UncheckedExtrinsic = UncheckedExtrinsic
     {
         System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        ExampleErc721: example_erc721::{Pallet, Call, Storage, Event<T>},
+        Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
+        Erc721: example_erc721::{Pallet, Call, Storage, Event<T>},
     }
 );
 
+parameter_types! {
+    pub Erc721Id: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"NFT"));
+}
+
 impl Config for Test {
     type Event = Event;
+    type Identifier = Erc721Id;
+}
+
+pub const USER_A: AccountId32 = AccountId32::new([1u8; 32]);
+pub const USER_B: AccountId32 = AccountId32::new([2u8; 32]);
+pub const USER_C: AccountId32 = AccountId32::new([3u8; 32]);
+pub const ENDOWED_BALANCE: Balance = 100 * DOLLARS;
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+    let mut t = frame_system::GenesisConfig::default()
+        .build_storage::<Test>()
+        .unwrap();
+
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(USER_A, ENDOWED_BALANCE)],
+    }
+        .assimilate_storage(&mut t)
+        .unwrap();
+    let mut ext = sp_io::TestExternalities::new(t);
+    ext.execute_with(|| System::set_block_number(1));
+    ext
 }
