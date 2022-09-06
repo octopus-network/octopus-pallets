@@ -7,7 +7,10 @@ use frame_support::{
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	sp_std::fmt::Debug,
 	traits::{
-		tokens::{fungibles, nonfungibles},
+		tokens::{
+			fungibles::{self, Mutate},
+			nonfungibles,
+		},
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		OneSessionHandler, StorageVersion,
@@ -619,6 +622,12 @@ pub mod pallet {
 			class: T::ClassId,
 			instance: T::InstanceId,
 		},
+		/// Some asset was force-minted.
+		ForceAssetMinted {
+			asset_id: T::AssetId,
+			who: T::AccountId,
+			amount: T::AssetBalance,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -1095,6 +1104,22 @@ pub mod pallet {
 				"️️️force set next_notification_id, next_notification_id is : {:?} ",
 				NextNotificationId::<T>::get()
 			);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_mint_asset(
+			origin: OriginFor<T>,
+			asset_id: T::AssetId,
+			who: <T::Lookup as StaticLookup>::Source,
+			amount: T::AssetBalance,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			T::Assets::mint_into(asset_id, &who, amount)?;
+
+			Self::deposit_event(Event::ForceAssetMinted { asset_id, who, amount });
+
 			Ok(())
 		}
 	}
