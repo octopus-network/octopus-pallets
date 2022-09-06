@@ -2,7 +2,7 @@
 
 use super::*;
 
-use frame_support::{assert_ok, ord_parameter_types, parameter_types, weights::Weight};
+use frame_support::{assert_ok,  parameter_types};
 pub use frame_support::{
     construct_runtime,
     pallet_prelude::GenesisBuild,
@@ -15,13 +15,11 @@ pub use frame_support::{
 };
 use frame_system::{self as system};
 use sp_core::H256;
-use sp_runtime::Perbill;
 use sp_runtime::{
-    generic, impl_opaque_keys,
-    testing::TestXt,
+    generic,
     traits::{
-        AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
-        OpaqueKeys, Verify,
+        AccountIdLookup, BlakeTwo256,  IdentifyAccount,
+        Verify,
     },
     MultiSignature,
 };
@@ -119,8 +117,6 @@ construct_runtime!(
     }
 );
 
-pub const ALICE: AccountId32 = AccountId32::new([0u8; 32]);
-pub const BOB: AccountId32 = AccountId32::new([1u8; 32]);
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);
 pub const RELAYER_B: AccountId32 = AccountId32::new([3u8; 32]);
 pub const RELAYER_C: AccountId32 = AccountId32::new([4u8; 32]);

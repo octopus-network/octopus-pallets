@@ -1,13 +1,12 @@
 use super::*;
 use crate as example_erc721;
 use sp_runtime::{
-    generic, impl_opaque_keys,
-    testing::TestXt,
+    generic,
     traits::{
-        AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
-        OpaqueKeys, Verify,
+        AccountIdLookup, BlakeTwo256, IdentifyAccount,
+        Verify,
     },
-    BuildStorage, MultiSignature,
+    MultiSignature,
 };
 
 pub use frame_support::{
@@ -22,16 +21,15 @@ pub use frame_support::{
     PalletId, StorageValue,
 };
 use sp_core::blake2_128;
-use sp_runtime::{traits::AccountIdConversion, AccountId32};
+use sp_runtime::AccountId32;
 
-use frame_system::EnsureRoot;
+
 use pallet_chainbridge as bridge;
 pub use pallet_balances as balances;
 
 pub(crate) type BlockNumber = u32;
 pub type Signature = MultiSignature;
 pub type Balance = u128;
-pub type Moment = u64;
 pub type Index = u64;
 pub type Hash = sp_core::H256;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
@@ -40,11 +38,6 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub const MILLICENTS: Balance = 10_000_000_000;
 pub const CENTS: Balance = 1_000 * MILLICENTS;
 pub const DOLLARS: Balance = 100 * CENTS;
-pub const MILLISECS_PER_BLOCK: Moment = 3000;
-pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
-pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 1 * MINUTES;
-pub const MINUTES: BlockNumber = 60 / (SECS_PER_BLOCK as BlockNumber);
 
 parameter_types! {
     pub const BlockHashCount: BlockNumber = 2400;

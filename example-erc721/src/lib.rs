@@ -1,7 +1,5 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(unused_imports)]
-#![allow(dead_code)]
 
 #[cfg(test)]
 mod mock;
@@ -12,31 +10,17 @@ mod tests;
 use codec::{Decode, Encode};
 use frame_support::{
     pallet_prelude::*,
-    traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
-    PalletId,
+    traits::{Get, StorageVersion}
 };
-use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
-use pallet_octopus_support::{
-    log,
-    traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
-    types::{EraPayoutPayload, Offender, PayloadType, PlanNewEraPayload},
-};
+use frame_system::{ensure_root, pallet_prelude::*};
 
-use scale_info::{
-    prelude::string::{String, ToString},
-    TypeInfo,
-};
+use scale_info::TypeInfo;
 use sp_core::U256;
-use sp_runtime::{
-    traits::{AccountIdConversion, CheckedConversion, Convert, SaturatedConversion},
-    KeyTypeId, RuntimeDebug,
-};
+use sp_runtime::RuntimeDebug;
 
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{convert::From, prelude::*};
 
 pub use pallet::*;
-
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-lpos";
 
 type TokenId = U256;
 
@@ -52,7 +36,6 @@ pub struct Erc721Token {
 #[frame_support::pallet]
 pub mod pallet {
     use sp_core::U256;
-    use sp_runtime::traits::Saturating;
     use super::*;
 
     #[pallet::pallet]
@@ -187,7 +170,7 @@ pub mod pallet {
 
             Tokens::<T>::remove(&id);
             TokenOwner::<T>::remove(&id);
-            let new_total = TokenCount::<T>::get().saturating_add(U256::one());
+            let new_total = TokenCount::<T>::get().saturating_sub(U256::one());
             TokenCount::<T>::put(new_total);
 
             Self::deposit_event(Event::<T>::Burned(id));

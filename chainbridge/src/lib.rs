@@ -1,27 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(unused_imports)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
+
 
 use codec::{Decode, Encode};
 use frame_support::{
-    dispatch::DispatchError,
     ensure,
     traits::{EnsureOrigin, Get, StorageVersion},
     PalletId,
 };
-use pallet_octopus_support::log;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-    traits::{AccountIdConversion, Dispatchable, Hash, Keccak256},
-    DigestItem, RuntimeDebug,
+    traits::{AccountIdConversion, Dispatchable}, RuntimeDebug,
 };
 use sp_std::prelude::*;
 
 pub use pallet::*;
-
-pub(crate) const LOG_TARGET: &'static str = "runtime::chainbridge";
 
 #[cfg(test)]
 mod tests;

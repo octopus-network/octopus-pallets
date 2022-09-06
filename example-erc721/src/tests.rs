@@ -1,9 +1,8 @@
 use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
-use sp_runtime::traits::{BadOrigin, Zero};
 
 #[test]
-#[ignore] // TODO(davirain) need fix
+// #[ignore] // TODO(davirain) need fix
 fn mint_burn_tokens() {
     new_test_ext().execute_with(|| {
         let id_a: U256 = 1.into();
