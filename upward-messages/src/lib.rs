@@ -124,7 +124,7 @@ pub mod pallet {
                 key,
                 messages
             );
-            offchain_index::set(&*key, &messages.encode());
+            offchain_index::set(&key, &messages.encode());
 
             T::WeightInfo::on_initialize(messages.len() as u32, average_payload_size as u32)
         }
