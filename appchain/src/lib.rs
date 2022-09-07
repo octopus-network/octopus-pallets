@@ -2,14 +2,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use borsh::BorshSerialize;
-use codec::{Codec, Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	sp_runtime::traits::AtLeast32BitUnsigned,
-	sp_std::fmt::Debug,
 	traits::{
 		tokens::{
 			fungibles::{self, Mutate},
-			nonfungibles,
+			nonfungibles, AssetId, Balance as AssetBalance,
 		},
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
@@ -54,8 +52,8 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
+pub mod impls;
 mod mainchain;
-pub mod traits_default_impl;
 pub mod weights;
 
 #[cfg(test)]
@@ -344,39 +342,21 @@ pub mod pallet {
 
 		type Currency: Currency<Self::AccountId>;
 
-		type AssetId: Member
-			+ Parameter
-			+ AtLeast32BitUnsigned
-			+ Codec
-			+ Copy
-			+ Debug
-			+ Default
-			+ MaxEncodedLen
-			+ MaybeSerializeDeserialize;
+		type LposInterface: LposInterface<Self::AccountId>;
 
-		type AssetBalance: Parameter
-			+ Member
-			+ AtLeast32BitUnsigned
-			+ Codec
-			+ Default
-			+ From<u128>
-			+ Into<u128>
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ Debug;
+		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
+
+		type AssetIdByTokenId: TokenIdAndAssetIdProvider<Self::AssetId>;
+
+		type AssetId: AssetId + MaybeSerializeDeserialize + Default;
+
+		type AssetBalance: AssetBalance + From<u128> + Into<u128>;
 
 		type Assets: fungibles::Mutate<
 			<Self as frame_system::Config>::AccountId,
 			AssetId = Self::AssetId,
 			Balance = Self::AssetBalance,
 		>;
-
-		type AssetIdByTokenId: TokenIdAndAssetIdProvider<Self::AssetId>;
-
-		type LposInterface: LposInterface<Self::AccountId>;
-
-		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		/// Identifier for the class of nft asset.
 		type ClassId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
@@ -560,7 +540,6 @@ pub mod pallet {
 			amount: BalanceOf<T>,
 			sequence: u32,
 		},
-
 		AssetMinted {
 			asset_id: T::AssetId,
 			sender: Vec<u8>,
@@ -589,12 +568,6 @@ pub mod pallet {
 			amount: T::AssetBalance,
 			sequence: u32,
 		},
-
-		TransferredFromPallet {
-			receiver: T::AccountId,
-			amount: BalanceOf<T>,
-		},
-
 		NftLocked {
 			sender: T::AccountId,
 			receiver: Vec<u8>,
@@ -602,7 +575,6 @@ pub mod pallet {
 			instance: T::InstanceId,
 			sequence: u64,
 		},
-
 		NftUnlocked {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
@@ -610,13 +582,16 @@ pub mod pallet {
 			instance: T::InstanceId,
 			sequence: u32,
 		},
-
 		NftUnlockFailed {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			class: T::ClassId,
 			instance: T::InstanceId,
 			sequence: u32,
+		},
+		ForceUnlock {
+			who: T::AccountId,
+			amount: BalanceOf<T>,
 		},
 		/// Some asset was force-minted.
 		ForceAssetMinted {
@@ -999,24 +974,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::tranfer_from_pallet_account())]
-		pub fn tranfer_from_pallet_account(
-			origin: OriginFor<T>,
-			receiver: <T::Lookup as StaticLookup>::Source,
-			amount: BalanceOf<T>,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let receiver = T::Lookup::lookup(receiver)?;
-
-			T::Currency::transfer(&Self::account_id(), &receiver, amount, KeepAlive)?;
-			log!(debug, "Transfer from pallet, receiver: {:?}, amount: {:?} ", receiver, amount);
-
-			Self::deposit_event(Event::TransferredFromPallet { receiver, amount });
-
-			Ok(())
-		}
-
 		// nft cross chain transfer:
 		// mainchain:mint() <- appchain:lock_nft()
 		// mainchain:burn() -> appchain:unlock_nft()
@@ -1098,6 +1055,22 @@ pub mod pallet {
 				"️️️force set next_notification_id, next_notification_id is : {:?} ",
 				NextNotificationId::<T>::get()
 			);
+			Ok(())
+		}
+
+		#[pallet::weight(<T as Config>::WeightInfo::tranfer_from_pallet_account())]
+		pub fn force_unlock(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+			amount: BalanceOf<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let who = T::Lookup::lookup(who)?;
+			T::Currency::transfer(&Self::account_id(), &who, amount, KeepAlive)?;
+
+			Self::deposit_event(Event::ForceUnlock { who, amount });
+
 			Ok(())
 		}
 
