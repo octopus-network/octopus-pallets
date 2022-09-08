@@ -1,5 +1,5 @@
 use super::*;
-use crate::{self as pallet_octopus_appchain, traits_default_impl::ExampleConvertor};
+use crate::{self as pallet_octopus_appchain, impls::ExampleConvertor};
 use sp_runtime::{
 	generic, impl_opaque_keys,
 	testing::TestXt,
