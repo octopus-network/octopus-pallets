@@ -9,10 +9,10 @@ use crate::Pallet as OctopusLpos;
 
 benchmarks! {
    set_history_depth {
-       let b in 0..u32::MAX;
-       let m in 0..u32::MAX;
+	   let b in 0..u32::MAX;
+	   let m in 0..u32::MAX;
 
-       CurrentEra::<T>::put(1);
+	   CurrentEra::<T>::put(1);
    }: set_history_depth(RawOrigin::Root, b, m)
 
    force_set_era_payout {
