@@ -286,6 +286,7 @@ fn test_lock() {
 	});
 }
 
+/* Not finished.
 #[test]
 pub fn test_lock_nft() {
 	let alice: AccountId = AccountKeyring::Alice.into();
@@ -320,7 +321,7 @@ pub fn test_lock_nft() {
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 		));
 	});
-}
+}*/
 
 pub fn mock_payload_and_signature(
 	keyring: Keyring,

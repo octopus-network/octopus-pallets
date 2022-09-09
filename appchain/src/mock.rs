@@ -16,7 +16,7 @@ pub use frame_support::{
 	parameter_types,
 	traits::{
 		ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness,
-		StorageInfo,
+		StorageInfo,AsEnsureOriginWithArg
 	},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
@@ -265,19 +265,24 @@ parameter_types! {
 }
 impl pallet_uniques::Config for Test {
 	type Event = Event;
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
+	// type ClassId = ClassId;
+	type CollectionId = u32 ;
+	type ItemId = u32 ;
 	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type ClassDeposit = ClassDeposit;
-	type InstanceDeposit = InstanceDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type AttributeDepositBase = MetadataDepositBase;
-	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
-	type KeyLimit = KeyLimit;
-	type ValueLimit = ValueLimit;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
+	type ForceOrigin = EnsureRoot<AccountId>;
+	type Locker = ();
+	type CollectionDeposit = ConstU128<1>; 
+	type ItemDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type AttributeDepositBase = ConstU128<1>;
+	type DepositPerByte = ConstU128<1>;
+	type StringLimit = ConstU32<50>;
+	type KeyLimit = ConstU32<50>;
+	type ValueLimit = ConstU32<50>;
 	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
 }
 
 parameter_types! {
