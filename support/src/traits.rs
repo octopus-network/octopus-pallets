@@ -40,20 +40,20 @@ pub trait UpwardMessagesInterface<AccountId> {
 }
 
 pub trait ConvertIntoNep171 {
-	type ClassId;
-	type InstanceId;
+	type CollectionId;
+	type ItemId;
 	fn convert_into_nep171_metadata(
-		class: Self::ClassId,
-		instance: Self::InstanceId,
+		collection: Self::CollectionId,
+		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata>;
 }
 
 impl ConvertIntoNep171 for () {
-	type ClassId = u128;
-	type InstanceId = u128;
+	type CollectionId = u128;
+	type ItemId = u128;
 	fn convert_into_nep171_metadata(
-		_class: Self::ClassId,
-		_instance: Self::InstanceId,
+		_collection: Self::CollectionId,
+		_item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		None
 	}
