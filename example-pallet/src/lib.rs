@@ -90,7 +90,7 @@ pub mod pallet {
 		pub fn transfer_hash(
 			origin: OriginFor<T>,
 			hash: T::Hash,
-			dest_id: bridge::ChainId,
+			dest_id: bridge::BridgeChainId,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 
@@ -106,12 +106,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: BalanceOf<T>,
 			recipient: Vec<u8>,
-			dest_id: bridge::ChainId,
+			dest_id: bridge::BridgeChainId,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(<bridge::Pallet::<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
 			let bridge_id = <bridge::Pallet<T>>::account_id();
-			T::Currency::transfer(&source, &bridge_id, amount.into(), AllowDeath)?;
+			<T as Config>::Currency::transfer(&source, &bridge_id, amount.into(), AllowDeath)?;
 
 			let resource_id = T::NativeTokenId::get();
 			<bridge::Pallet<T>>::transfer_fungible(
@@ -128,7 +128,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			recipient: Vec<u8>,
 			token_id: U256,
-			dest_id: bridge::ChainId,
+			dest_id: bridge::BridgeChainId,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(<bridge::Pallet::<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
