@@ -51,6 +51,20 @@ pub enum ProposalStatus {
 	Rejected,
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub enum BridgeEvent {
+	FungibleTransfer(BridgeChainId, DepositNonce, ResourceId, U256, Vec<u8>),
+	NonFungibleTransfer(
+		BridgeChainId,
+		DepositNonce,
+		ResourceId,
+		Vec<u8>,
+		Vec<u8>,
+		Vec<u8>,
+	),
+	GenericTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>),
+}
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ProposalVotes<AccountId, BlockNumber> {
 	pub votes_for: Vec<AccountId>,
@@ -122,10 +136,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Origin used to administer the pallet
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
-
-		/// Currency impl
-		type Currency: Currency<Self::AccountId>;
+		type BridgeCommitteeOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Proposed dispatchable call
 		type Proposal: Parameter
@@ -137,10 +148,36 @@ pub mod pallet {
 		/// This must be unique and must not collide with existing IDs within a set of bridged
 		/// chains.
 		#[pallet::constant]
-		type ChainId: Get<BridgeChainId>;
+		type BridgeChainId: Get<BridgeChainId>;
+
+		/// Currency impl
+		type Currency: Currency<Self::AccountId>;
 
 		#[pallet::constant]
 		type ProposalLifetime: Get<Self::BlockNumber>;
+
+		/// Check whether an asset is PHA
+		// type NativeAssetChecker: NativeAssetChecker; // TODO
+
+		/// Execution price in PHA
+		type NativeExecutionPrice: Get<u128>;
+
+		/// Treasury account to receive assets fee
+		// type TreasuryAccount: Get<Self::AccountId>; // todo
+
+		/// Asset adapter to do withdraw, deposit etc.
+		// type FungibleAdapter: TransactAsset; // todo
+
+		/// Fungible assets registry
+		// type AssetsRegistry: GetAssetRegistryInfo<<Self as pallet_assets::Config>::AssetId>; // TODO
+
+		/// Maximum number of bridge events  allowed to exist in a single block
+		#[pallet::constant]
+		type BridgeEventLimit: Get<u32>;
+
+		/// Salt used to generation rid
+		#[pallet::constant]
+		type ResourceIdGenerationSalt: Get<Option<u128>>;
 	}
 
 	#[pallet::pallet]
@@ -201,33 +238,33 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Vote threshold has changed (new_threshold)
+		/// Vote threshold has changed \[new_threshold\]
 		RelayerThresholdChanged(u32),
-		/// Chain now available for transfers (chain_id)
+		/// Chain now available for transfers \[bridge_chain_id\]
 		ChainWhitelisted(BridgeChainId),
-		/// Relayer added to set
+		/// Relayer added to set \[relayer_accout_id\]
 		RelayerAdded(T::AccountId),
-		/// Relayer removed from set
+		/// Relayer removed from set \[relayer_accout_id\]
 		RelayerRemoved(T::AccountId),
-		/// FunglibleTransfer is for relaying fungibles (dest_id, nonce, resource_id, amount,
-		/// recipient, metadata)
+		/// FunglibleTransfer is for relaying fungibles \[dest_id, nonce, resource_id, amount,
+		/// recipient, metadata\]
 		FungibleTransfer(BridgeChainId, DepositNonce, ResourceId, U256, Vec<u8>),
-		/// NonFungibleTransfer is for relaying NFTS (dest_id, nonce, resource_id, token_id,
-		/// recipient, metadata)
+		/// NonFungibleTransfer is for relaying NFTS \[dest_id, nonce, resource_id, token_id,
+		/// recipient, metadata\]
 		NonFungibleTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
-		/// GenericTransfer is for a generic data payload(dest_id, nonce, resource_id, metadata)
+		/// GenericTransfer is for a generic data payload \[dest_id, nonce, resource_id, metadata\]
 		GenericTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>),
-		/// Vote submitted in favour of proposal
+		/// Vote submitted in favour of proposal \[bridge_chain_id, nonce, account_id\]
 		VoteFor(BridgeChainId, DepositNonce, T::AccountId),
-		/// Vote submitted against proposal
+		/// Vote submitted against proposal \[bridge_chain_id, nonce, account_id\]
 		VoteAgainst(BridgeChainId, DepositNonce, T::AccountId),
-		/// Voting successful for a proposal
+		/// Voting successful for a proposal \[bridge_chain_id, nonce\]
 		ProposalApproved(BridgeChainId, DepositNonce),
-		/// Voting rejected a proposal
+		/// Voting rejected a proposal \[bridge_chain_id, nonce\]
 		ProposalRejected(BridgeChainId, DepositNonce),
-		/// Execution of call succeeded
+		/// Execution of call succeeded \[bridge_chain_id, nonce\]
 		ProposalSucceeded(BridgeChainId, DepositNonce),
-		/// Execution of call failed
+		/// Execution of call failed \[bridge_chain_id, nonce\]
 		ProposalFailed(BridgeChainId, DepositNonce),
 	}
 
@@ -404,7 +441,10 @@ pub mod pallet {
 		/// # <weight>
 		/// - weight of proposed call, regardless of whether execution is performed
 		/// # </weight>
-		#[pallet::weight(195_000_0000)]
+		#[pallet::weight({
+			let dispatch_info = prop.get_dispatch_info();
+			(dispatch_info.weight + 195_000_000, dispatch_info.class, Pays::Yes)
+		})]
 		pub fn eval_vote_state(
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
@@ -421,7 +461,7 @@ pub mod pallet {
 		// *** Utility methods ***
 
 		pub fn ensure_admin(o: T::Origin) -> DispatchResult {
-			T::AdminOrigin::try_origin(o).map(|_| ()).or_else(ensure_root)?;
+			T::BridgeCommitteeOrigin::try_origin(o).map(|_| ()).or_else(ensure_root)?;
 			Ok(().into())
 		}
 
@@ -478,7 +518,7 @@ pub mod pallet {
 		/// Whitelist a chain ID for transfer
 		pub fn whitelist(id: BridgeChainId) -> DispatchResult {
 			// Cannot whitelist this chain
-			ensure!(id != T::ChainId::get(), Error::<T>::InvalidChainId);
+			ensure!(id != T::BridgeChainId::get(), Error::<T>::InvalidChainId);
 			// Cannot whitelist with an existing entry
 			ensure!(!Self::chain_whitelisted(id), Error::<T>::ChainAlreadyWhitelisted);
 			ChainNonces::<T>::insert(&id, 0);
@@ -599,9 +639,11 @@ pub mod pallet {
 			call: Box<T::Proposal>,
 		) -> DispatchResult {
 			Self::deposit_event(Event::<T>::ProposalApproved(src_id, nonce));
+
 			call.dispatch(frame_system::RawOrigin::Signed(Self::account_id()).into())
 				.map(|_| ())
 				.map_err(|e| e.error)?;
+
 			Self::deposit_event(Event::<T>::ProposalSucceeded(src_id, nonce));
 			Ok(().into())
 		}
@@ -665,6 +707,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
+
 			Self::deposit_event(Event::<T>::GenericTransfer(dest_id, nonce, resource_id, metadata));
 			Ok(().into())
 		}
