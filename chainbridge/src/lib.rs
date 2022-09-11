@@ -205,17 +205,12 @@ pub mod pallet {
 	/// Tracks current relayer set
 	#[pallet::storage]
 	#[pallet::getter(fn relayers)]
-	pub type Relayers<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, bool>;
-
-	#[pallet::type_value]
-	pub fn DefaultRelayerCount() -> u32 {
-		0
-	}
+	pub type Relayers<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
 
 	/// Number of relayers in set
 	#[pallet::storage]
 	#[pallet::getter(fn relayer_count)]
-	pub type RelayerCount<T: Config> = StorageValue<_, u32, ValueQuery, DefaultRelayerCount>;
+	pub type RelayerCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// All known proposals.
 	/// The key is the hash of the call and the deposit ID, to ensure it's unique.
@@ -229,6 +224,15 @@ pub mod pallet {
 		(DepositNonce, T::Proposal),
 		ProposalVotes<T::AccountId, T::BlockNumber>,
 	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bridge_events)]
+	pub type BridgeEvents<T: Config> =
+		StorageValue<_, BoundedVec<BridgeEvent, T::BridgeEventLimit>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bridge_fee)]
+	pub type BridgeFee<T: Config> = StorageMap<_, Twox64Concat, BridgeChainId, u128>;
 
 	/// Utilized by the bridge software to map resource IDs to actual methods
 	#[pallet::storage]
@@ -266,6 +270,10 @@ pub mod pallet {
 		ProposalSucceeded(BridgeChainId, DepositNonce),
 		/// Execution of call failed \[bridge_chain_id, nonce\]
 		ProposalFailed(BridgeChainId, DepositNonce),
+		FeeUpdated {
+			dest_id: BridgeChainId,
+			fee: u128,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -301,6 +309,8 @@ pub mod pallet {
 		ProposalAlreadyComplete,
 		/// Lifetime of proposal has been exceeded
 		ProposalExpired,
+		///
+		InvalidFeeOption,
 	}
 
 	#[pallet::hooks]
@@ -387,6 +397,27 @@ pub mod pallet {
 			Self::unregister_relayer(v)
 		}
 
+		/// Change extra bridge transfer fee that user should pay
+		///
+		/// # <weight>
+		/// - O(1) lookup and insert
+		/// # </weight>
+		#[pallet::weight(195_000_000)]
+		pub fn update_fee(
+			origin: OriginFor<T>,
+			fee: u128,
+			dest_id: BridgeChainId,
+		) -> DispatchResult {
+			Self::ensure_admin(origin)?;
+			ensure!(
+				fee >= T::NativeExecutionPrice::get(),
+				Error::<T>::InvalidFeeOption
+			);
+			BridgeFee::<T>::insert(dest_id, fee);
+			Self::deposit_event(Event::FeeUpdated { dest_id, fee });
+			Ok(())
+		}
+
 		/// Commits a vote in favour of the provided proposal.
 		///
 		/// If a proposal with the given nonce and source chain ID does not already exist, it will
@@ -395,19 +426,21 @@ pub mod pallet {
 		/// # <weight>
 		/// - weight of proposed call, regardless of whether execution is performed
 		/// # </weight>
-		// TODO: need handle weight
-		#[pallet::weight(195_000_0000)]
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(dispatch_info.weight + 195_000_000, dispatch_info.class, Pays::Yes)
+		})]
 		pub fn acknowledge_proposal(
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
 			src_id: BridgeChainId,
-			r_id: ResourceId,
+			_r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
 			ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-			ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
+			// ensure!(Self::resource_exists(_r_id), Error::<T>::ResourceDoesNotExist);
 
 			Self::vote_for(who, nonce, src_id, call)
 		}
@@ -422,13 +455,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
 			src_id: BridgeChainId,
-			r_id: ResourceId,
+			_r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
 			ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-			ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
+			// ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
 
 			Self::vote_against(who, nonce, src_id, call)
 		}
@@ -451,9 +484,21 @@ pub mod pallet {
 			src_id: BridgeChainId,
 			prop: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
-			let _ = ensure_signed(origin)?;
+			ensure_signed(origin)?;
 
 			Self::try_resolve_proposal(nonce, src_id, prop)
+		}
+
+		// TODO
+		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was resolved.
+		#[pallet::weight(195_000_000)]
+		pub fn handle_fungible_transfer(
+			_origin: OriginFor<T>,
+			_dest: Vec<u8>,
+			_amount: BalanceOf<T>,
+			_rid: ResourceId,
+		) -> DispatchResult {
+			todo!()
 		}
 	}
 
@@ -461,13 +506,13 @@ pub mod pallet {
 		// *** Utility methods ***
 
 		pub fn ensure_admin(o: T::Origin) -> DispatchResult {
-			T::BridgeCommitteeOrigin::try_origin(o).map(|_| ()).or_else(ensure_root)?;
+			T::BridgeCommitteeOrigin::ensure_origin(o)?;
 			Ok(().into())
 		}
 
 		/// Checks if who is a relayer
 		pub fn is_relayer(who: &T::AccountId) -> bool {
-			Self::relayers(who).unwrap_or_else(|| false)
+			Self::relayers(who)
 		}
 
 		/// Provides an AccountId for the pallet.
@@ -530,8 +575,7 @@ pub mod pallet {
 		pub fn register_relayer(relayer: T::AccountId) -> DispatchResult {
 			ensure!(!Self::is_relayer(&relayer), Error::<T>::RelayerAlreadyExists);
 			Relayers::<T>::insert(&relayer, true);
-			let relayer_count = RelayerCount::<T>::get();
-			RelayerCount::<T>::put(relayer_count + 1);
+			RelayerCount::<T>::mutate(|i| *i += 1);
 			Self::deposit_event(Event::<T>::RelayerAdded(relayer));
 			Ok(().into())
 		}
@@ -540,8 +584,7 @@ pub mod pallet {
 		pub fn unregister_relayer(relayer: T::AccountId) -> DispatchResult {
 			ensure!(Self::is_relayer(&relayer), Error::<T>::RelayerInvalid);
 			Relayers::<T>::remove(&relayer);
-			let relayer_count = RelayerCount::<T>::get();
-			RelayerCount::<T>::put(relayer_count - 1);
+			RelayerCount::<T>::mutate(|i| *i -= 1);
 			Self::deposit_event(Event::<T>::RelayerRemoved(relayer));
 			Ok(().into())
 		}
@@ -654,6 +697,35 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		// extract_fungible
+
+		// extract_dest
+
+		//  estimate_fee_in_pha
+
+		// to_e12
+
+		// from_e12
+
+		// convert_fee_from_ph
+
+		//  rid_to_location
+
+		// rid_to_assetid
+
+		//  gen_pha_rid
+
+		// get_chainid
+
+		// get_fe
+
+		// check_balance
+
+		// impl<T: Config> BridgeChecker for Pallet<T>
+
+		// pub struct BridgeTransactImpl<T>(PhantomData<T>);
+		// impl<T: Config> BridgeTransact for BridgeTransactImpl<T>
+		
 		/// Initiates a transfer of a fungible asset out of the chain. This should be called by
 		/// another pallet.
 		pub fn transfer_fungible(
