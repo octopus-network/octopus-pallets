@@ -26,7 +26,7 @@ mod mock;
 const DEFAULT_RELAYER_THRESHOLD: u32 = 1;
 const MODULE_ID: PalletId = PalletId(*b"oc/bridg");
 
-pub type BridgeChainId = u8;
+pub type ChainId = u8;
 pub type DepositNonce = u64;
 pub type ResourceId = [u8; 32];
 
@@ -53,16 +53,16 @@ pub enum ProposalStatus {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum BridgeEvent {
-	FungibleTransfer(BridgeChainId, DepositNonce, ResourceId, U256, Vec<u8>),
+	FungibleTransfer(ChainId, DepositNonce, ResourceId, U256, Vec<u8>),
 	NonFungibleTransfer(
-		BridgeChainId,
+		ChainId,
 		DepositNonce,
 		ResourceId,
 		Vec<u8>,
 		Vec<u8>,
 		Vec<u8>,
 	),
-	GenericTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>),
+	GenericTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -148,7 +148,7 @@ pub mod pallet {
 		/// This must be unique and must not collide with existing IDs within a set of bridged
 		/// chains.
 		#[pallet::constant]
-		type BridgeChainId: Get<BridgeChainId>;
+		type ChainId: Get<ChainId>;
 
 		/// Currency impl
 		type Currency: Currency<Self::AccountId>;
@@ -189,7 +189,7 @@ pub mod pallet {
 	/// All whitelisted chains and their respective transaction counts
 	#[pallet::storage]
 	#[pallet::getter(fn chains)]
-	pub type ChainNonces<T: Config> = StorageMap<_, Blake2_128Concat, BridgeChainId, DepositNonce>;
+	pub type ChainNonces<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, DepositNonce>;
 
 	#[pallet::type_value]
 	pub fn DefaultRelayerThreshold() -> u32 {
@@ -219,7 +219,7 @@ pub mod pallet {
 	pub type Votes<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		BridgeChainId,
+		ChainId,
 		Blake2_128Concat,
 		(DepositNonce, T::Proposal),
 		ProposalVotes<T::AccountId, T::BlockNumber>,
@@ -232,7 +232,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn bridge_fee)]
-	pub type BridgeFee<T: Config> = StorageMap<_, Twox64Concat, BridgeChainId, u128>;
+	pub type BridgeFee<T: Config> = StorageMap<_, Twox64Concat, ChainId, u128>;
 
 	/// Utilized by the bridge software to map resource IDs to actual methods
 	#[pallet::storage]
@@ -245,33 +245,33 @@ pub mod pallet {
 		/// Vote threshold has changed \[new_threshold\]
 		RelayerThresholdChanged(u32),
 		/// Chain now available for transfers \[bridge_chain_id\]
-		ChainWhitelisted(BridgeChainId),
+		ChainWhitelisted(ChainId),
 		/// Relayer added to set \[relayer_accout_id\]
 		RelayerAdded(T::AccountId),
 		/// Relayer removed from set \[relayer_accout_id\]
 		RelayerRemoved(T::AccountId),
 		/// FunglibleTransfer is for relaying fungibles \[dest_id, nonce, resource_id, amount,
 		/// recipient, metadata\]
-		FungibleTransfer(BridgeChainId, DepositNonce, ResourceId, U256, Vec<u8>),
+		FungibleTransfer(ChainId, DepositNonce, ResourceId, U256, Vec<u8>),
 		/// NonFungibleTransfer is for relaying NFTS \[dest_id, nonce, resource_id, token_id,
 		/// recipient, metadata\]
-		NonFungibleTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
+		NonFungibleTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
 		/// GenericTransfer is for a generic data payload \[dest_id, nonce, resource_id, metadata\]
-		GenericTransfer(BridgeChainId, DepositNonce, ResourceId, Vec<u8>),
+		GenericTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>),
 		/// Vote submitted in favour of proposal \[bridge_chain_id, nonce, account_id\]
-		VoteFor(BridgeChainId, DepositNonce, T::AccountId),
+		VoteFor(ChainId, DepositNonce, T::AccountId),
 		/// Vote submitted against proposal \[bridge_chain_id, nonce, account_id\]
-		VoteAgainst(BridgeChainId, DepositNonce, T::AccountId),
+		VoteAgainst(ChainId, DepositNonce, T::AccountId),
 		/// Voting successful for a proposal \[bridge_chain_id, nonce\]
-		ProposalApproved(BridgeChainId, DepositNonce),
+		ProposalApproved(ChainId, DepositNonce),
 		/// Voting rejected a proposal \[bridge_chain_id, nonce\]
-		ProposalRejected(BridgeChainId, DepositNonce),
+		ProposalRejected(ChainId, DepositNonce),
 		/// Execution of call succeeded \[bridge_chain_id, nonce\]
-		ProposalSucceeded(BridgeChainId, DepositNonce),
+		ProposalSucceeded(ChainId, DepositNonce),
 		/// Execution of call failed \[bridge_chain_id, nonce\]
-		ProposalFailed(BridgeChainId, DepositNonce),
+		ProposalFailed(ChainId, DepositNonce),
 		FeeUpdated {
-			dest_id: BridgeChainId,
+			dest_id: ChainId,
 			fee: u128,
 		},
 	}
@@ -370,7 +370,7 @@ pub mod pallet {
 		/// - O(1) lookup and insert
 		/// # </weight>
 		#[pallet::weight(195_000_0000)]
-		pub fn whitelist_chain(origin: OriginFor<T>, id: BridgeChainId) -> DispatchResult {
+		pub fn whitelist_chain(origin: OriginFor<T>, id: ChainId) -> DispatchResult {
 			Self::ensure_admin(origin)?;
 			Self::whitelist(id)
 		}
@@ -406,7 +406,7 @@ pub mod pallet {
 		pub fn update_fee(
 			origin: OriginFor<T>,
 			fee: u128,
-			dest_id: BridgeChainId,
+			dest_id: ChainId,
 		) -> DispatchResult {
 			Self::ensure_admin(origin)?;
 			ensure!(
@@ -433,7 +433,7 @@ pub mod pallet {
 		pub fn acknowledge_proposal(
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			_r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
@@ -454,7 +454,7 @@ pub mod pallet {
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			_r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
@@ -481,7 +481,7 @@ pub mod pallet {
 		pub fn eval_vote_state(
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			prop: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -527,12 +527,12 @@ pub mod pallet {
 		}
 
 		/// Checks if a chain exists as a whitelisted destination
-		pub fn chain_whitelisted(id: BridgeChainId) -> bool {
+		pub fn chain_whitelisted(id: ChainId) -> bool {
 			Self::chains(id).is_some()
 		}
 
 		/// Increments the deposit nonce for the specified chain ID
-		fn bump_nonce(id: BridgeChainId) -> DepositNonce {
+		fn bump_nonce(id: ChainId) -> DepositNonce {
 			let nonce = Self::chains(id).unwrap_or_default() + 1;
 			ChainNonces::<T>::insert(id, nonce);
 			nonce
@@ -561,9 +561,9 @@ pub mod pallet {
 		}
 
 		/// Whitelist a chain ID for transfer
-		pub fn whitelist(id: BridgeChainId) -> DispatchResult {
+		pub fn whitelist(id: ChainId) -> DispatchResult {
 			// Cannot whitelist this chain
-			ensure!(id != T::BridgeChainId::get(), Error::<T>::InvalidChainId);
+			ensure!(id != T::ChainId::get(), Error::<T>::InvalidChainId);
 			// Cannot whitelist with an existing entry
 			ensure!(!Self::chain_whitelisted(id), Error::<T>::ChainAlreadyWhitelisted);
 			ChainNonces::<T>::insert(&id, 0);
@@ -595,7 +595,7 @@ pub mod pallet {
 		fn commit_vote(
 			who: T::AccountId,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			prop: Box<T::Proposal>,
 			in_favour: bool,
 		) -> DispatchResult {
@@ -630,7 +630,7 @@ pub mod pallet {
 		/// Attempts to finalize or cancel the proposal if the vote count allows.
 		fn try_resolve_proposal(
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			prop: Box<T::Proposal>,
 		) -> DispatchResult {
 			if let Some(mut votes) = Votes::<T>::get(src_id, (nonce, prop.clone())) {
@@ -656,7 +656,7 @@ pub mod pallet {
 		fn vote_for(
 			who: T::AccountId,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			prop: Box<T::Proposal>,
 		) -> DispatchResult {
 			Self::commit_vote(who, nonce, src_id, prop.clone(), true)?;
@@ -668,7 +668,7 @@ pub mod pallet {
 		fn vote_against(
 			who: T::AccountId,
 			nonce: DepositNonce,
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			prop: Box<T::Proposal>,
 		) -> DispatchResult {
 			Self::commit_vote(who, nonce, src_id, prop.clone(), false)?;
@@ -677,7 +677,7 @@ pub mod pallet {
 
 		/// Execute the proposal and signals the result as an event
 		fn finalize_execution(
-			src_id: BridgeChainId,
+			src_id: ChainId,
 			nonce: DepositNonce,
 			call: Box<T::Proposal>,
 		) -> DispatchResult {
@@ -692,7 +692,7 @@ pub mod pallet {
 		}
 
 		/// Cancels a proposal.
-		fn cancel_execution(src_id: BridgeChainId, nonce: DepositNonce) -> DispatchResult {
+		fn cancel_execution(src_id: ChainId, nonce: DepositNonce) -> DispatchResult {
 			Self::deposit_event(Event::<T>::ProposalRejected(src_id, nonce));
 			Ok(().into())
 		}
@@ -729,7 +729,7 @@ pub mod pallet {
 		/// Initiates a transfer of a fungible asset out of the chain. This should be called by
 		/// another pallet.
 		pub fn transfer_fungible(
-			dest_id: BridgeChainId,
+			dest_id: ChainId,
 			resource_id: ResourceId,
 			to: Vec<u8>,
 			amount: U256,
@@ -750,7 +750,7 @@ pub mod pallet {
 		/// Initiates a transfer of a nonfungible asset out of the chain. This should be called by
 		/// another pallet.
 		pub fn transfer_nonfungible(
-			dest_id: BridgeChainId,
+			dest_id: ChainId,
 			resource_id: ResourceId,
 			token_id: Vec<u8>,
 			to: Vec<u8>,
@@ -773,7 +773,7 @@ pub mod pallet {
 		/// Initiates a transfer of generic data out of the chain. This should be called by another
 		/// pallet.
 		pub fn transfer_generic(
-			dest_id: BridgeChainId,
+			dest_id: ChainId,
 			resource_id: ResourceId,
 			metadata: Vec<u8>,
 		) -> DispatchResult {
