@@ -630,6 +630,9 @@ pub mod pallet {
 			to: Vec<u8>,
 			amount: U256,
 		) -> DispatchResult {
+			// have two token handle
+			// - native token handle, transfer to bridge_account
+			// - burn non-native token,
 			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
 			Self::deposit_event(Event::<T>::FungibleTransfer(

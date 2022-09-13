@@ -83,20 +83,6 @@ pub mod pallet {
 		// Initiation calls. These start a bridge transfer.
 		//
 
-		/// Transfers an arbitrary hash to a (whitelisted) destination chain.
-		#[pallet::weight(195_000_0000)]
-		pub fn transfer_hash(
-			origin: OriginFor<T>,
-			hash: T::Hash,
-			dest_id: bridge::ChainId,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-
-			let resource_id = T::HashId::get();
-			let metadata: Vec<u8> = hash.as_ref().to_vec();
-			<bridge::Pallet<T>>::transfer_generic(dest_id, resource_id, metadata)
-		}
-
 		/// Transfers some amount of the native token to some recipient on a (whitelisted)
 		/// destination chain.
 		#[pallet::weight(195_000_0000)]
@@ -125,15 +111,27 @@ pub mod pallet {
 		//
 
 		/// Executes a simple currency transfer using the bridge account as the source
+		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was resolved.
+		/// this function by bridge triggered transfer
+		/// so have two token transfer
+		/// - native token transfer
+		/// - no-native token transfer
 		#[pallet::weight(195_000_0000)]
 		pub fn transfer(
 			origin: OriginFor<T>,
 			to: T::AccountId,
 			amount: BalanceOf<T>,
-			_r_id: ResourceId,
+			r_id: ResourceId,
 		) -> DispatchResult {
 			let source = T::BridgeOrigin::ensure_origin(origin)?;
-			<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
+
+			// this do native transfer
+			// if r_id == T::NativeTokenId::get() {
+				<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
+			// } else {
+				// do asset mint
+			// }
+
 			Ok(())
 		}
 

@@ -33,30 +33,6 @@ fn make_transfer_proposal(to: AccountId32, amount: u64) -> Call {
 	})
 }
 
-#[test]
-fn transfer_hash() {
-	new_test_ext().execute_with(|| {
-		let dest_chain = 0;
-		let resource_id = HashId::get();
-		let hash: H256 = "ABC".using_encoded(blake2_256).into();
-
-		assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
-
-		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
-		assert_ok!(ChainBridgeTransfer::transfer_hash(
-			Origin::signed(AccountId32::new([1u8; 32])),
-			hash.clone(),
-			dest_chain,
-		));
-
-		expect_event(bridge::Event::GenericTransfer(
-			dest_chain,
-			1,
-			resource_id,
-			hash.as_ref().to_vec(),
-		));
-	})
-}
 
 #[test]
 fn transfer_native() {
