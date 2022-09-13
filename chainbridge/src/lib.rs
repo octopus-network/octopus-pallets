@@ -3,7 +3,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{EnsureOrigin, Get, StorageVersion},
+	traits::{Currency, EnsureOrigin, Get, StorageVersion},
 	PalletId,
 };
 use scale_info::TypeInfo;
@@ -113,10 +113,16 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use codec::EncodeLike;
-	use frame_support::{pallet_prelude::*, weights::GetDispatchInfo, Blake2_128Concat};
+	use codec::{Codec, EncodeLike};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{Currency, ExistenceRequirement::AllowDeath},
+		weights::GetDispatchInfo,
+		Blake2_128Concat,
+	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::AccountIdConversion;
+	use sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned};
+	use std::fmt::Debug;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -630,9 +636,6 @@ pub mod pallet {
 			to: Vec<u8>,
 			amount: U256,
 		) -> DispatchResult {
-			// have two token handle
-			// - native token handle, transfer to bridge_account
-			// - burn non-native token,
 			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
 			Self::deposit_event(Event::<T>::FungibleTransfer(

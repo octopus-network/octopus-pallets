@@ -89,6 +89,7 @@ impl bridge::Config for Test {
 	type Proposal = Call;
 	type ChainId = TestChainId;
 	type ProposalLifetime = ProposalLifetime;
+	type Currency = Balances;
 }
 
 parameter_types! {

@@ -8,6 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod traits;
+
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, StorageVersion},
@@ -26,6 +28,7 @@ use pallet_chainbridge as bridge;
 use sp_core::U256;
 use sp_std::{convert::From, prelude::*};
 
+use crate::traits::AssetIdResourceIdProvider;
 pub use pallet::*;
 
 type ResourceId = bridge::ResourceId;
@@ -39,6 +42,11 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::traits::AssetIdResourceIdProvider;
+	use codec::Codec;
+	use frame_support::traits::fungibles::{Inspect, Mutate, Transfer};
+	use sp_arithmetic::traits::AtLeast32BitUnsigned;
+	use core::fmt::Debug;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -60,18 +68,92 @@ pub mod pallet {
 
 		/// Ids can be defined by the runtime and passed in, perhaps from blake2b_128 hashes.
 		type HashId: Get<ResourceId>;
+
 		type NativeTokenId: Get<ResourceId>;
+
+		/// Identifier for the class of asset.
+		type AssetId: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Copy
+			+ Debug
+			+ Default
+			+ MaybeSerializeDeserialize;
+
+		/// The units in which we record balances.
+		type AssetBalance: Parameter
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Codec
+			+ Default
+			+ From<u128>
+			+ Into<u128>
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ Debug;
+
+		/// Expose customizable associated type of asset transfer, lock and unlock
+		type Assets: Transfer<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
+			+ Mutate<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
+			+ Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>;
+
+		/// Map of cross-chain asset ID & name
+		type AssetIdByName: AssetIdResourceIdProvider<Self::AssetId>;
 	}
+
+	#[pallet::storage]
+	#[pallet::getter(fn resource_id_by_asset_id)]
+	pub type ResourceIdOfAssetId<T: Config> =
+		StorageMap<_, Blake2_128Concat, ResourceId, T::AssetId>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub asset_id_by_resource_id: Vec<(ResourceId, T::AssetId)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { asset_id_by_resource_id: Vec::new() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (token_id, id) in self.asset_id_by_resource_id.iter() {
+				<ResourceIdOfAssetId<T>>::insert(token_id, id);
+			}
+		}
+	}
+
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// deposit assets
+		Deposit {
+			sender: T::AccountId,
+			recipient: T::AccountId,
+			resource_id: ResourceId,
+			amount: BalanceOf<T>,
+		},
+		/// Withdraw assets
+		Withdraw {
+			sender: T::AccountId,
+			recipient: Vec<u8>,
+			resource_id: ResourceId,
+			amount: BalanceOf<T>,
+		},
 		Remark(T::Hash),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		InvalidTransfer,
+		InvalidTokenId,
+		WrongAssetId,
 	}
 
 	#[pallet::hooks]
@@ -83,8 +165,6 @@ pub mod pallet {
 		// Initiation calls. These start a bridge transfer.
 		//
 
-		/// Transfers some amount of the native token to some recipient on a (whitelisted)
-		/// destination chain.
 		#[pallet::weight(195_000_0000)]
 		pub fn transfer_native(
 			origin: OriginFor<T>,
@@ -92,18 +172,66 @@ pub mod pallet {
 			recipient: Vec<u8>,
 			dest_id: bridge::ChainId,
 		) -> DispatchResult {
+			let native_token = T::NativeTokenId::get();
+
+			Self::transfer(origin, amount, native_token, recipient, dest_id)
+		}
+
+		/// Transfers some amount of the native token to some recipient on a (whitelisted)
+		/// destination chain.
+		#[pallet::weight(195_000_0000)]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			amount: BalanceOf<T>,
+			r_id: ResourceId,
+			recipient: Vec<u8>,
+			dest_id: bridge::ChainId,
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(<bridge::Pallet::<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
-			let bridge_id = <bridge::Pallet<T>>::account_id();
-			<T as Config>::Currency::transfer(&source, &bridge_id, amount.into(), AllowDeath)?;
+			// TODO
+			// check recipient address is verify
 
-			let resource_id = T::NativeTokenId::get();
-			<bridge::Pallet<T>>::transfer_fungible(
-				dest_id,
-				resource_id,
-				recipient,
-				U256::from(amount.saturated_into::<u128>()),
-			)
+			match r_id == T::NativeTokenId::get() {
+				true => {
+					// transfer native token
+					let bridge_id = <bridge::Pallet<T>>::account_id();
+					<T as Config>::Currency::transfer(
+						&source,
+						&bridge_id,
+						amount.into(),
+						AllowDeath,
+					)?;
+
+					let resource_id = T::NativeTokenId::get();
+					<bridge::Pallet<T>>::transfer_fungible(
+						dest_id,
+						resource_id,
+						recipient.clone(),
+						U256::from(amount.saturated_into::<u128>()),
+					)?;
+				},
+				false => {
+					let amount = amount.saturated_into::<u128>();
+					let token_id = Self::try_get_asset_id(r_id)?;
+					<T::Assets as Mutate<T::AccountId>>::burn_from(token_id, &source, amount.into())?;
+					<bridge::Pallet<T>>::transfer_fungible(
+						dest_id,
+						r_id,
+						recipient.clone(),
+						U256::from(amount.saturated_into::<u128>()),
+					)?;
+				},
+			}
+
+			Self::deposit_event(Event::Withdraw {
+				sender: source.clone(),
+				recipient: recipient,
+				resource_id: r_id,
+				amount
+			});
+
+			Ok(())
 		}
 
 		//
@@ -111,13 +239,10 @@ pub mod pallet {
 		//
 
 		/// Executes a simple currency transfer using the bridge account as the source
-		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was resolved.
-		/// this function by bridge triggered transfer
-		/// so have two token transfer
-		/// - native token transfer
-		/// - no-native token transfer
+		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was
+		/// resolved. this function by bridge triggered transfer
 		#[pallet::weight(195_000_0000)]
-		pub fn transfer(
+		pub fn handle_transfer(
 			origin: OriginFor<T>,
 			to: T::AccountId,
 			amount: BalanceOf<T>,
@@ -126,11 +251,25 @@ pub mod pallet {
 			let source = T::BridgeOrigin::ensure_origin(origin)?;
 
 			// this do native transfer
-			// if r_id == T::NativeTokenId::get() {
-				<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
-			// } else {
-				// do asset mint
-			// }
+			match r_id == T::NativeTokenId::get() {
+				true => {
+					<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
+
+				},
+				false => {
+					let amount = amount.saturated_into::<u128>();
+					let token_id = Self::try_get_asset_id(r_id)?;
+					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &source, amount.into())?;
+					// emit event
+				},
+			}
+
+			Self::deposit_event(Event::Deposit {
+				sender: source.clone(),
+				recipient: to.clone(),
+				resource_id: r_id,
+				amount
+			});
 
 			Ok(())
 		}
@@ -141,6 +280,26 @@ pub mod pallet {
 			T::BridgeOrigin::ensure_origin(origin)?;
 			Self::deposit_event(Event::<T>::Remark(hash));
 			Ok(())
+		}
+	}
+}
+
+impl<T: Config> AssetIdResourceIdProvider<T::AssetId> for Pallet<T> {
+	type Err = Error<T>;
+
+	fn try_get_asset_id(resource_id: ResourceId) -> Result<<T as Config>::AssetId, Self::Err> {
+		let asset_id = <ResourceIdOfAssetId<T>>::try_get(resource_id);
+		match asset_id {
+			Ok(id) => Ok(id),
+			_ => Err(Error::<T>::InvalidTokenId),
+		}
+	}
+
+	fn try_get_asset_name(asset_id: T::AssetId) -> Result<ResourceId, Self::Err> {
+		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
+		match token_id {
+			Some(id) => Ok(id),
+			_ => Err(Error::<T>::WrongAssetId),
 		}
 	}
 }

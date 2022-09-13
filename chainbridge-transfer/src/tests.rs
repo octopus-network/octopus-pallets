@@ -26,13 +26,12 @@ fn make_remark_proposal(hash: H256) -> Call {
 
 fn make_transfer_proposal(to: AccountId32, amount: u64) -> Call {
 	let resource_id = HashId::get();
-	Call::ChainBridgeTransfer(crate::Call::transfer {
+	Call::ChainBridgeTransfer(crate::Call::handle_transfer {
 		to,
 		amount: amount.into(),
 		r_id: resource_id,
 	})
 }
-
 
 #[test]
 fn transfer_native() {
@@ -126,7 +125,7 @@ fn transfer() {
 		let resource_id = HashId::get();
 		assert_eq!(Balances::free_balance(&bridge_id), ENDOWED_BALANCE);
 		// Transfer and check result
-		assert_ok!(ChainBridgeTransfer::transfer(
+		assert_ok!(ChainBridgeTransfer::handle_transfer(
 			Origin::signed(Bridge::account_id()),
 			RELAYER_A,
 			10,
