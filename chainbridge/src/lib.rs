@@ -50,14 +50,7 @@ pub enum ProposalStatus {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum BridgeEvent {
 	FungibleTransfer(ChainId, DepositNonce, ResourceId, U256, Vec<u8>),
-	NonFungibleTransfer(
-		ChainId,
-		DepositNonce,
-		ResourceId,
-		Vec<u8>,
-		Vec<u8>,
-		Vec<u8>,
-	),
+	NonFungibleTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>, Vec<u8>, Vec<u8>),
 	GenericTransfer(ChainId, DepositNonce, ResourceId, Vec<u8>),
 }
 
@@ -361,7 +354,6 @@ pub mod pallet {
 			Self::ensure_admin(origin)?;
 			Self::unregister_relayer(v)
 		}
-
 
 		/// Commits a vote in favour of the provided proposal.
 		///

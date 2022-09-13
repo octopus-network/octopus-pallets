@@ -3,7 +3,7 @@
 use super::{
 	mock::{
 		assert_events, event_exists, expect_event, new_test_ext, Balances, Bridge, Call,
-		Event, ChainBridgeTransfer, HashId, NativeTokenId, Origin, ProposalLifetime,
+		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime,
 		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
@@ -26,7 +26,11 @@ fn make_remark_proposal(hash: H256) -> Call {
 
 fn make_transfer_proposal(to: AccountId32, amount: u64) -> Call {
 	let resource_id = HashId::get();
-	Call::ChainBridgeTransfer(crate::Call::transfer { to, amount: amount.into(), r_id: resource_id })
+	Call::ChainBridgeTransfer(crate::Call::transfer {
+		to,
+		amount: amount.into(),
+		r_id: resource_id,
+	})
 }
 
 #[test]
@@ -80,7 +84,6 @@ fn transfer_native() {
 	})
 }
 
-
 #[test]
 fn execute_remark() {
 	new_test_ext().execute_with(|| {
@@ -121,14 +124,21 @@ fn execute_remark_bad_origin() {
 	new_test_ext().execute_with(|| {
 		let hash: H256 = "ABC".using_encoded(blake2_256).into();
 		let resource_id = HashId::get();
-		assert_ok!(ChainBridgeTransfer::remark(Origin::signed(Bridge::account_id()), hash, resource_id));
+		assert_ok!(ChainBridgeTransfer::remark(
+			Origin::signed(Bridge::account_id()),
+			hash,
+			resource_id
+		));
 		// Don't allow any signed origin except from bridge addr
 		assert_noop!(
 			ChainBridgeTransfer::remark(Origin::signed(RELAYER_A), hash, resource_id),
 			DispatchError::BadOrigin
 		);
 		// Don't allow root calls
-		assert_noop!(ChainBridgeTransfer::remark(Origin::root(), hash, resource_id), DispatchError::BadOrigin);
+		assert_noop!(
+			ChainBridgeTransfer::remark(Origin::root(), hash, resource_id),
+			DispatchError::BadOrigin
+		);
 	})
 }
 
@@ -156,7 +166,6 @@ fn transfer() {
 		})]);
 	})
 }
-
 
 #[test]
 fn create_sucessful_transfer_proposal() {
