@@ -1,5 +1,5 @@
 [package]
-name = "example-pallet"
+name = "pallet-chainbridge-transfer"
 version = "0.1.0"
 edition = "2021"
 authors = ["Parity Technologies <admin@parity.io>", "Octopus Network <hi@oct.network>"]
@@ -27,7 +27,6 @@ sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polka
 
 pallet-octopus-support = { path = "../support", default-features = false }
 pallet-chainbridge = { path = "../chainbridge", default-features = false }
-example-erc721 = { path = "../example-erc721", default-features = false }
 
 [dev-dependencies]
 sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
@@ -48,6 +47,5 @@ std = [
 	"sp-std/std",
 	"pallet-octopus-support/std",
 	"pallet-chainbridge/std",
-	"example-erc721/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

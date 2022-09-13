@@ -1,5 +1,5 @@
 use super::*;
-use crate as example_pallet;
+use crate as pallet_chainbridge_transfer;
 use pallet_chainbridge as bridge;
 use sp_runtime::{
 	generic,
@@ -74,8 +74,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Bridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
-		Erc721: example_erc721::{Pallet, Call, Storage, Event<T>},
-		Example: example_pallet::{Pallet, Call, Storage, Event<T>},
+		ChainBridgeTransfer: pallet_chainbridge_transfer::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -113,12 +112,6 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub HashId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"hash"));
 	pub NativeTokenId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"DAV")); // native token id
-	pub Erc721Id: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"NFT"));
-}
-
-impl example_erc721::Config for Test {
-	type Event = Event;
-	type Identifier = Erc721Id;
 }
 
 impl Config for Test {
@@ -127,7 +120,6 @@ impl Config for Test {
 	type Currency = Balances;
 	type HashId = HashId;
 	type NativeTokenId = NativeTokenId;
-	type Erc721Id = Erc721Id;
 }
 
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);

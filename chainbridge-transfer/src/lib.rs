@@ -16,7 +16,6 @@ use frame_system::pallet_prelude::*;
 
 use sp_runtime::traits::SaturatedConversion;
 
-use example_erc721 as erc721;
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -48,7 +47,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + bridge::Config + erc721::Config {
+	pub trait Config: frame_system::Config + bridge::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -62,7 +61,6 @@ pub mod pallet {
 		/// Ids can be defined by the runtime and passed in, perhaps from blake2b_128 hashes.
 		type HashId: Get<ResourceId>;
 		type NativeTokenId: Get<ResourceId>;
-		type Erc721Id: Get<ResourceId>;
 	}
 
 	#[pallet::event]
@@ -122,34 +120,6 @@ pub mod pallet {
 			)
 		}
 
-		/// Transfer a non-fungible token (erc721) to a (whitelisted) destination chain.
-		#[pallet::weight(195_000_0000)]
-		pub fn transfer_erc721(
-			origin: OriginFor<T>,
-			recipient: Vec<u8>,
-			token_id: U256,
-			dest_id: bridge::ChainId,
-		) -> DispatchResult {
-			let source = ensure_signed(origin)?;
-			ensure!(<bridge::Pallet::<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
-			match <erc721::Pallet<T>>::tokens(&token_id) {
-				Some(token) => {
-					<erc721::Pallet<T>>::burn_token(source, token_id)?;
-					let resource_id = T::Erc721Id::get();
-					let tid: &mut [u8] = &mut [0; 32];
-					token_id.to_big_endian(tid);
-					<bridge::Pallet<T>>::transfer_nonfungible(
-						dest_id,
-						resource_id,
-						tid.to_vec(),
-						recipient,
-						token.metadata,
-					)
-				},
-				None => Err(Error::<T>::InvalidTransfer)?,
-			}
-		}
-
 		//
 		// Executable calls. These can be triggered by a bridge transfer initiated on another chain
 		//
@@ -172,20 +142,6 @@ pub mod pallet {
 		pub fn remark(origin: OriginFor<T>, hash: T::Hash, _r_id: ResourceId) -> DispatchResult {
 			T::BridgeOrigin::ensure_origin(origin)?;
 			Self::deposit_event(Event::<T>::Remark(hash));
-			Ok(())
-		}
-
-		/// Allows the bridge to issue new erc721 tokens
-		#[pallet::weight(195_000_0000)]
-		pub fn mint_erc721(
-			origin: OriginFor<T>,
-			recipient: T::AccountId,
-			id: U256,
-			metadata: Vec<u8>,
-			_r_id: ResourceId,
-		) -> DispatchResult {
-			T::BridgeOrigin::ensure_origin(origin)?;
-			<erc721::Pallet<T>>::mint_token(recipient, id, metadata)?;
 			Ok(())
 		}
 	}

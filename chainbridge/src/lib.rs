@@ -6,7 +6,6 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, StorageVersion},
 	PalletId,
 };
-use frame_support::traits::Currency;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
@@ -29,9 +28,6 @@ const MODULE_ID: PalletId = PalletId(*b"oc/bridg");
 pub type ChainId = u8;
 pub type DepositNonce = u64;
 pub type ResourceId = [u8; 32];
-
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 pub fn derive_resource_id(chain: u8, id: &[u8]) -> ResourceId {
 	let mut r_id: ResourceId = [0; 32];
@@ -136,7 +132,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Origin used to administer the pallet
-		type BridgeCommitteeOrigin: EnsureOrigin<Self::Origin>;
+		type AdminOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Proposed dispatchable call
 		type Proposal: Parameter
@@ -150,34 +146,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type ChainId: Get<ChainId>;
 
-		/// Currency impl
-		type Currency: Currency<Self::AccountId>;
-
 		#[pallet::constant]
 		type ProposalLifetime: Get<Self::BlockNumber>;
-
-		/// Check whether an asset is PHA
-		// type NativeAssetChecker: NativeAssetChecker; // TODO
-
-		/// Execution price in PHA
-		type NativeExecutionPrice: Get<u128>;
-
-		/// Treasury account to receive assets fee
-		// type TreasuryAccount: Get<Self::AccountId>; // todo
-
-		/// Asset adapter to do withdraw, deposit etc.
-		// type FungibleAdapter: TransactAsset; // todo
-
-		/// Fungible assets registry
-		// type AssetsRegistry: GetAssetRegistryInfo<<Self as pallet_assets::Config>::AssetId>; // TODO
-
-		/// Maximum number of bridge events  allowed to exist in a single block
-		#[pallet::constant]
-		type BridgeEventLimit: Get<u32>;
-
-		/// Salt used to generation rid
-		#[pallet::constant]
-		type ResourceIdGenerationSalt: Get<Option<u128>>;
 	}
 
 	#[pallet::pallet]
@@ -224,11 +194,6 @@ pub mod pallet {
 		(DepositNonce, T::Proposal),
 		ProposalVotes<T::AccountId, T::BlockNumber>,
 	>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn bridge_events)]
-	pub type BridgeEvents<T: Config> =
-		StorageValue<_, BoundedVec<BridgeEvent, T::BridgeEventLimit>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn bridge_fee)]
@@ -397,26 +362,6 @@ pub mod pallet {
 			Self::unregister_relayer(v)
 		}
 
-		/// Change extra bridge transfer fee that user should pay
-		///
-		/// # <weight>
-		/// - O(1) lookup and insert
-		/// # </weight>
-		#[pallet::weight(195_000_000)]
-		pub fn update_fee(
-			origin: OriginFor<T>,
-			fee: u128,
-			dest_id: ChainId,
-		) -> DispatchResult {
-			Self::ensure_admin(origin)?;
-			ensure!(
-				fee >= T::NativeExecutionPrice::get(),
-				Error::<T>::InvalidFeeOption
-			);
-			BridgeFee::<T>::insert(dest_id, fee);
-			Self::deposit_event(Event::FeeUpdated { dest_id, fee });
-			Ok(())
-		}
 
 		/// Commits a vote in favour of the provided proposal.
 		///
@@ -434,13 +379,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
 			src_id: ChainId,
-			_r_id: ResourceId,
+			r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
 			ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-			// ensure!(Self::resource_exists(_r_id), Error::<T>::ResourceDoesNotExist);
+			ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
 
 			Self::vote_for(who, nonce, src_id, call)
 		}
@@ -455,13 +400,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			nonce: DepositNonce,
 			src_id: ChainId,
-			_r_id: ResourceId,
+			r_id: ResourceId,
 			call: Box<<T as Config>::Proposal>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
 			ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
-			// ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
+			ensure!(Self::resource_exists(r_id), Error::<T>::ResourceDoesNotExist);
 
 			Self::vote_against(who, nonce, src_id, call)
 		}
@@ -488,25 +433,13 @@ pub mod pallet {
 
 			Self::try_resolve_proposal(nonce, src_id, prop)
 		}
-
-		// TODO
-		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was resolved.
-		#[pallet::weight(195_000_000)]
-		pub fn handle_fungible_transfer(
-			_origin: OriginFor<T>,
-			_dest: Vec<u8>,
-			_amount: BalanceOf<T>,
-			_rid: ResourceId,
-		) -> DispatchResult {
-			todo!()
-		}
 	}
 
 	impl<T: Config> Pallet<T> {
 		// *** Utility methods ***
 
 		pub fn ensure_admin(o: T::Origin) -> DispatchResult {
-			T::BridgeCommitteeOrigin::ensure_origin(o)?;
+			T::AdminOrigin::ensure_origin(o)?;
 			Ok(().into())
 		}
 
@@ -697,35 +630,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// extract_fungible
-
-		// extract_dest
-
-		//  estimate_fee_in_pha
-
-		// to_e12
-
-		// from_e12
-
-		// convert_fee_from_ph
-
-		//  rid_to_location
-
-		// rid_to_assetid
-
-		//  gen_pha_rid
-
-		// get_chainid
-
-		// get_fe
-
-		// check_balance
-
-		// impl<T: Config> BridgeChecker for Pallet<T>
-
-		// pub struct BridgeTransactImpl<T>(PhantomData<T>);
-		// impl<T: Config> BridgeTransact for BridgeTransactImpl<T>
-		
 		/// Initiates a transfer of a fungible asset out of the chain. This should be called by
 		/// another pallet.
 		pub fn transfer_fungible(
@@ -799,11 +703,11 @@ impl<T: Config> EnsureOrigin<T::Origin> for EnsureBridge<T> {
 		})
 	}
 
-	// /// Returns an outer origin capable of passing `try_origin` check.
-	// ///
-	// /// ** Should be used for benchmarking only!!! **
-	// #[cfg(feature = "runtime-benchmarks")]
-	// fn successful_origin() -> T::Origin {
-	// 	T::Origin::from(frame_system::RawOrigin::Signed(<Pallet<T>>::account_id()))
-	// }
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		T::Origin::from(frame_system::RawOrigin::Signed(<Pallet<T>>::account_id()))
+	}
 }
