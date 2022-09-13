@@ -224,12 +224,12 @@ pub mod pallet {
 				},
 			}
 
-			Self::deposit_event(Event::Withdraw {
-				sender: source.clone(),
-				recipient: recipient,
-				resource_id: r_id,
-				amount
-			});
+			// Self::deposit_event(Event::Withdraw {
+			// 	sender: source.clone(),
+			// 	recipient: recipient,
+			// 	resource_id: r_id,
+			// 	amount
+			// });
 
 			Ok(())
 		}
@@ -258,18 +258,20 @@ pub mod pallet {
 				},
 				false => {
 					let amount = amount.saturated_into::<u128>();
+					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
+					dbg!(token_id);
 					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &source, amount.into())?;
 					// emit event
 				},
 			}
 
-			Self::deposit_event(Event::Deposit {
-				sender: source.clone(),
-				recipient: to.clone(),
-				resource_id: r_id,
-				amount
-			});
+			// Self::deposit_event(Event::Deposit {
+			// 	sender: source.clone(),
+			// 	recipient: to.clone(),
+			// 	resource_id: r_id,
+			// 	amount
+			// });
 
 			Ok(())
 		}

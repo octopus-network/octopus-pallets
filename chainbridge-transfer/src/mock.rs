@@ -18,6 +18,7 @@ pub use frame_support::{
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
 };
+use frame_system::EnsureRoot;
 use sp_core::blake2_128;
 use sp_runtime::{traits::AccountIdConversion, AccountId32};
 
@@ -72,6 +73,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Assets: pallet_assets::<Instance1>,
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Bridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		ChainBridgeTransfer: pallet_chainbridge_transfer::{Pallet, Call, Storage, Event<T>},
@@ -89,7 +91,6 @@ impl bridge::Config for Test {
 	type Proposal = Call;
 	type ChainId = TestChainId;
 	type ProposalLifetime = ProposalLifetime;
-	type Currency = Balances;
 }
 
 parameter_types! {
@@ -111,9 +112,37 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
+	pub const AssetDeposit: Balance = 100 * DOLLARS;
+	pub const ApprovalDeposit: Balance = 1 * DOLLARS;
+	pub const StringLimit: u32 = 50;
+	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
+	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
+}
+
+impl pallet_assets::Config<pallet_assets::Instance1> for Test {
+	type Event = Event;
+	type Balance = AssetBalance;
+	type AssetId = AssetId;
+	type Currency = Balances;
+	type ForceOrigin = EnsureRoot<AccountId>;
+	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = ConstU128<DOLLARS>;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = StringLimit;
+	type Freezer = ();
+	type Extra = ();
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
+}
+
+parameter_types! {
 	pub HashId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"hash"));
 	pub NativeTokenId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"DAV")); // native token id
 }
+
+pub type AssetBalance = u128;
+pub type AssetId = u32;
 
 impl Config for Test {
 	type Event = Event;
@@ -121,6 +150,10 @@ impl Config for Test {
 	type Currency = Balances;
 	type HashId = HashId;
 	type NativeTokenId = NativeTokenId;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Assets = Assets;
+	type AssetIdByName = ChainBridgeTransfer;
 }
 
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);
@@ -130,13 +163,21 @@ pub const ENDOWED_BALANCE: Balance = 100 * DOLLARS;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let bridge_id = PalletId(*b"oc/bridg").into_account_truncating();
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(bridge_id, ENDOWED_BALANCE), (RELAYER_A, ENDOWED_BALANCE)],
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut storage)
 	.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
+
+	let r_id = bridge::derive_resource_id(0, b"transfer");
+
+	pallet_chainbridge_transfer::GenesisConfig::<Test> {
+		asset_id_by_resource_id: vec![(r_id, 999)]
+	}.assimilate_storage(&mut storage)
+		.unwrap();
+
+	let mut ext = sp_io::TestExternalities::new(storage);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

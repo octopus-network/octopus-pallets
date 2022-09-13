@@ -25,7 +25,8 @@ fn make_remark_proposal(hash: H256) -> Call {
 }
 
 fn make_transfer_proposal(to: AccountId32, amount: u64) -> Call {
-	let resource_id = HashId::get();
+	// let resource_id = HashId::get();
+	let resource_id = NativeTokenId::get(); // this use native token
 	Call::ChainBridgeTransfer(crate::Call::handle_transfer {
 		to,
 		amount: amount.into(),
@@ -39,7 +40,7 @@ fn transfer_native() {
 		let dest_chain = 0;
 		let resource_id = NativeTokenId::get();
 		let amount: Balance = 1 * DOLLARS;
-		let recipient = vec![99];
+		let recipient = b"davirain.xyz".to_vec(); // recipient account
 
 		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
 		assert_ok!(ChainBridgeTransfer::transfer_native(
@@ -122,7 +123,7 @@ fn transfer() {
 	new_test_ext().execute_with(|| {
 		// Check inital state
 		let bridge_id: AccountId32 = Bridge::account_id();
-		let resource_id = HashId::get();
+		let resource_id = NativeTokenId::get();
 		assert_eq!(Balances::free_balance(&bridge_id), ENDOWED_BALANCE);
 		// Transfer and check result
 		assert_ok!(ChainBridgeTransfer::handle_transfer(
@@ -143,7 +144,7 @@ fn transfer() {
 }
 
 #[test]
-fn create_sucessful_transfer_proposal() {
+fn create_sucessful_transfer_proposal_native_token() {
 	new_test_ext().execute_with(|| {
 		let prop_id = 1;
 		let src_id = 1;
