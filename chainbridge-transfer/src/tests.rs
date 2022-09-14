@@ -3,11 +3,12 @@
 use super::{
 	mock::{
 		assert_events, event_exists, expect_event, new_test_ext, Balances, Bridge, Call,
-		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime,
+		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime, Assets,
 		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
 };
+use pallet_assets as assets;
 use frame_support::{assert_noop, assert_ok, dispatch::DispatchError};
 
 use crate::{
@@ -16,6 +17,8 @@ use crate::{
 };
 use codec::Encode;
 use sp_core::{blake2_256, crypto::AccountId32, H256};
+use sp_keyring::AccountKeyring;
+use crate::mock::AccountId;
 
 const TEST_THRESHOLD: u32 = 2;
 
@@ -57,6 +60,48 @@ fn transfer_native() {
 			amount.into(),
 			recipient,
 		));
+	})
+}
+
+#[test]
+fn transfer_non_native() {
+	new_test_ext().execute_with(|| {
+		let dest_chain = 0;
+		// get resource id
+		let resource_id = bridge::derive_resource_id(dest_chain, b"DENOM");
+		let ferdie: AccountId = AccountKeyring::Ferdie.into();
+		// set token_id
+		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0));
+
+		// force_create Assets token_id 0
+		assert_ok!(Assets::force_create(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			true,
+			1
+		));
+
+		let amount: Balance = 1 * DOLLARS;
+		dbg!(amount);
+		dbg!(RELAYER_A);
+
+		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
+		assert_ok!(ChainBridgeTransfer::handle_transfer(
+			Origin::signed(Bridge::account_id()),
+			RELAYER_A,
+			amount,
+			resource_id,
+		));
+
+
+		assert_events(vec![
+			Event::Assets(assets::Event::Issued{
+				asset_id: 0,
+				owner: RELAYER_A,
+				total_supply: amount,
+			})
+		]);
 	})
 }
 

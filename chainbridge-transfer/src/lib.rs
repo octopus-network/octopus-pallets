@@ -161,6 +161,26 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		#[pallet::weight(195_000_0000)]
+		pub fn set_token_id(origin: OriginFor<T>, resource_id: ResourceId, token_id: T::AssetId) -> DispatchResult {
+			ensure_root(origin)?;
+
+			ResourceIdOfAssetId::<T>::insert(resource_id, token_id);
+
+			Ok(())
+		}
+
+		#[pallet::weight(195_000_0000)]
+		pub fn remove_token_id(origin: OriginFor<T>, resource_id: ResourceId) -> DispatchResult {
+			ensure_root(origin)?;
+
+			ResourceIdOfAssetId::<T>::remove(resource_id);
+
+			Ok(())
+		}
+
+
 		//
 		// Initiation calls. These start a bridge transfer.
 		//
@@ -213,8 +233,11 @@ pub mod pallet {
 				},
 				false => {
 					let amount = amount.saturated_into::<u128>();
+					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
+					dbg!(token_id);
 					<T::Assets as Mutate<T::AccountId>>::burn_from(token_id, &source, amount.into())?;
+					dbg!(1);
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
 						r_id,
@@ -261,7 +284,8 @@ pub mod pallet {
 					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
 					dbg!(token_id);
-					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &source, amount.into())?;
+					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &to, amount.into())?;
+					dbg!("mint asset");
 					// emit event
 				},
 			}
