@@ -173,9 +173,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let r_id = bridge::derive_resource_id(0, b"transfer");
 
 	pallet_chainbridge_transfer::GenesisConfig::<Test> {
-		asset_id_by_resource_id: vec![(r_id, 999)]
-	}.assimilate_storage(&mut storage)
-		.unwrap();
+		asset_id_by_resource_id: vec![(r_id, 999)],
+	}
+	.assimilate_storage(&mut storage)
+	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(storage);
 	ext.execute_with(|| System::set_block_number(1));

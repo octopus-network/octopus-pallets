@@ -3,7 +3,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, EnsureOrigin, Get, StorageVersion},
+	traits::{EnsureOrigin, Get, StorageVersion},
 	PalletId,
 };
 use scale_info::TypeInfo;
@@ -113,16 +113,10 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use codec::{Codec, EncodeLike};
-	use frame_support::{
-		pallet_prelude::*,
-		traits::{Currency, ExistenceRequirement::AllowDeath},
-		weights::GetDispatchInfo,
-		Blake2_128Concat,
-	};
+	use codec::EncodeLike;
+	use frame_support::{pallet_prelude::*, weights::GetDispatchInfo, Blake2_128Concat};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{AccountIdConversion, AtLeast32BitUnsigned};
-	use std::fmt::Debug;
+	use sp_runtime::traits::AccountIdConversion;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]

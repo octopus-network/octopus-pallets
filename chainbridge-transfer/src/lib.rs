@@ -44,9 +44,9 @@ pub mod pallet {
 	use super::*;
 	use crate::traits::AssetIdResourceIdProvider;
 	use codec::Codec;
+	use core::fmt::Debug;
 	use frame_support::traits::fungibles::{Inspect, Mutate, Transfer};
 	use sp_arithmetic::traits::AtLeast32BitUnsigned;
-	use core::fmt::Debug;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -128,7 +128,6 @@ pub mod pallet {
 		}
 	}
 
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -161,9 +160,12 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		#[pallet::weight(195_000_0000)]
-		pub fn set_token_id(origin: OriginFor<T>, resource_id: ResourceId, token_id: T::AssetId) -> DispatchResult {
+		pub fn set_token_id(
+			origin: OriginFor<T>,
+			resource_id: ResourceId,
+			token_id: T::AssetId,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			ResourceIdOfAssetId::<T>::insert(resource_id, token_id);
@@ -179,7 +181,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
 
 		//
 		// Initiation calls. These start a bridge transfer.
@@ -236,7 +237,11 @@ pub mod pallet {
 					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
 					dbg!(token_id);
-					<T::Assets as Mutate<T::AccountId>>::burn_from(token_id, &source, amount.into())?;
+					<T::Assets as Mutate<T::AccountId>>::burn_from(
+						token_id,
+						&source,
+						amount.into(),
+					)?;
 					dbg!(1);
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
@@ -277,7 +282,6 @@ pub mod pallet {
 			match r_id == T::NativeTokenId::get() {
 				true => {
 					<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
-
 				},
 				false => {
 					let amount = amount.saturated_into::<u128>();

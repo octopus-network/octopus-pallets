@@ -2,23 +2,22 @@
 
 use super::{
 	mock::{
-		assert_events, event_exists, expect_event, new_test_ext, Balances, Bridge, Call,
-		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime, Assets,
+		assert_events, event_exists, expect_event, new_test_ext, Assets, Balances, Bridge, Call,
+		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime,
 		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
 };
-use pallet_assets as assets;
 use frame_support::{assert_noop, assert_ok, dispatch::DispatchError};
+use pallet_assets as assets;
 
 use crate::{
-	mock::{Balance, DOLLARS},
+	mock::{AccountId, Balance, DOLLARS},
 	Event as ChainBridgeTransferEvent,
 };
 use codec::Encode;
 use sp_core::{blake2_256, crypto::AccountId32, H256};
 use sp_keyring::AccountKeyring;
-use crate::mock::AccountId;
 
 const TEST_THRESHOLD: u32 = 2;
 
@@ -94,14 +93,11 @@ fn transfer_non_native() {
 			resource_id,
 		));
 
-
-		assert_events(vec![
-			Event::Assets(assets::Event::Issued{
-				asset_id: 0,
-				owner: RELAYER_A,
-				total_supply: amount,
-			})
-		]);
+		assert_events(vec![Event::Assets(assets::Event::Issued {
+			asset_id: 0,
+			owner: RELAYER_A,
+			total_supply: amount,
+		})]);
 	})
 }
 
