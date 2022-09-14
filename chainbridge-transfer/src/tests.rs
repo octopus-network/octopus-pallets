@@ -67,6 +67,7 @@ fn transfer_non_native() {
 		// get resource id
 		let resource_id = bridge::derive_resource_id(dest_chain, b"DENOM");
 		let ferdie: AccountId = AccountKeyring::Ferdie.into();
+		let recipient = vec![99];
 		// set token_id
 		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0));
 
@@ -80,22 +81,35 @@ fn transfer_non_native() {
 		));
 
 		let amount: Balance = 1 * DOLLARS;
-		dbg!(amount);
-		dbg!(RELAYER_A);
-
-		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
-		assert_ok!(ChainBridgeTransfer::handle_transfer(
-			Origin::signed(Bridge::account_id()),
-			RELAYER_A,
-			amount,
-			resource_id,
+		assert_ok!(Assets::mint(
+			Origin::signed(ferdie.clone()),
+			0,
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			amount
 		));
 
-		assert_events(vec![Event::Assets(assets::Event::Issued {
-			asset_id: 0,
-			owner: RELAYER_A,
-			total_supply: amount,
-		})]);
+		// make sure have some  amount after mint
+		assert_eq!(Assets::balance(0, ferdie.clone()), amount);
+
+		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
+		assert_ok!(ChainBridgeTransfer::transfer(
+			Origin::signed(ferdie.clone()),
+			amount,
+			resource_id,
+			recipient.clone(),
+			dest_chain,
+		));
+
+		// maket sure transfer have 0 amount
+		assert_eq!(Assets::balance(0, ferdie), 0);
+
+		assert_events(vec![Event::Bridge(bridge::Event::FungibleTransfer(
+			0,
+			1,
+			resource_id,
+			U256::from(amount),
+			recipient,
+		))]);
 	})
 }
 

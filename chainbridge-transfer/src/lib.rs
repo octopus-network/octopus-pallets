@@ -215,7 +215,7 @@ pub mod pallet {
 
 			match r_id == T::NativeTokenId::get() {
 				true => {
-					// transfer native token
+					dbg!("transfer native token");
 					let bridge_id = <bridge::Pallet<T>>::account_id();
 					<T as Config>::Currency::transfer(
 						&source,
@@ -223,26 +223,25 @@ pub mod pallet {
 						amount.into(),
 						AllowDeath,
 					)?;
+					dbg!("transfer native token successful");
 
-					let resource_id = T::NativeTokenId::get();
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
-						resource_id,
+						r_id,
 						recipient.clone(),
 						U256::from(amount.saturated_into::<u128>()),
 					)?;
 				},
 				false => {
+					dbg!("transfer non-native_token: burn assets");
 					let amount = amount.saturated_into::<u128>();
-					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
-					dbg!(token_id);
 					<T::Assets as Mutate<T::AccountId>>::burn_from(
 						token_id,
 						&source,
 						amount.into(),
 					)?;
-					dbg!(1);
+					dbg!("transfer non-native_token: burn successful!");
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
 						r_id,
@@ -277,11 +276,11 @@ pub mod pallet {
 					<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
 				},
 				false => {
+					dbg!("mint assets");
 					let amount = amount.saturated_into::<u128>();
-					dbg!(amount);
 					let token_id = Self::try_get_asset_id(r_id)?;
-					dbg!(token_id);
 					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &to, amount.into())?;
+					dbg!("mint assets successful!");
 				},
 			}
 			Ok(())
