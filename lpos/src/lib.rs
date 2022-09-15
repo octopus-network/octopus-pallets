@@ -137,7 +137,7 @@ where
 	) -> Option<<T as frame_system::Config>::AccountId> {
 		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
 		if who.is_none() {
-			return None;
+			return None
 		}
 
 		Self::validators().into_iter().find(|v| {
@@ -507,8 +507,8 @@ impl<T: Config> Pallet<T> {
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				// The 5th session of the era.
-				if T::AppchainInterface::is_activated()
-					&& (era_length == T::SessionsPerEra::get() - 1)
+				if T::AppchainInterface::is_activated() &&
+					(era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
 					let message = PlanNewEraPayload { new_era: next_set_id };
@@ -525,16 +525,14 @@ impl<T: Config> Pallet<T> {
 						Self::deposit_event(Event::<T>::PlanNewEraFailed);
 					}
 				}
-				return None;
+				return None
 			}
-
-			// New era.
-			Self::try_trigger_new_era(session_index)
 		} else {
-			// Set initial era.
 			log!(debug, "Starting the first era.");
-			Self::try_trigger_new_era(session_index)
 		}
+
+		// Set initial era.
+		Self::try_trigger_new_era(session_index)
 	}
 
 	/// Start a session potentially starting an era.
@@ -618,7 +616,7 @@ impl<T: Config> Pallet<T> {
 		// All validators did not produce blocks, so they should be excluded.
 		if era_reward_points.individual.is_empty() {
 			log!(warn, "Era {:?}, no validator produce block", index);
-			return validators;
+			return validators
 		}
 
 		let expect_points = era_reward_points.total / validators.len() as u32 * 80 / 100;
@@ -651,14 +649,14 @@ impl<T: Config> Pallet<T> {
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-			return;
+			return
 		}
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
 				log!(warn, "era reward {:?} has already been paid", active_era.index);
-				return;
+				return
 			}
 
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -791,7 +789,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
-		let _ = <ErasStakers<T>>::clear_prefix( era_index , u32::max_value(), None );
+		let _ = <ErasStakers<T>>::clear_prefix(era_index, u32::max_value(), None);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
