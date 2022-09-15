@@ -173,6 +173,9 @@ fn test_mint_asset() {
 			1000000000
 		));
 
+		// check balance
+		assert_eq!(Assets::balance(0, ferdie.clone()), 1000000000);
+
 		assert_noop!(
 			OctopusAppchain::mint_asset(
 				Origin::signed(ferdie.clone()),
@@ -220,6 +223,7 @@ fn test_burn_asset() {
 			true,
 			1
 		));
+
 		assert_noop!(
 			OctopusAppchain::burn_asset(
 				origin.clone(),
@@ -235,7 +239,7 @@ fn test_burn_asset() {
 			Origin::root(),
 			0,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			sp_runtime::MultiAddress::Id(alice),
+			sp_runtime::MultiAddress::Id(alice.clone()),
 			1000000000000000000
 		));
 		assert_ok!(OctopusAppchain::burn_asset(
@@ -244,6 +248,9 @@ fn test_burn_asset() {
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			100000000
 		));
+
+		// check balance
+		assert_eq!(Assets::balance(0, alice.clone()), 1000000000000000000 - 100000000);
 	});
 }
 
@@ -277,7 +284,8 @@ fn test_lock() {
 		);
 
 		let account = OctopusAppchain::octopus_pallet_id().unwrap();
-		let pallet_account = Origin::signed(account);
+		let pallet_account = Origin::signed(account.clone());
+
 		assert_ok!(OctopusAppchain::lock(
 			pallet_account.clone(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
