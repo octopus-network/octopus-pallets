@@ -12,6 +12,7 @@ use frame_support::{
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		OneSessionHandler, StorageVersion,
 	},
+	BoundedSlice, BoundedVec ,
 	transactional, PalletId,
 };
 use frame_system::offchain::{
@@ -409,6 +410,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
 
+		/// A configuration for limit of plannedValidators
+		#[pallet::constant]
+		type MaxValidators: Get<u32>;
+
 		type WeightInfo: WeightInfo;
 	}
 
@@ -449,7 +454,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(crate) type PlannedValidators<T: Config> =
-		StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
+		StorageValue<_, BoundedVec<(T::AccountId, u128), T::MaxValidators>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -512,7 +517,9 @@ pub mod pallet {
 			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
-			<PlannedValidators<T>>::put(self.validators.clone());
+			let bounded_validators = BoundedSlice::<(T::AccountId, u128), T::MaxValidators>::try_from( self.validators.as_slice())
+				.expect("Exceed the limit of max validators.");
+			<PlannedValidators<T>>::put(bounded_validators);
 			let account_id = <Pallet<T>>::account_id();
 			let min = T::Currency::minimum_balance();
 			let amount =
@@ -654,6 +661,8 @@ pub mod pallet {
 		TokenIdNotExist,
 		/// Not implement nep171 convertor.
 		ConvertorNotImplement,
+		/// Exceed the limit of BoundedVec
+		BoundedVecExeceededLimit ,
 	}
 
 	#[pallet::hooks]
@@ -849,7 +858,12 @@ pub mod pallet {
 			validators: Vec<(T::AccountId, u128)>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			<PlannedValidators<T>>::put(validators);
+			let bounded_validators = match BoundedSlice::<(T::AccountId, u128), T::MaxValidators>::try_from( validators.as_slice()) {
+				Ok(v) => v ,
+				Err(_) => return Err(Error::<T>::BoundedVecExeceededLimit.into())  
+			} ;
+			<PlannedValidators<T>>::put(bounded_validators) ;
+			
 			Ok(())
 		}
 
@@ -1516,8 +1530,12 @@ pub mod pallet {
 							.iter()
 							.map(|v| (v.validator_id_in_appchain.clone(), v.total_stake))
 							.collect();
-						<PlannedValidators<T>>::put(validators.clone());
-						log!(debug, "new PlannedValidators: {:?}", validators);
+						log!(debug, "new PlannedValidators: {:?}", validators.clone());
+						let bounded_validators = match BoundedSlice::<(T::AccountId, u128), T::MaxValidators>::try_from( validators.as_slice()) {
+							Ok(v) => v ,
+							Err(_) => return Err(Error::<T>::BoundedVecExeceededLimit.into())  
+						} ;
+						<PlannedValidators<T>>::put( bounded_validators );
 						let set_id = NextSetId::<T>::get();
 						Self::deposit_event(Event::NewPlannedValidators { set_id, validators });
 						Self::increase_next_set_id()?;
@@ -1791,7 +1809,7 @@ pub mod pallet {
 
 	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
 		fn validators() -> Vec<(T::AccountId, u128)> {
-			<PlannedValidators<T>>::get()
+			<PlannedValidators<T>>::get().to_vec()
 		}
 	}
 }

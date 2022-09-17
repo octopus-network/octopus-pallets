@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, *};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok }; 
 use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
@@ -38,6 +38,20 @@ fn test_force_set_params() {
 				(AccountKeyring::Dave.into(), stash),
 				(AccountKeyring::Eve.into(), stash),
 			],
+		);
+		assert_noop!(
+			OctopusAppchain::force_set_planned_validators(
+				Origin::root(),
+				vec![
+					(AccountKeyring::Alice.into(), stash),
+					(AccountKeyring::Bob.into(), stash),
+					(AccountKeyring::Charlie.into(), stash),
+					(AccountKeyring::Dave.into(), stash),
+					(AccountKeyring::Eve.into(), stash),
+					(AccountKeyring::Ferdie.into(), stash),
+				],
+			) ,
+			Error::<Test>::BoundedVecExeceededLimit	
 		);
 		assert_noop!(
 			OctopusAppchain::force_set_planned_validators(

@@ -291,6 +291,7 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators: u32 = 5 ;
 }
 
 impl Config for Test {
@@ -313,6 +314,7 @@ impl Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
+	type MaxValidators = MaxValidators ;
 	type WeightInfo = ();
 }
 
