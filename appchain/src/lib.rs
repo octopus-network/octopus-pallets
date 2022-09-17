@@ -10,7 +10,7 @@ use frame_support::{
 		tokens::{fungibles, nonfungibles},
 		Currency,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		OneSessionHandler, StorageVersion,
+		OneSessionHandler, StorageVersion,ConstU32
 	},
 	BoundedSlice, BoundedVec ,
 	transactional, PalletId,
@@ -113,6 +113,8 @@ pub mod ecdsa {
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+type AnchorContractLen = ConstU32<100> ;
 
 /// Validator of appchain.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -424,14 +426,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(crate) fn DefaultForAnchorContract() -> Vec<u8> {
-		Vec::new()
+	pub(crate) fn DefaultForAnchorContract() -> BoundedVec< u8 , AnchorContractLen > {
+		Vec::new().try_into().unwrap()
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
 	pub(crate) type AnchorContract<T: Config> =
-		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
+		StorageValue<_, BoundedVec< u8 , AnchorContractLen >, ValueQuery, DefaultForAnchorContract>;
 
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
@@ -514,7 +516,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
+			let bounded_anchor_contract = BoundedSlice::<u8, AnchorContractLen>::try_from( self.anchor_contract.as_bytes())
+				.expect("Exceed the limit of max validators.");
+			<AnchorContract<T>>::put(bounded_anchor_contract);
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
 			let bounded_validators = BoundedSlice::<(T::AccountId, u128), T::MaxValidators>::try_from( self.validators.as_slice())
@@ -677,7 +681,7 @@ pub mod pallet {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			let anchor_contract = Self::anchor_contract();
+			let anchor_contract = Self::anchor_contract().to_vec();
 			if !sp_io::offchain::is_validator() ||
 				!IsActivated::<T>::get() ||
 				anchor_contract.is_empty()
