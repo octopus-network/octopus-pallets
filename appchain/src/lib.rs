@@ -2,7 +2,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use borsh::BorshSerialize;
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
 		tokens::{
@@ -165,10 +165,10 @@ pub struct BurnEvent<AccountId> {
 // 	receiver: AccountId,
 // 	#[serde(rename = "class_id")]
 // 	#[serde(deserialize_with = "deserialize_from_str")]
-// 	class: u128,
+// 	collection: u128,
 // 	#[serde(rename = "instance_id")]
 // 	#[serde(deserialize_with = "deserialize_from_str")]
-// 	instance: u128,
+// 	item: u128,
 // }
 
 /// Token locked event.
@@ -204,10 +204,10 @@ pub struct BurnNftEvent<AccountId> {
 	pub receiver: AccountId,
 	#[serde(rename = "class_id")]
 	#[serde(deserialize_with = "deserialize_from_str")]
-	pub class: u128,
+	pub collection: u128,
 	#[serde(rename = "token_id")]
 	#[serde(deserialize_with = "deserialize_from_str")]
-	pub instance: u128,
+	pub item: u128,
 }
 
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -358,16 +358,23 @@ pub mod pallet {
 			Balance = Self::AssetBalance,
 		>;
 
-		/// Identifier for the class of nft asset.
-		type ClassId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
+		/// Identifier for the collection of nft item.
+		type CollectionId: Parameter + Copy + From<u128> + Into<u128>;
 
-		/// The type used to identify a unique nft asset within an asset class.
-		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u128> + Into<u128>;
+		/// The type used to identify a unique item within a collection.
+		type ItemId: Parameter + Copy + From<u128> + Into<u128>;
 
-		type Uniques: nonfungibles::Inspect<Self::AccountId>
-			+ nonfungibles::Transfer<Self::AccountId>;
+		type Uniques: nonfungibles::Inspect<
+				Self::AccountId,
+				ItemId = Self::ItemId,
+				CollectionId = Self::CollectionId,
+			> + nonfungibles::Transfer<
+				Self::AccountId,
+				ItemId = Self::ItemId,
+				CollectionId = Self::CollectionId,
+			>;
 
-		type Convertor: ConvertIntoNep171<ClassId = Self::ClassId, InstanceId = Self::InstanceId>;
+		type Convertor: ConvertIntoNep171<CollectionId = Self::CollectionId, ItemId = Self::ItemId>;
 
 		// Configuration parameters
 
@@ -571,22 +578,22 @@ pub mod pallet {
 		NftLocked {
 			sender: T::AccountId,
 			receiver: Vec<u8>,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			sequence: u64,
 		},
 		NftUnlocked {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			sequence: u32,
 		},
 		NftUnlockFailed {
 			sender: Vec<u8>,
 			receiver: T::AccountId,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			sequence: u32,
 		},
 		ForceUnlock {
@@ -598,6 +605,11 @@ pub mod pallet {
 			asset_id: T::AssetId,
 			who: T::AccountId,
 			amount: T::AssetBalance,
+		},
+		ForceNftUnlock {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			who: T::AccountId,
 		},
 	}
 
@@ -733,7 +745,7 @@ pub mod pallet {
 			} else {
 				log!(
 					info,
-					"Migration being executed on the wrong storage version, expected V0 or V1"
+					"The storageVersion is already the matching version, and the migration is not repeated."
 				);
 				T::DbWeight::get().reads(1)
 			}
@@ -950,7 +962,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::set_asset_name())]
+		#[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
 		pub fn set_token_id(
 			origin: OriginFor<T>,
 			token_id: Vec<u8>,
@@ -981,8 +993,8 @@ pub mod pallet {
 		#[transactional]
 		pub fn lock_nft(
 			origin: OriginFor<T>,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			receiver_id: Vec<u8>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -991,16 +1003,16 @@ pub mod pallet {
 			let receiver_id =
 				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-			let metadata = match T::Convertor::convert_into_nep171_metadata(class, instance) {
+			let metadata = match T::Convertor::convert_into_nep171_metadata(collection, item) {
 				Some(data) => data,
 				None => return Err(Error::<T>::ConvertorNotImplement.into()),
 			};
 
-			// <T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-			// 	&class,
-			// 	&instance,
-			// 	&Self::account_id(),
-			// )?;
+			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+				&collection,
+				&item,
+				&Self::account_id(),
+			)?;
 
 			let prefix = String::from("0x");
 			let hex_sender = prefix + &hex::encode(who.encode());
@@ -1008,8 +1020,8 @@ pub mod pallet {
 			let message = LockNftPayload {
 				sender: hex_sender.clone(),
 				receiver_id: receiver_id.clone(),
-				class: class.into(),
-				instance: instance.into(),
+				collection: collection.into(),
+				item: item.into(),
 				metadata,
 			};
 
@@ -1021,8 +1033,8 @@ pub mod pallet {
 			Self::deposit_event(Event::NftLocked {
 				sender: who,
 				receiver: receiver_id.as_bytes().to_vec(),
-				class,
-				instance,
+				collection,
+				item,
 				sequence,
 			});
 
@@ -1058,7 +1070,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::tranfer_from_pallet_account())]
+		#[pallet::weight(<T as Config>::WeightInfo::force_unlock())]
 		pub fn force_unlock(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -1074,7 +1086,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_mint_asset())]
 		pub fn force_mint_asset(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -1086,6 +1098,27 @@ pub mod pallet {
 			T::Assets::mint_into(asset_id, &who, amount)?;
 
 			Self::deposit_event(Event::ForceAssetMinted { asset_id, who, amount });
+
+			Ok(())
+		}
+
+		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nft())]
+		pub fn force_unlock_nft(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+			collection: T::CollectionId,
+			item: T::ItemId,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let who = T::Lookup::lookup(who)?;
+			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+				&collection,
+				&item,
+				&who,
+			)?;
+
+			Self::deposit_event(Event::ForceNftUnlock { collection, item, who });
 
 			Ok(())
 		}
@@ -1628,23 +1661,23 @@ pub mod pallet {
 						if let Err(error) = Self::unlock_nft_inner(
 							event.sender_id.clone(),
 							event.receiver.clone(),
-							event.class.into(),
-							event.instance.into(),
+							event.collection.into(),
+							event.item.into(),
 							event.index,
 						) {
-							log!(warn, "️️️failed to unlock nft, sequence: {:?}, send_id: {:?}, receiver: {:?}, class: {:?}, instance: {:?}, error: {:?}",
+							log!(warn, "️️️failed to unlock nft, sequence: {:?}, send_id: {:?}, receiver: {:?}, collection: {:?}, item: {:?}, error: {:?}",
 							event.index,
 							event.sender_id.clone(),
 							event.receiver.clone(),
-							event.class,
-							event.instance,
+							event.collection,
+							event.item,
 							error);
 
 							Self::deposit_event(Event::NftUnlockFailed {
 								sender: event.sender_id,
 								receiver: event.receiver,
-								class: event.class.into(),
-								instance: event.instance.into(),
+								collection: event.collection.into(),
+								item: event.item.into(),
 								sequence: event.index,
 							});
 
@@ -1720,19 +1753,21 @@ pub mod pallet {
 		fn unlock_nft_inner(
 			sender_id: Vec<u8>,
 			receiver: T::AccountId,
-			class: T::ClassId,
-			instance: T::InstanceId,
+			collection: T::CollectionId,
+			item: T::ItemId,
 			sequence: u32,
 		) -> DispatchResultWithPostInfo {
-			// <T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-			// 	&class, &instance, &receiver,
-			// )?;
+			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+				&collection,
+				&item,
+				&receiver,
+			)?;
 
 			Self::deposit_event(Event::NftUnlocked {
 				sender: sender_id,
 				receiver,
-				class,
-				instance,
+				collection,
+				item,
 				sequence,
 			});
 

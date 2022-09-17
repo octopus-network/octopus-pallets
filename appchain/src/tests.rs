@@ -1,6 +1,5 @@
 use crate::{mock::*, Error, *};
 use frame_support::{assert_noop, assert_ok};
-use pallet_balances::Error as BalancesError;
 use pallet_octopus_support::traits::{AppchainInterface, ValidatorsProvider};
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keyring::{sr25519::Keyring, AccountKeyring};
@@ -75,7 +74,7 @@ fn test_force_set_params() {
 
 		assert_ok!(OctopusAppchain::force_set_next_notification_id(Origin::root(), 10));
 		assert_noop!(
-			OctopusAppchain::force_set_next_notification_id(Origin::signed(ferdie.clone()), 12),
+			OctopusAppchain::force_set_next_notification_id(Origin::signed(ferdie), 12),
 			BadOrigin
 		);
 	});
@@ -84,7 +83,7 @@ fn test_force_set_params() {
 #[test]
 fn test_set_asset_name() {
 	let alice: AccountId = AccountKeyring::Alice.into();
-	let _origin = Origin::signed(alice.clone());
+	let _origin = Origin::signed(alice);
 	new_tester().execute_with(|| {
 		assert_noop!(
 			OctopusAppchain::set_token_id(
@@ -250,8 +249,11 @@ fn test_burn_asset() {
 #[test]
 fn test_lock() {
 	let alice: AccountId = AccountKeyring::Alice.into();
-	let origin = Origin::signed(alice);
+	let origin = Origin::signed(alice.clone());
+	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
+		assert_ok!(Balances::set_balance(Origin::root(), source, 10000000000000000000, 100));
+
 		assert_noop!(
 			OctopusAppchain::lock(
 				origin.clone(),
@@ -267,21 +269,10 @@ fn test_lock() {
 			Error::<Test>::InvalidReceiverId
 		);
 
-		assert_noop!(
-			OctopusAppchain::lock(
-				origin.clone(),
-				"test-account.testnet".to_string().as_bytes().to_vec(),
-				1000000000
-			),
-			BalancesError::<Test>::InsufficientBalance
-		);
-
-		let account = OctopusAppchain::octopus_pallet_id().unwrap();
-		let pallet_account = Origin::signed(account);
 		assert_ok!(OctopusAppchain::lock(
-			pallet_account.clone(),
+			origin,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			10000
+			100000
 		));
 	});
 }
@@ -293,16 +284,10 @@ pub fn test_lock_nft() {
 	new_tester().execute_with(|| {
 		assert_ok!(Uniques::force_create(
 			Origin::root(),
-			0,
 			sp_runtime::MultiAddress::Id(alice.clone()),
 			true
 		));
-		assert_ok!(Uniques::mint(
-			origin.clone(),
-			0,
-			42,
-			sp_runtime::MultiAddress::Id(alice.clone()),
-		));
+		assert_ok!(Uniques::mint(origin.clone(), 0, 42, sp_runtime::MultiAddress::Id(alice),));
 		assert_noop!(
 			OctopusAppchain::lock_nft(
 				origin.clone(),
@@ -314,11 +299,114 @@ pub fn test_lock_nft() {
 		);
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 		assert_ok!(OctopusAppchain::lock_nft(
-			origin.clone(),
+			origin,
 			0,
 			42,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 		));
+	});
+}
+
+#[test]
+pub fn test_force_unlock() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let bob: AccountId = AccountKeyring::Bob.into();
+	let origin = Origin::signed(bob);
+	new_tester().execute_with(|| {
+		let account = OctopusAppchain::account_id();
+
+		assert_ok!(Balances::set_balance(
+			Origin::root(),
+			sp_runtime::MultiAddress::Id(account),
+			10000000000000000000000,
+			100
+		));
+
+		assert_noop!(
+			OctopusAppchain::force_unlock(
+				origin,
+				sp_runtime::MultiAddress::Id(alice.clone()),
+				10000
+			),
+			BadOrigin
+		);
+
+		assert_ok!(OctopusAppchain::force_unlock(
+			Origin::root(),
+			sp_runtime::MultiAddress::Id(alice),
+			1000000000000000000,
+		));
+	});
+}
+
+#[test]
+pub fn test_force_mint_asset() {
+	let ferdie: AccountId = AccountKeyring::Ferdie.into();
+	new_tester().execute_with(|| {
+		assert_ok!(Assets::force_create(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			true,
+			1
+		));
+
+		assert_ok!(OctopusAppchain::force_mint_asset(
+			Origin::root(),
+			0,
+			sp_runtime::MultiAddress::Id(ferdie.clone()),
+			1000000000
+		));
+
+		assert_noop!(
+			OctopusAppchain::force_mint_asset(
+				Origin::signed(ferdie.clone()),
+				1,
+				sp_runtime::MultiAddress::Id(ferdie),
+				1000000000
+			),
+			BadOrigin,
+		);
+	});
+}
+
+#[test]
+pub fn test_force_unlock_nft() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let origin = Origin::signed(alice.clone());
+	let bob: AccountId = AccountKeyring::Bob.into();
+	let origin2 = Origin::signed(bob);
+	new_tester().execute_with(|| {
+		assert_ok!(Uniques::force_create(
+			Origin::root(),
+			sp_runtime::MultiAddress::Id(alice.clone()),
+			true
+		));
+		assert_ok!(Uniques::mint(
+			origin.clone(),
+			0,
+			42,
+			sp_runtime::MultiAddress::Id(alice.clone()),
+		));
+		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		assert_ok!(OctopusAppchain::lock_nft(
+			origin,
+			0,
+			42,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+		));
+
+		assert_ok!(OctopusAppchain::force_unlock_nft(
+			Origin::root(),
+			sp_runtime::MultiAddress::Id(alice.clone()),
+			0,
+			42,
+		));
+
+		assert_noop!(
+			OctopusAppchain::force_unlock_nft(origin2, sp_runtime::MultiAddress::Id(alice), 0, 42,),
+			BadOrigin,
+		);
 	});
 }
 
@@ -329,7 +417,7 @@ pub fn mock_payload_and_signature(
 	let obs_payload = ObservationsPayload {
 		public: public.clone(),
 		block_number: 2,
-		key_data: public.clone().into_account().encode(),
+		key_data: public.into_account().encode(),
 		observations: vec![expected_burn_notify()],
 	};
 	let sig = keyring.sign(&vec![1, 2]);
@@ -353,26 +441,14 @@ fn test_submit_observations() {
 		vec![(AccountKeyring::Alice.into(), stash), (AccountKeyring::Bob.into(), stash)];
 
 	new_tester().execute_with(|| {
-		assert_ok!(OctopusAppchain::submit_observations(
-			Origin::none(),
-			obs_payload1.clone(),
-			msig1.clone()
-		));
+		assert_ok!(OctopusAppchain::submit_observations(Origin::none(), obs_payload1, msig1,));
 
 		OctopusLpos::trigger_new_era(1, validators.clone());
 		advance_session();
-		assert_ok!(OctopusAppchain::submit_observations(
-			Origin::none(),
-			obs_payload2.clone(),
-			msig2.clone()
-		));
+		assert_ok!(OctopusAppchain::submit_observations(Origin::none(), obs_payload2, msig2,));
 
 		assert_noop!(
-			OctopusAppchain::submit_observations(
-				Origin::none(),
-				obs_payload3.clone(),
-				msig3.clone()
-			),
+			OctopusAppchain::submit_observations(Origin::none(), obs_payload3, msig3,),
 			Error::<Test>::NotValidator
 		);
 	});
