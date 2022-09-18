@@ -1,9 +1,5 @@
 use super::*;
-use frame_support::traits::tokens::{
-	fungibles, nonfungibles, DepositConsequence, WithdrawConsequence,
-};
-use serde_json::json;
-use sp_runtime::{DispatchError, DispatchResult};
+// use serde_json::json;
 
 pub struct UnImplementUniques<T>(sp_std::marker::PhantomData<T>);
 
@@ -163,6 +159,7 @@ where
 
 // For the definition of base metadata, please refer to the following document:
 // 		https://github.com/rmrk-team/rmrk-spec/blob/master/standards/rmrk2.0.0/entities/metadata.md#schema-definition
+#[cfg(feature = "std")]
 #[derive(Deserialize, RuntimeDebug)]
 struct RmrkBaseMetadata {
 	// NFT name, required
@@ -212,63 +209,95 @@ where
 		collection: Self::CollectionId,
 		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
-		let mut data: Vec<u8> = Vec::new();
-		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
-			&collection,
-			&item,
-			&vec![],
-		) {
-			data.extend(attribute);
-		}
+		// let mut data: Vec<u8> = Vec::new();
+		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		// 	&collection,
+		// 	&item,
+		// 	&vec![],
+		// ) {
+		// 	data.extend(attribute);
+		// }
 
-		if data.is_empty() {
-			return None
-		}
+		// if data.is_empty() {
+		// 	return None;
+		// }
 
-		// parse vec to rmrk base metadata
-		let rmrk_metadata: RmrkBaseMetadata = match serde_json::from_slice(&data) {
-			Ok(metadata) => metadata,
-			Err(_) => {
-				log!(warn, "data : {:?}", data);
-				log!(warn, "Failed to parse data to rmrk base metadata");
-				return None
-			},
-		};
-		log!(debug, "rmrk metadata is : {:?}", rmrk_metadata);
+		// // parse vec to rmrk base metadata
+		// let rmrk_metadata: RmrkBaseMetadata = match serde_json::from_slice(&data) {
+		// 	Ok(metadata) => metadata,
+		// 	Err(_) => {
+		// 		log!(warn, "data : {:?}", data);
+		// 		log!(warn, "Failed to parse data to rmrk base metadata");
+		// 		return None;
+		// 	},
+		// };
+		// log!(debug, "rmrk metadata is : {:?}", rmrk_metadata);
 
-		// Need Check:
-		// 		Can the name field be empty?
-		let title = (rmrk_metadata.name.len() != 0).then_some(rmrk_metadata.name);
-		let description =
-			(rmrk_metadata.description.len() != 0).then_some(rmrk_metadata.description);
-		let media_uri = (rmrk_metadata.media_uri.len() != 0).then_some(rmrk_metadata.media_uri);
+		// // Need Check:
+		// // 		Can the name field be empty?
+		// let title = (rmrk_metadata.name.len() != 0).then_some(rmrk_metadata.name);
+		// let description =
+		// 	(rmrk_metadata.description.len() != 0).then_some(rmrk_metadata.description);
+		// let media_uri = (rmrk_metadata.media_uri.len() != 0).then_some(rmrk_metadata.media_uri);
 
-		let extra = json!({
-			"types": rmrk_metadata.types,
-			"locale": rmrk_metadata.locale,
-			"license": rmrk_metadata.license,
-			"licenseUri": rmrk_metadata.license_uri,
-			"thumbnailUri": rmrk_metadata.thumbnail_uri,
-			"externalUri": rmrk_metadata.external_uri,
-		});
+		// let extra = json!({
+		// 	"types": rmrk_metadata.types,
+		// 	"locale": rmrk_metadata.locale,
+		// 	"license": rmrk_metadata.license,
+		// 	"licenseUri": rmrk_metadata.license_uri,
+		// 	"thumbnailUri": rmrk_metadata.thumbnail_uri,
+		// 	"externalUri": rmrk_metadata.external_uri,
+		// });
 
-		// parse rmrk base metadata to nep171 format
-		let metadata = Nep171TokenMetadata {
-			title,
-			description,
-			media: media_uri,
-			media_hash: None,
-			copies: None,
-			issued_at: None,
-			expires_at: None,
-			starts_at: None,
-			updated_at: None,
-			extra: Some(extra.to_string()),
-			reference: None,
-			reference_hash: None,
-		};
-		log!(debug, "After, the Nep171 media data is {:?} ", metadata.clone());
+		// // parse rmrk base metadata to nep171 format
+		// let metadata = Nep171TokenMetadata {
+		// 	title,
+		// 	description,
+		// 	media: media_uri,
+		// 	media_hash: None,
+		// 	copies: None,
+		// 	issued_at: None,
+		// 	expires_at: None,
+		// 	starts_at: None,
+		// 	updated_at: None,
+		// 	extra: Some(extra.to_string()),
+		// 	reference: None,
+		// 	reference_hash: None,
+		// };
+		// log!(debug, "After, the Nep171 media data is {:?} ", metadata.clone());
 
-		Some(metadata)
+		// Some(metadata)
+		None
+	}
+}
+
+impl<T: Config> BridgeInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
+	fn unlock(
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult {
+		Self::do_unlock(sender_id, receiver, amount, sequence)
+	}
+
+	fn mint_nep141(
+		token_id: Vec<u8>,
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		amount: u128,
+		sequence: Option<u32>,
+	) -> DispatchResult {
+		Self::do_mint_nep141(token_id, sender_id, receiver, amount, sequence)
+	}
+
+	fn unlock_nonfungible(
+		collection: u128,
+		item: u128,
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		sequence: u32,
+	) -> DispatchResult {
+		Self::do_unlock_nonfungible(collection, item, sender_id, receiver, sequence)
 	}
 }

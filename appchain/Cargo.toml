@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 base64 = { version = "0.13", default-features = false, features = ["alloc"] }
-borsh = { version = "0.9.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -54,7 +53,6 @@ pallet-octopus-upward-messages = { path = "../upward-messages" }
 default = ["std"]
 std = [
 	"base64/std",
-	"borsh/std",
 	"codec/std",
 	"hex/std",
 	"log/std",

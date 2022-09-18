@@ -1,5 +1,5 @@
 use crate::types::Nep171TokenMetadata;
-use frame_support::dispatch::DispatchError;
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
 
@@ -21,6 +21,31 @@ pub trait TokenIdAndAssetIdProvider<AssetId> {
 	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
 
 	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
+}
+
+pub trait BridgeInterface<AccountId> {
+	fn unlock(
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult;
+
+	fn mint_nep141(
+		token_id: Vec<u8>,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: Option<u32>,
+	) -> DispatchResult;
+
+	fn unlock_nonfungible(
+		collection: u128,
+		item: u128,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		sequence: u32,
+	) -> DispatchResult;
 }
 
 pub trait LposInterface<AccountId> {
