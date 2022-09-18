@@ -40,11 +40,11 @@ impl<T: Config> Pallet<T> {
 			PayloadType::LockNft,
 			&message.try_to_vec().unwrap(),
 		)?;
-		Self::deposit_event(Event::NftLocked {
-			sender,
-			receiver: receiver_id.as_bytes().to_vec(),
+		Self::deposit_event(Event::NonfungibleLocked {
 			collection,
 			item,
+			sender,
+			receiver: receiver_id.as_bytes().to_vec(),
 			sequence,
 		});
 
@@ -66,11 +66,11 @@ impl<T: Config> Pallet<T> {
 			&receiver,
 		)?;
 
-		Self::deposit_event(Event::NftUnlocked {
-			sender: sender_id,
-			receiver,
+		Self::deposit_event(Event::NonfungibleUnlocked {
 			collection,
 			item,
+			sender: sender_id,
+			receiver,
 			sequence,
 		});
 

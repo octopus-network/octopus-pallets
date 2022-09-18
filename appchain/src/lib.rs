@@ -450,14 +450,14 @@ pub mod pallet {
 		NewPlannedValidators { set_id: u32, validators: Vec<(T::AccountId, u128)> },
 		/// An `amount` unlock to `receiver` from `sender` failed.
 		UnlockFailed { sender: Vec<u8>, receiver: T::AccountId, amount: u128, sequence: u32 },
-		AssetMintFailed {
+		MintNep141Failed {
 			token_id: Vec<u8>,
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: u128,
-			sequence: Option<u32>,
+			sequence: u32,
 		},
-		NftUnlockFailed {
+		UnlockNonfungibleFailed {
 			collection: u128,
 			item: u128,
 			sender: Vec<u8>,
@@ -1128,7 +1128,7 @@ pub mod pallet {
 							event.sender_id.clone(),
 							event.receiver.clone(),
 							event.amount,
-							Some(sequence),
+							sequence,
 						) {
 							log!(warn, "️️️failed to mint asset, sequence: {:?}, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
 								event.index,
@@ -1137,12 +1137,12 @@ pub mod pallet {
 								event.receiver.clone(),
 								event.amount,
 								error);
-							Self::deposit_event(Event::AssetMintFailed {
+							Self::deposit_event(Event::MintNep141Failed {
 								token_id: event.token_id,
 								sender: event.sender_id,
 								receiver: event.receiver,
 								amount: event.amount.into(),
-								sequence: Some(sequence),
+								sequence: sequence,
 							});
 							result = NotificationResult::AssetMintFailed;
 						}
@@ -1175,7 +1175,7 @@ pub mod pallet {
 							event.item,
 							error);
 
-							Self::deposit_event(Event::NftUnlockFailed {
+							Self::deposit_event(Event::UnlockNonfungibleFailed {
 								collection: event.collection,
 								item: event.item,
 								sender: event.sender_id,

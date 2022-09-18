@@ -222,7 +222,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 			T::Currency::transfer(&Self::account_id(), &who, amount, KeepAlive)?;
 
-			Self::deposit_event(Event::ForceUnlock { who, amount });
+			Self::deposit_event(Event::ForceUnlocked { who, amount });
 
 			Ok(())
 		}
@@ -238,7 +238,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 			T::Assets::mint_into(asset_id, &who, amount)?;
 
-			Self::deposit_event(Event::ForceAssetMinted { asset_id, who, amount });
+			Self::deposit_event(Event::ForceNep141Minted { asset_id, who, amount });
 
 			Ok(())
 		}
@@ -259,7 +259,7 @@ pub mod pallet {
 				&who,
 			)?;
 
-			Self::deposit_event(Event::ForceNftUnlock { collection, item, who });
+			Self::deposit_event(Event::ForceNonfungibleUnlocked { collection, item, who });
 
 			Ok(())
 		}
@@ -283,45 +283,45 @@ pub mod pallet {
 			amount: BalanceOf<T>,
 			sequence: u32,
 		},
-		AssetMinted {
+		Nep141Minted {
 			asset_id: T::AssetId,
 			sender: Vec<u8>,
 			receiver: T::AccountId,
 			amount: T::AssetBalance,
-			sequence: Option<u32>,
-		},
-		AssetBurned {
-			asset_id: T::AssetId,
-			sender: T::AccountId,
-			receiver: Vec<u8>,
-			amount: T::AssetBalance,
-			sequence: u64,
-		},
-		NftLocked {
-			sender: T::AccountId,
-			receiver: Vec<u8>,
-			collection: T::CollectionId,
-			item: T::ItemId,
-			sequence: u64,
-		},
-		NftUnlocked {
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			collection: T::CollectionId,
-			item: T::ItemId,
 			sequence: u32,
 		},
-		ForceUnlock {
+		Nep141Burned {
+			asset_id: T::AssetId,
+			sender: T::AccountId,
+			receiver: Vec<u8>,
+			amount: T::AssetBalance,
+			sequence: u64,
+		},
+		NonfungibleLocked {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			sender: T::AccountId,
+			receiver: Vec<u8>,
+			sequence: u64,
+		},
+		NonfungibleUnlocked {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			sender: Vec<u8>,
+			receiver: T::AccountId,
+			sequence: u32,
+		},
+		ForceUnlocked {
 			who: T::AccountId,
 			amount: BalanceOf<T>,
 		},
 		/// Some asset was force-minted.
-		ForceAssetMinted {
+		ForceNep141Minted {
 			asset_id: T::AssetId,
 			who: T::AccountId,
 			amount: T::AssetBalance,
 		},
-		ForceNftUnlock {
+		ForceNonfungibleUnlocked {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			who: T::AccountId,

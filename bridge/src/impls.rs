@@ -283,7 +283,7 @@ impl<T: Config> BridgeInterface<<T as frame_system::Config>::AccountId> for Pall
 		sender_id: Vec<u8>,
 		receiver: T::AccountId,
 		amount: u128,
-		sequence: Option<u32>,
+		sequence: u32,
 	) -> DispatchResult {
 		Self::do_mint_nep141(token_id, sender_id, receiver, amount, sequence)
 	}

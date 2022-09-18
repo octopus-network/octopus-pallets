@@ -25,7 +25,7 @@ pub trait BridgeInterface<AccountId> {
 		sender_id: Vec<u8>,
 		receiver: AccountId,
 		amount: u128,
-		sequence: Option<u32>,
+		sequence: u32,
 	) -> DispatchResult;
 
 	fn unlock_nonfungible(

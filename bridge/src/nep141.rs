@@ -31,7 +31,7 @@ impl<T: Config> Pallet<T> {
 			PayloadType::BurnAsset,
 			&message.try_to_vec().unwrap(),
 		)?;
-		Self::deposit_event(Event::AssetBurned {
+		Self::deposit_event(Event::Nep141Burned {
 			asset_id,
 			sender,
 			receiver: receiver_id.as_bytes().to_vec(),
@@ -47,7 +47,7 @@ impl<T: Config> Pallet<T> {
 		sender_id: Vec<u8>,
 		receiver: T::AccountId,
 		amount: u128,
-		sequence: Option<u32>,
+		sequence: u32,
 	) -> DispatchResult {
 		let asset_id =
 			T::AssetIdByTokenId::try_get_asset_id(token_id).map_err(|_| Error::<T>::NoTokenId)?;
@@ -58,7 +58,7 @@ impl<T: Config> Pallet<T> {
 			&receiver,
 			amount_unwrapped,
 		)?;
-		Self::deposit_event(Event::AssetMinted {
+		Self::deposit_event(Event::Nep141Minted {
 			asset_id,
 			sender: sender_id,
 			receiver,
