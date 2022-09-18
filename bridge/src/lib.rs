@@ -36,15 +36,14 @@ use pallet_octopus_support::{
 	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
 };
 use scale_info::prelude::string::{String, ToString};
+use serde::Deserialize;
+use serde_json::json;
 use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, StaticLookup},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
 use weights::WeightInfo;
-
-#[cfg(feature = "std")]
-use serde::Deserialize;
 
 pub use pallet::*;
 
@@ -75,9 +74,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// The overarching dispatch call type.
-		type Call: From<Call<Self>>;
 
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
@@ -125,6 +121,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::call]
