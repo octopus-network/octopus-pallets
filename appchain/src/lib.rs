@@ -12,10 +12,7 @@ use frame_system::offchain::{
 };
 use pallet_octopus_support::{
 	log,
-	traits::{
-		AppchainInterface, BridgeInterface, LposInterface, UpwardMessagesInterface,
-		ValidatorsProvider,
-	},
+	traits::{AppchainInterface, BridgeInterface, LposInterface, UpwardMessagesInterface},
 };
 use scale_info::{
 	prelude::string::{String, ToString},
@@ -289,13 +286,17 @@ impl<T: SigningTypes> SignedPayload<T>
 	}
 }
 
-impl<T: Config> AppchainInterface for Pallet<T> {
+impl<T: Config> AppchainInterface<T::AccountId> for Pallet<T> {
 	fn is_activated() -> bool {
 		IsActivated::<T>::get()
 	}
 
 	fn next_set_id() -> u32 {
 		NextSetId::<T>::get()
+	}
+
+	fn planned_validators() -> Vec<(T::AccountId, u128)> {
+		<PlannedValidators<T>>::get()
 	}
 }
 
@@ -1294,12 +1295,6 @@ pub mod pallet {
 
 		fn on_disabled(_i: u32) {
 			// ignore
-		}
-	}
-
-	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
-		fn validators() -> Vec<(T::AccountId, u128)> {
-			<PlannedValidators<T>>::get()
 		}
 	}
 }

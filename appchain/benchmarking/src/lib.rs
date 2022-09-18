@@ -15,9 +15,7 @@ use pallet_octopus_appchain::{
 	BurnEvent, Config as AppchainConfig, Event as AppchainEvent, LockAssetEvent, Observation,
 	ObservationsPayload, Pallet as AppchainPallet, Validator, ValidatorSet,
 };
-use pallet_octopus_support::traits::{
-	AppchainInterface, TokenIdAndAssetIdProvider, ValidatorsProvider,
-};
+use pallet_octopus_support::traits::{AppchainInterface, TokenIdAndAssetIdProvider};
 use pallet_uniques::BenchmarkHelper;
 use scale_info::prelude::{format, string::ToString, vec};
 use sp_runtime::{

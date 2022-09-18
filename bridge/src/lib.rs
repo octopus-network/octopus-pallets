@@ -80,7 +80,7 @@ pub mod pallet {
 
 		type Currency: Currency<Self::AccountId>;
 
-		type AppchainInterface: AppchainInterface;
+		type AppchainInterface: AppchainInterface<Self::AccountId>;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 

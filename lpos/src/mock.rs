@@ -280,7 +280,6 @@ impl Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
 	type WeightInfo = ();
 }
 
