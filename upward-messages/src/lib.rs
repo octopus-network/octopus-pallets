@@ -1,18 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{Get, StorageVersion},
+	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use pallet_octopus_support::{log, traits::UpwardMessagesInterface, types::PayloadType};
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_io::offchain_index;
 use sp_runtime::{
-	traits::{Hash, Keccak256},
-	DigestItem, RuntimeDebug,
+	traits::{Hash, Zero},
+	DigestItem,
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -28,11 +29,16 @@ mod tests;
 
 mod benchmarking;
 
-#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Message {
+#[derive(
+	Encode, Decode, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound, MaxEncodedLen, TypeInfo,
+)]
+#[scale_info(skip_type_params(M))]
+#[codec(mel_bound())]
+pub struct Message<M: Get<u32>> {
+	#[codec(compact)]
 	nonce: u64,
 	payload_type: PayloadType,
-	payload: Vec<u8>,
+	payload: BoundedVec<u8, M>,
 }
 
 /// The current storage version.
@@ -51,9 +57,15 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The limit for submit messages.
+		type Hashing: Hash<Output = H256>;
+
+		/// Max bytes in a message payload
 		#[pallet::constant]
-		type UpwardMessagesLimit: Get<u32>;
+		type MaxMessagePayloadSize: Get<u32>;
+
+		/// Max number of messages per commitment
+		#[pallet::constant]
+		type MaxMessagesPerCommit: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet
 		type WeightInfo: WeightInfo;
@@ -61,34 +73,73 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
+	/// Interval between commitments
 	#[pallet::storage]
-	pub(crate) type MessageQueue<T: Config> = StorageValue<_, Vec<Message>, ValueQuery>;
+	#[pallet::getter(fn interval)]
+	pub(crate) type Interval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	#[pallet::storage]
+	pub(crate) type MessageQueue<T: Config> = StorageValue<
+		_,
+		BoundedVec<Message<<T as Config>::MaxMessagePayloadSize>, T::MaxMessagesPerCommit>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub interval: T::BlockNumber,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { interval: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			<Interval<T>>::put(self.interval);
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {}
+	pub enum Event<T: Config> {
+		MessageAccepted(u64),
+		Committed { hash: H256, data: Vec<Message<T::MaxMessagePayloadSize>> },
+	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Nonce overflow.
-		NonceOverflow,
-		/// Queue size limit reached.
+		/// The message payload exceeds byte limit.
+		PayloadTooLarge,
+		/// No more messages can be queued for the channel during this commit cycle.
 		QueueSizeLimitReached,
+		/// Cannot increment nonce
+		NonceOverflow,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Initialization
-		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
-			Self::commit()
+		// Generate a message commitment every [`Interval`] blocks.
+		//
+		// The commitment hash is included in an [`AuxiliaryDigestItem`] in the block header,
+		// with the corresponding commitment is persisted offchain.
+		fn on_initialize(now: T::BlockNumber) -> Weight {
+			if (now % Self::interval()).is_zero() {
+				Self::commit()
+			} else {
+				T::WeightInfo::on_initialize_non_interval()
+			}
 		}
 	}
 
@@ -100,39 +151,40 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		fn commit() -> Weight {
-			let messages: Vec<Message> = MessageQueue::<T>::take();
-			if messages.is_empty() {
-				return 0
+			let message_queue = <MessageQueue<T>>::take();
+			if message_queue.is_empty() {
+				return T::WeightInfo::on_initialize_no_messages()
 			}
 
-			let encoded_messages = messages.encode();
-			let commitment_hash = Keccak256::hash(&encoded_messages);
-			let average_payload_size = Self::average_payload_size(&messages);
+			let message_count = message_queue.len() as u32;
+			let average_payload_size = Self::average_payload_size(&message_queue);
 
+			let encoded_messages = message_queue.encode();
+			let commitment_hash = <T as Config>::Hashing::hash(&encoded_messages);
 			<frame_system::Pallet<T>>::deposit_log(DigestItem::Other(
 				commitment_hash.as_bytes().to_vec(),
 			));
 
-			let key = Self::make_offchain_key(commitment_hash);
+			Self::deposit_event(Event::Committed {
+				hash: commitment_hash,
+				data: message_queue.to_vec(),
+			});
+
 			log!(
 				debug,
-				"commit cross-chain messages: hash: {:?}, key: {:?}, messages: {:?}",
+				"commit cross-chain messages: hash: {:?}, messages: {:?}",
 				commitment_hash,
-				key,
-				messages
+				message_queue
 			);
-			offchain_index::set(&key, &messages.encode());
 
-			T::WeightInfo::on_initialize(messages.len() as u32, average_payload_size as u32)
+			offchain_index::set(commitment_hash.as_bytes(), &message_queue.encode());
+
+			T::WeightInfo::on_initialize(message_count, average_payload_size)
 		}
 
-		fn make_offchain_key(hash: H256) -> Vec<u8> {
-			(b"commitment", hash).encode()
-		}
-
-		fn average_payload_size(messages: &[Message]) -> usize {
+		fn average_payload_size(messages: &[Message<T::MaxMessagePayloadSize>]) -> u32 {
 			let sum: usize = messages.iter().fold(0, |acc, x| acc + x.payload.len());
-			(sum / messages.len()).saturating_add(1)
+			(sum / messages.len()).saturating_add(1) as u32
 		}
 	}
 }
@@ -144,10 +196,15 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 		payload: &[u8],
 	) -> Result<u64, DispatchError> {
 		match payload_type {
-			PayloadType::Lock | PayloadType::BurnAsset => {
+			PayloadType::Lock | PayloadType::BurnAsset | PayloadType::LockNft => {
 				ensure!(
-					MessageQueue::<T>::get().len() < T::UpwardMessagesLimit::get() as usize,
+					<MessageQueue<T>>::decode_len().unwrap_or(0) <
+						T::MaxMessagesPerCommit::get() as usize,
 					Error::<T>::QueueSizeLimitReached,
+				);
+				ensure!(
+					payload.len() <= T::MaxMessagePayloadSize::get() as usize,
+					Error::<T>::PayloadTooLarge,
 				);
 			},
 			_ => {},
@@ -160,11 +217,15 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 				return Err(Error::<T>::NonceOverflow.into())
 			}
 
-			MessageQueue::<T>::append(Message {
+			<MessageQueue<T>>::try_append(Message {
 				nonce: *nonce,
 				payload_type,
-				payload: payload.to_vec(),
-			});
+				payload: payload.to_vec().try_into().map_err(|_| Error::<T>::PayloadTooLarge)?,
+			})
+			.map_err(|_| Error::<T>::QueueSizeLimitReached)?;
+
+			Self::deposit_event(Event::MessageAccepted(*nonce));
+
 			Ok(*nonce)
 		})
 	}

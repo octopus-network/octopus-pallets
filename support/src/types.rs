@@ -1,6 +1,8 @@
 use super::*;
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode, Decode, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound, MaxEncodedLen, TypeInfo,
+)]
 pub enum PayloadType {
 	Lock,
 	BurnAsset,
