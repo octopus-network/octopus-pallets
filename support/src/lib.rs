@@ -1,10 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use crate::types::Nep171TokenMetadata;
+use borsh::{BorshDeserialize, BorshSerialize};
+use codec::{Decode, Encode};
+use frame_support::dispatch::{DispatchError, DispatchResult};
+use scale_info::{prelude::string::String, TypeInfo};
+use sp_runtime::{KeyTypeId, RuntimeDebug};
+use sp_std::prelude::*;
+
 pub mod traits;
 pub mod types;
-
-#[allow(dead_code)]
-pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-support";
 
 // syntactic sugar for logging.
 #[macro_export]

@@ -1,8 +1,4 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use codec::{Decode, Encode};
-use scale_info::{prelude::string::String, TypeInfo};
-use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
+use super::*;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum PayloadType {
