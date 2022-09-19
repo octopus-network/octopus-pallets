@@ -224,7 +224,6 @@ impl pallet_octopus_lpos::Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
 	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
 }
 
@@ -255,22 +254,22 @@ construct_runtime!(
 	}
 );
 
-type ClassId = u128;
-type InstanceId = u128;
+type CollectionId = u128;
+type ItemId = u128;
 parameter_types! {
-	pub const ClassDeposit: Balance = 100 * DOLLARS;
-	pub const InstanceDeposit: Balance = 1 * DOLLARS;
+	pub const CollectionDeposit: Balance = 100 * DOLLARS;
+	pub const ItemDeposit: Balance = 1 * DOLLARS;
 	pub const KeyLimit: u32 = 32;
 	pub const ValueLimit: u32 = 256;
 }
 impl pallet_uniques::Config for Test {
 	type Event = Event;
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
+	type CollectionId = CollectionId;
+	type ItemId = ItemId;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type ClassDeposit = ClassDeposit;
-	type InstanceDeposit = InstanceDeposit;
+	type CollectionDeposit = CollectionDeposit;
+	type ItemDeposit = ItemDeposit;
 	type MetadataDepositBase = MetadataDepositBase;
 	type AttributeDepositBase = MetadataDepositBase;
 	type DepositPerByte = MetadataDepositPerByte;
@@ -278,6 +277,10 @@ impl pallet_uniques::Config for Test {
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
 	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+	type Locker = ();
 }
 
 pub struct MockLpos<T>(sp_std::marker::PhantomData<T>);
@@ -315,8 +318,8 @@ impl pallet_octopus_appchain::Config for Test {
 	// type LposInterface = OctopusLpos;
 	type LposInterface = MockLpos<Test>;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
+	type CollectionId = CollectionId;
+	type ItemId = ItemId;
 	type Uniques = Uniques;
 	type Convertor = ExampleConvertor<Test>;
 	type Currency = Balances;

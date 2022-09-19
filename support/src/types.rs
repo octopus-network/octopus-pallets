@@ -1,8 +1,4 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use codec::{Decode, Encode};
-use scale_info::{prelude::string::String, TypeInfo};
-use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
+use super::*;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum PayloadType {
@@ -51,8 +47,8 @@ pub struct EraPayoutPayload {
 pub struct LockNftPayload {
 	pub sender: String,
 	pub receiver_id: String,
-	pub class: u128,
-	pub instance: u128,
+	pub collection: u128,
+	pub item: u128,
 	pub metadata: Nep171TokenMetadata,
 }
 

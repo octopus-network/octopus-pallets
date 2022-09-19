@@ -226,7 +226,6 @@ construct_runtime!(
 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -242,9 +241,9 @@ pub type AssetId = u32;
 pub type AssetBalance = u128;
 
 impl pallet_octopus_appchain::Config for Test {
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
-	type Uniques = Uniques;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Uniques = pallet_octopus_appchain::impls::UnImplementUniques<Test>;
 	type Convertor = ();
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
@@ -261,31 +260,6 @@ impl pallet_octopus_appchain::Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
-	type WeightInfo = ();
-}
-
-type ClassId = u128;
-type InstanceId = u128;
-parameter_types! {
-	pub const ClassDeposit: Balance = 100 * DOLLARS;
-	pub const InstanceDeposit: Balance = 1 * DOLLARS;
-	pub const KeyLimit: u32 = 32;
-	pub const ValueLimit: u32 = 256;
-}
-impl pallet_uniques::Config for Test {
-	type Event = Event;
-	type ClassId = ClassId;
-	type InstanceId = InstanceId;
-	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type ClassDeposit = ClassDeposit;
-	type InstanceDeposit = InstanceDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type AttributeDepositBase = MetadataDepositBase;
-	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
-	type KeyLimit = KeyLimit;
-	type ValueLimit = ValueLimit;
 	type WeightInfo = ();
 }
 
@@ -306,7 +280,6 @@ impl Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
 	type WeightInfo = ();
 }
 

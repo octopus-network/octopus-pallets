@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
 	"appchain",
+	"bridge",
 	"lpos",
 	"support",
 	"upward-messages",

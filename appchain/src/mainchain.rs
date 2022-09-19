@@ -15,14 +15,6 @@ struct ResponseResult {
 	block_hash: String,
 }
 
-#[derive(Deserialize, RuntimeDebug)]
-pub struct AppchainNotificationHistory<AccountId> {
-	#[serde(bound(deserialize = "AccountId: Decode"))]
-	appchain_notification: AppchainNotification<AccountId>,
-	#[serde(deserialize_with = "deserialize_from_str")]
-	index: u32,
-}
-
 impl<T: Config> Pallet<T> {
 	/// Gets a validator set by the specified era number.
 	/// Returns an empty list if the validator set has not been generated.

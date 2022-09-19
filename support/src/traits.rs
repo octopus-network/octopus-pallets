@@ -1,26 +1,37 @@
-use crate::types::Nep171TokenMetadata;
-use frame_support::dispatch::DispatchError;
-use sp_runtime::KeyTypeId;
-use sp_std::prelude::*;
+use super::*;
 
-pub trait AppchainInterface {
+pub trait AppchainInterface<AccountId> {
 	fn is_activated() -> bool;
 
 	fn next_set_id() -> u32;
-}
 
-/// Something that can provide a set of validators for the next era.
-pub trait ValidatorsProvider<AccountId> {
 	/// A new set of validators.
-	fn validators() -> Vec<(AccountId, u128)>;
+	fn planned_validators() -> Vec<(AccountId, u128)>;
 }
 
-pub trait TokenIdAndAssetIdProvider<AssetId> {
-	type Err;
+pub trait BridgeInterface<AccountId> {
+	fn unlock(
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult;
 
-	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
+	fn mint_nep141(
+		token_id: Vec<u8>,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult;
 
-	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
+	fn unlock_nonfungible(
+		collection: u128,
+		item: u128,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		sequence: u32,
+	) -> DispatchResult;
 }
 
 pub trait LposInterface<AccountId> {
@@ -39,21 +50,29 @@ pub trait UpwardMessagesInterface<AccountId> {
 	) -> Result<u64, DispatchError>;
 }
 
+pub trait TokenIdAndAssetIdProvider<AssetId> {
+	type Err;
+
+	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
+
+	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
+}
+
 pub trait ConvertIntoNep171 {
-	type ClassId;
-	type InstanceId;
+	type CollectionId;
+	type ItemId;
 	fn convert_into_nep171_metadata(
-		class: Self::ClassId,
-		instance: Self::InstanceId,
+		collection: Self::CollectionId,
+		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata>;
 }
 
 impl ConvertIntoNep171 for () {
-	type ClassId = u128;
-	type InstanceId = u128;
+	type CollectionId = u128;
+	type ItemId = u128;
 	fn convert_into_nep171_metadata(
-		_class: Self::ClassId,
-		_instance: Self::InstanceId,
+		_collection: Self::CollectionId,
+		_item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		None
 	}
