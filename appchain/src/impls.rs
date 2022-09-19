@@ -2,6 +2,7 @@ use super::*;
 use frame_support::traits::tokens::{
 	fungibles, nonfungibles, DepositConsequence, WithdrawConsequence,
 };
+use serde_json::json;
 use sp_runtime::{DispatchError, DispatchResult};
 
 pub struct UnImplementUniques<T>(sp_std::marker::PhantomData<T>);
@@ -11,11 +12,11 @@ where
 	T: Config,
 {
 	/// Type for identifying an item.
-	type ItemId = T::InstanceId;
+	type ItemId = T::ItemId;
 
 	/// Type for identifying a collection (an identifier for an independent collection of
 	/// items).
-	type CollectionId = T::ClassId;
+	type CollectionId = T::CollectionId;
 
 	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
 	/// (or somehow has no owner).
@@ -114,26 +115,28 @@ impl<T> ConvertIntoNep171 for ExampleConvertor<T>
 where
 	T: Config,
 {
-	type ClassId = <T as Config>::ClassId;
-	type InstanceId = <T as Config>::InstanceId;
+	type CollectionId = <T as Config>::CollectionId;
+	type ItemId = <T as Config>::ItemId;
 
 	fn convert_into_nep171_metadata(
-		_class: Self::ClassId,
-		_instance: Self::InstanceId,
+		collection: Self::CollectionId,
+		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
-		// if let Some(class_attribute) =
-		// 	<T::Uniques as nonfungibles::Inspect<T::AccountId>>::class_attribute(&class, &vec![])
-		// {
-		// 	data.extend(class_attribute);
-		// }
-		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
-		// 	&class,
-		// 	&instance,
-		// 	&vec![],
-		// ) {
-		// 	data.extend(attribute);
-		// }
+		if let Some(collection_attribute) =
+			<T::Uniques as nonfungibles::Inspect<T::AccountId>>::collection_attribute(
+				&collection,
+				&vec![],
+			) {
+			data.extend(collection_attribute);
+		}
+		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+			&collection,
+			&item,
+			&vec![],
+		) {
+			data.extend(attribute);
+		}
 
 		if data.is_empty() {
 			data.extend("example hash".to_string().as_bytes().to_vec());
@@ -202,38 +205,28 @@ impl<T> ConvertIntoNep171 for RmrkBaseMetadataConvertor<T>
 where
 	T: Config,
 {
-	type ClassId = <T as Config>::ClassId;
-	type InstanceId = <T as Config>::InstanceId;
+	type CollectionId = <T as Config>::CollectionId;
+	type ItemId = <T as Config>::ItemId;
 
 	fn convert_into_nep171_metadata(
-		_class: Self::ClassId,
-		_instance: Self::InstanceId,
+		collection: Self::CollectionId,
+		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
-		let data: Vec<u8> = Vec::new();
-		// if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
-		// 	&class,
-		// 	&instance,
-		// 	&vec![],
-		// ) {
-		// 	data.extend(attribute);
-		// }
+		let mut data: Vec<u8> = Vec::new();
+		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+			&collection,
+			&item,
+			&vec![],
+		) {
+			data.extend(attribute);
+		}
 
 		if data.is_empty() {
 			return None
 		}
 
-		let json_str = match String::from_utf8(data.clone()) {
-			Ok(v) => v,
-			Err(_) => {
-				log!(debug, "Parse metadata error, input is {:?} ", data);
-				return None
-			},
-		};
-
-		log!(debug, "The metadata is {:?} ", json_str.clone());
-
 		// parse vec to rmrk base metadata
-		let rmrk_metadata: RmrkBaseMetadata = match serde_json::from_str(&json_str) {
+		let rmrk_metadata: RmrkBaseMetadata = match serde_json::from_slice(&data) {
 			Ok(metadata) => metadata,
 			Err(_) => {
 				log!(warn, "data : {:?}", data);
@@ -243,45 +236,21 @@ where
 		};
 		log!(debug, "rmrk metadata is : {:?}", rmrk_metadata);
 
-		let title = {
-			// Need Check:
-			// 		Is there need a check for field name is not none?
-			if rmrk_metadata.name.len() != 0 {
-				Some(rmrk_metadata.name.clone())
-			} else {
-				log!(warn, "Rmrk base metadata must have field name");
-				return None
-			}
-		};
+		// Need Check:
+		// 		Can the name field be empty?
+		let title = (rmrk_metadata.name.len() != 0).then_some(rmrk_metadata.name);
+		let description =
+			(rmrk_metadata.description.len() != 0).then_some(rmrk_metadata.description);
+		let media_uri = (rmrk_metadata.media_uri.len() != 0).then_some(rmrk_metadata.media_uri);
 
-		let description = {
-			if rmrk_metadata.description.len() != 0 {
-				Some(rmrk_metadata.description)
-			} else {
-				None
-			}
-		};
-
-		let media_uri = {
-			if rmrk_metadata.media_uri.len() != 0 {
-				Some(rmrk_metadata.media_uri)
-			} else {
-				None
-			}
-		};
-
-		let mut extra = "types: ".to_string();
-		extra += &rmrk_metadata.types;
-		extra += ", locale: ";
-		extra += &rmrk_metadata.locale;
-		extra += ", license: ";
-		extra += &rmrk_metadata.license;
-		extra += ", licenseUri: ";
-		extra += &rmrk_metadata.license_uri;
-		extra += ", thumbnailUri: ";
-		extra += &rmrk_metadata.thumbnail_uri;
-		extra += ", externalUri: ";
-		extra += &rmrk_metadata.external_uri;
+		let extra = json!({
+			"types": rmrk_metadata.types,
+			"locale": rmrk_metadata.locale,
+			"license": rmrk_metadata.license,
+			"licenseUri": rmrk_metadata.license_uri,
+			"thumbnailUri": rmrk_metadata.thumbnail_uri,
+			"externalUri": rmrk_metadata.external_uri,
+		});
 
 		// parse rmrk base metadata to nep171 format
 		let metadata = Nep171TokenMetadata {
@@ -294,7 +263,7 @@ where
 			expires_at: None,
 			starts_at: None,
 			updated_at: None,
-			extra: Some(extra),
+			extra: Some(extra.to_string()),
 			reference: None,
 			reference_hash: None,
 		};

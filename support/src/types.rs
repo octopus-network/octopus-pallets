@@ -51,8 +51,8 @@ pub struct EraPayoutPayload {
 pub struct LockNftPayload {
 	pub sender: String,
 	pub receiver_id: String,
-	pub class: u128,
-	pub instance: u128,
+	pub collection: u128,
+	pub item: u128,
 	pub metadata: Nep171TokenMetadata,
 }
 
