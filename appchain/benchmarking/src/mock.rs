@@ -224,7 +224,6 @@ impl pallet_octopus_lpos::Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	type ValidatorsProvider = OctopusAppchain;
 	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
 }
 

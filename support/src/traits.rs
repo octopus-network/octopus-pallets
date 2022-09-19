@@ -1,26 +1,40 @@
 use crate::types::Nep171TokenMetadata;
-use frame_support::dispatch::DispatchError;
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::KeyTypeId;
 use sp_std::prelude::*;
 
-pub trait AppchainInterface {
+pub trait AppchainInterface<AccountId> {
 	fn is_activated() -> bool;
 
 	fn next_set_id() -> u32;
-}
 
-/// Something that can provide a set of validators for the next era.
-pub trait ValidatorsProvider<AccountId> {
 	/// A new set of validators.
-	fn validators() -> Vec<(AccountId, u128)>;
+	fn planned_validators() -> Vec<(AccountId, u128)>;
 }
 
-pub trait TokenIdAndAssetIdProvider<AssetId> {
-	type Err;
+pub trait BridgeInterface<AccountId> {
+	fn unlock(
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult;
 
-	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
+	fn mint_nep141(
+		token_id: Vec<u8>,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult;
 
-	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
+	fn unlock_nonfungible(
+		collection: u128,
+		item: u128,
+		sender_id: Vec<u8>,
+		receiver: AccountId,
+		sequence: u32,
+	) -> DispatchResult;
 }
 
 pub trait LposInterface<AccountId> {
@@ -37,6 +51,14 @@ pub trait UpwardMessagesInterface<AccountId> {
 		payload_type: crate::types::PayloadType,
 		payload: &[u8],
 	) -> Result<u64, DispatchError>;
+}
+
+pub trait TokenIdAndAssetIdProvider<AssetId> {
+	type Err;
+
+	fn try_get_asset_id(token_id: impl AsRef<[u8]>) -> Result<AssetId, Self::Err>;
+
+	fn try_get_token_id(asset_id: AssetId) -> Result<Vec<u8>, Self::Err>;
 }
 
 pub trait ConvertIntoNep171 {

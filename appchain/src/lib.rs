@@ -1,19 +1,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
-	traits::{
-		tokens::{
-			fungibles::{self, Mutate},
-			nonfungibles, AssetId, Balance as AssetBalance,
-		},
-		Currency,
-		ExistenceRequirement::{AllowDeath, KeepAlive},
-		OneSessionHandler, StorageVersion,
-	},
-	transactional, PalletId,
+	traits::{OneSessionHandler, StorageVersion},
+	transactional,
 };
 use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
@@ -21,11 +12,7 @@ use frame_system::offchain::{
 };
 use pallet_octopus_support::{
 	log,
-	traits::{
-		AppchainInterface, ConvertIntoNep171, LposInterface, TokenIdAndAssetIdProvider,
-		UpwardMessagesInterface, ValidatorsProvider,
-	},
-	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
+	traits::{AppchainInterface, BridgeInterface, LposInterface, UpwardMessagesInterface},
 };
 use scale_info::{
 	prelude::string::{String, ToString},
@@ -39,7 +26,7 @@ use sp_runtime::{
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
 	},
-	traits::{AccountIdConversion, CheckedConversion, IdentifyAccount, StaticLookup},
+	traits::IdentifyAccount,
 	RuntimeAppPublic, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -52,7 +39,6 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
-pub mod impls;
 mod mainchain;
 pub mod weights;
 
@@ -110,9 +96,6 @@ pub mod ecdsa {
 	/// An octopus identifier using ecdsa as its crypto.
 	pub type AuthorityId = app_ecdsa::Public;
 }
-
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Validator of appchain.
 #[derive(Deserialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -303,13 +286,17 @@ impl<T: SigningTypes> SignedPayload<T>
 	}
 }
 
-impl<T: Config> AppchainInterface for Pallet<T> {
+impl<T: Config> AppchainInterface<T::AccountId> for Pallet<T> {
 	fn is_activated() -> bool {
 		IsActivated::<T>::get()
 	}
 
 	fn next_set_id() -> u32 {
 		NextSetId::<T>::get()
+	}
+
+	fn planned_validators() -> Vec<(T::AccountId, u128)> {
+		<PlannedValidators<T>>::get()
 	}
 }
 
@@ -337,47 +324,13 @@ pub mod pallet {
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
 
-		#[pallet::constant]
-		type PalletId: Get<PalletId>;
-
-		type Currency: Currency<Self::AccountId>;
+		type BridgeInterface: BridgeInterface<Self::AccountId>;
 
 		type LposInterface: LposInterface<Self::AccountId>;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
-		type AssetIdByTokenId: TokenIdAndAssetIdProvider<Self::AssetId>;
-
-		type AssetId: AssetId + MaybeSerializeDeserialize + Default;
-
-		type AssetBalance: AssetBalance + From<u128> + Into<u128>;
-
-		type Assets: fungibles::Mutate<
-			<Self as frame_system::Config>::AccountId,
-			AssetId = Self::AssetId,
-			Balance = Self::AssetBalance,
-		>;
-
-		/// Identifier for the collection of nft item.
-		type CollectionId: Parameter + Copy + From<u128> + Into<u128>;
-
-		/// The type used to identify a unique item within a collection.
-		type ItemId: Parameter + Copy + From<u128> + Into<u128>;
-
-		type Uniques: nonfungibles::Inspect<
-				Self::AccountId,
-				ItemId = Self::ItemId,
-				CollectionId = Self::CollectionId,
-			> + nonfungibles::Transfer<
-				Self::AccountId,
-				ItemId = Self::ItemId,
-				CollectionId = Self::CollectionId,
-			>;
-
-		type Convertor: ConvertIntoNep171<CollectionId = Self::CollectionId, ItemId = Self::ItemId>;
-
 		// Configuration parameters
-
 		/// A grace period after we send transaction.
 		///
 		/// To avoid sending too many transactions, we only attempt to send one
@@ -418,15 +371,10 @@ pub mod pallet {
 	pub(crate) type AnchorContract<T: Config> =
 		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
 
-	/// A map from NEAR token account ID to appchain asset ID.
-	#[pallet::storage]
-	pub(super) type AssetIdByTokenId<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, OptionQuery, GetDefault>;
-
-	/// A storage discarded after StorageVersion 2.
-	#[pallet::storage]
-	pub(crate) type AssetIdByName<T: Config> =
-		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
+	// /// A storage discarded after StorageVersion 2.
+	// #[pallet::storage]
+	// pub(crate) type AssetIdByName<T: Config> =
+	// 	StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, ValueQuery>;
 
 	/// Whether the appchain is activated.
 	///
@@ -460,10 +408,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn octopus_pallet_id)]
-	pub(crate) type OctopusPalletId<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
-
-	#[pallet::storage]
 	pub(crate) type NotificationHistory<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Option<NotificationResult>, ValueQuery>;
 
@@ -480,19 +424,12 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub anchor_contract: String,
 		pub validators: Vec<(T::AccountId, u128)>,
-		pub premined_amount: u128,
-		pub asset_id_by_token_id: Vec<(String, T::AssetId)>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				anchor_contract: String::new(),
-				validators: Vec::new(),
-				premined_amount: 0,
-				asset_id_by_token_id: Vec::new(),
-			}
+			Self { anchor_contract: String::new(), validators: Vec::new() }
 		}
 	}
 
@@ -503,17 +440,6 @@ pub mod pallet {
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
 			<PlannedValidators<T>>::put(self.validators.clone());
-			let account_id = <Pallet<T>>::account_id();
-			let min = T::Currency::minimum_balance();
-			let amount =
-				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
-			if amount >= min {
-				T::Currency::make_free_balance_be(&account_id, amount);
-			}
-			<OctopusPalletId<T>>::put(Some(account_id));
-			for (token_id, asset_id) in self.asset_id_by_token_id.iter() {
-				<AssetIdByTokenId<T>>::insert(token_id.as_bytes(), asset_id);
-			}
 		}
 	}
 
@@ -521,95 +447,22 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new set of validators is waiting to be changed.
-		NewPlannedValidators {
-			set_id: u32,
-			validators: Vec<(T::AccountId, u128)>,
-		},
-		/// An `amount` of native token has been locked in the appchain to indicate that
-		/// it will be cross-chain transferred to the mainchain.
-		Locked {
-			sender: T::AccountId,
-			receiver: Vec<u8>,
-			amount: BalanceOf<T>,
-			sequence: u64,
-		},
-		/// An `amount` was unlocked to `receiver` from `sender`.
-		Unlocked {
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			amount: BalanceOf<T>,
-			sequence: u32,
-		},
+		NewPlannedValidators { set_id: u32, validators: Vec<(T::AccountId, u128)> },
 		/// An `amount` unlock to `receiver` from `sender` failed.
-		UnlockFailed {
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			amount: BalanceOf<T>,
-			sequence: u32,
-		},
-		AssetMinted {
-			asset_id: T::AssetId,
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			amount: T::AssetBalance,
-			sequence: Option<u32>,
-		},
-		AssetBurned {
-			asset_id: T::AssetId,
-			sender: T::AccountId,
-			receiver: Vec<u8>,
-			amount: T::AssetBalance,
-			sequence: u64,
-		},
-		AssetMintFailed {
-			asset_id: T::AssetId,
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			amount: T::AssetBalance,
-			sequence: Option<u32>,
-		},
-		AssetIdGetFailed {
+		UnlockFailed { sender: Vec<u8>, receiver: T::AccountId, amount: u128, sequence: u32 },
+		MintNep141Failed {
 			token_id: Vec<u8>,
 			sender: Vec<u8>,
 			receiver: T::AccountId,
-			amount: T::AssetBalance,
+			amount: u128,
 			sequence: u32,
 		},
-		NftLocked {
-			sender: T::AccountId,
-			receiver: Vec<u8>,
-			collection: T::CollectionId,
-			item: T::ItemId,
-			sequence: u64,
-		},
-		NftUnlocked {
+		UnlockNonfungibleFailed {
+			collection: u128,
+			item: u128,
 			sender: Vec<u8>,
 			receiver: T::AccountId,
-			collection: T::CollectionId,
-			item: T::ItemId,
 			sequence: u32,
-		},
-		NftUnlockFailed {
-			sender: Vec<u8>,
-			receiver: T::AccountId,
-			collection: T::CollectionId,
-			item: T::ItemId,
-			sequence: u32,
-		},
-		ForceUnlock {
-			who: T::AccountId,
-			amount: BalanceOf<T>,
-		},
-		/// Some asset was force-minted.
-		ForceAssetMinted {
-			asset_id: T::AssetId,
-			who: T::AccountId,
-			amount: T::AssetBalance,
-		},
-		ForceNftUnlock {
-			collection: T::CollectionId,
-			item: T::ItemId,
-			who: T::AccountId,
 		},
 	}
 
@@ -622,34 +475,18 @@ pub mod pallet {
 		InvalidNotificationId,
 		/// Must be a validator.
 		NotValidator,
-		/// Amount overflow.
-		AmountOverflow,
 		/// Next notification Id overflow.
 		NextNotificationIdOverflow,
-		/// Token Id not exist.
-		NoTokenId,
-		/// Asset Id not exist.
-		NoAssetId,
 		/// Invalid active total stake.
 		InvalidActiveTotalStake,
 		/// Appchain is not activated.
 		NotActivated,
 		/// ReceiverId is not a valid utf8 string.
 		InvalidReceiverId,
-		/// Token is not a valid utf8 string.
-		InvalidTokenId,
 		/// Next set Id overflow.
 		NextSetIdOverflow,
 		/// Observations exceeded limit.
 		ObservationsExceededLimit,
-		/// Token Id in use.
-		TokenIdInUse,
-		/// Asset Id in use.
-		AssetIdInUse,
-		/// Token Id Not Exist.
-		TokenIdNotExist,
-		/// Not implement nep171 convertor.
-		ConvertorNotImplement,
 	}
 
 	#[pallet::hooks]
@@ -733,22 +570,23 @@ pub mod pallet {
 				onchain
 			);
 
-			if current == 2 && onchain == 1 {
-				let translated = Self::migration_to_v2(1u64);
-				current.put::<Pallet<T>>();
-				T::DbWeight::get().reads_writes(translated, translated)
-			} else if current == 2 && onchain == 0 {
-				Self::migration_to_v1();
-				let translated = Self::migration_to_v2(1u64);
-				current.put::<Pallet<T>>();
-				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
-			} else {
-				log!(
-					info,
-					"The storageVersion is already the matching version, and the migration is not repeated."
-				);
-				T::DbWeight::get().reads(1)
-			}
+			// if current == 2 && onchain == 1 {
+			// 	let translated = Self::migration_to_v2(1u64);
+			// 	current.put::<Pallet<T>>();
+			// 	T::DbWeight::get().reads_writes(translated, translated)
+			// } else if current == 2 && onchain == 0 {
+			// 	Self::migration_to_v1();
+			// 	let translated = Self::migration_to_v2(1u64);
+			// 	current.put::<Pallet<T>>();
+			// 	T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			// } else {
+			// 	log!(
+			// 		info,
+			// 		"The storageVersion is already the matching version, and the migration is not
+			// repeated." 	);
+			// 	T::DbWeight::get().reads(1)
+			// }
+			0
 		}
 	}
 
@@ -849,212 +687,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// cross chain transfer
-
-		// There are 2 kinds of assets:
-		// 1. native token on appchain
-		// mainchain:mint() <- appchain:lock()
-		// mainchain:burn() -> appchain:unlock()
-		//
-		// 2. NEP141 asset on mainchain
-		// mainchain:lock_asset()   -> appchain:mint_asset()
-		// mainchain:unlock_asset() <- appchain:burn_asset()
-
-		/// Emits `Locked` event when successful.
-		#[pallet::weight(<T as Config>::WeightInfo::lock())]
-		#[transactional]
-		pub fn lock(
-			origin: OriginFor<T>,
-			receiver_id: Vec<u8>,
-			amount: BalanceOf<T>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-
-			let receiver_id =
-				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
-
-			let amount_wrapped: u128 = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
-
-			T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
-
-			let prefix = String::from("0x");
-			let hex_sender = prefix + &hex::encode(who.encode());
-			let message = LockPayload {
-				sender: hex_sender.clone(),
-				receiver_id: receiver_id.clone(),
-				amount: amount_wrapped,
-			};
-
-			let sequence = T::UpwardMessagesInterface::submit(
-				Some(who.clone()),
-				PayloadType::Lock,
-				&message.try_to_vec().unwrap(),
-			)?;
-			Self::deposit_event(Event::Locked {
-				sender: who,
-				receiver: receiver_id.as_bytes().to_vec(),
-				amount,
-				sequence,
-			});
-
-			Ok(())
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::mint_asset())]
-		#[transactional]
-		pub fn mint_asset(
-			origin: OriginFor<T>,
-			asset_id: T::AssetId,
-			sender_id: Vec<u8>,
-			receiver: <T::Lookup as StaticLookup>::Source,
-			amount: T::AssetBalance,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let receiver = T::Lookup::lookup(receiver)?;
-			Self::mint_asset_inner(asset_id, sender_id, receiver, amount, None)
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::burn_asset())]
-		#[transactional]
-		pub fn burn_asset(
-			origin: OriginFor<T>,
-			asset_id: T::AssetId,
-			receiver_id: Vec<u8>,
-			amount: T::AssetBalance,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-
-			let receiver_id =
-				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
-
-			let token_id = T::AssetIdByTokenId::try_get_token_id(asset_id)
-				.map_err(|_| Error::<T>::NoAssetId)?;
-
-			let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
-
-			<T::Assets as fungibles::Mutate<T::AccountId>>::burn_from(asset_id, &sender, amount)?;
-
-			let prefix = String::from("0x");
-			let hex_sender = prefix + &hex::encode(sender.encode());
-			let message = BurnAssetPayload {
-				token_id,
-				sender: hex_sender,
-				receiver_id: receiver_id.clone(),
-				amount: amount.into(),
-			};
-
-			let sequence = T::UpwardMessagesInterface::submit(
-				Some(sender.clone()),
-				PayloadType::BurnAsset,
-				&message.try_to_vec().unwrap(),
-			)?;
-			Self::deposit_event(Event::AssetBurned {
-				asset_id,
-				sender,
-				receiver: receiver_id.as_bytes().to_vec(),
-				amount,
-				sequence,
-			});
-
-			Ok(())
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
-		pub fn set_token_id(
-			origin: OriginFor<T>,
-			token_id: Vec<u8>,
-			asset_id: T::AssetId,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-
-			ensure!(
-				!AssetIdByTokenId::<T>::contains_key(token_id.clone()),
-				Error::<T>::TokenIdInUse
-			);
-			let asset = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id);
-			if asset.is_some() {
-				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset.unwrap(),);
-				return Err(Error::<T>::AssetIdInUse.into())
-			}
-
-			<AssetIdByTokenId<T>>::insert(token_id, asset_id);
-
-			Ok(())
-		}
-
-		// nft cross chain transfer:
-		// mainchain:mint() <- appchain:lock_nft()
-		// mainchain:burn() -> appchain:unlock_nft()
-		#[pallet::weight(<T as Config>::WeightInfo::lock_nft())]
-		#[transactional]
-		pub fn lock_nft(
-			origin: OriginFor<T>,
-			collection: T::CollectionId,
-			item: T::ItemId,
-			receiver_id: Vec<u8>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(IsActivated::<T>::get(), Error::<T>::NotActivated);
-
-			let receiver_id =
-				String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
-
-			let metadata = match T::Convertor::convert_into_nep171_metadata(collection, item) {
-				Some(data) => data,
-				None => return Err(Error::<T>::ConvertorNotImplement.into()),
-			};
-
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-				&collection,
-				&item,
-				&Self::account_id(),
-			)?;
-
-			let prefix = String::from("0x");
-			let hex_sender = prefix + &hex::encode(who.encode());
-
-			let message = LockNftPayload {
-				sender: hex_sender.clone(),
-				receiver_id: receiver_id.clone(),
-				collection: collection.into(),
-				item: item.into(),
-				metadata,
-			};
-
-			let sequence = T::UpwardMessagesInterface::submit(
-				Some(who.clone()),
-				PayloadType::LockNft,
-				&message.try_to_vec().unwrap(),
-			)?;
-			Self::deposit_event(Event::NftLocked {
-				sender: who,
-				receiver: receiver_id.as_bytes().to_vec(),
-				collection,
-				item,
-				sequence,
-			});
-
-			Ok(())
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
-		pub fn delete_token_id(origin: OriginFor<T>, token_id: Vec<u8>) -> DispatchResult {
-			ensure_root(origin)?;
-
-			ensure!(
-				AssetIdByTokenId::<T>::contains_key(token_id.clone()),
-				Error::<T>::TokenIdNotExist
-			);
-
-			AssetIdByTokenId::<T>::remove(token_id);
-
-			Ok(())
-		}
-
 		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
 		pub fn force_set_next_notification_id(
 			origin: OriginFor<T>,
@@ -1069,84 +701,9 @@ pub mod pallet {
 			);
 			Ok(())
 		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::force_unlock())]
-		pub fn force_unlock(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-			amount: BalanceOf<T>,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let who = T::Lookup::lookup(who)?;
-			T::Currency::transfer(&Self::account_id(), &who, amount, KeepAlive)?;
-
-			Self::deposit_event(Event::ForceUnlock { who, amount });
-
-			Ok(())
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::force_mint_asset())]
-		pub fn force_mint_asset(
-			origin: OriginFor<T>,
-			asset_id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
-			amount: T::AssetBalance,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			let who = T::Lookup::lookup(who)?;
-			T::Assets::mint_into(asset_id, &who, amount)?;
-
-			Self::deposit_event(Event::ForceAssetMinted { asset_id, who, amount });
-
-			Ok(())
-		}
-
-		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nft())]
-		pub fn force_unlock_nft(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-			collection: T::CollectionId,
-			item: T::ItemId,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let who = T::Lookup::lookup(who)?;
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-				&collection,
-				&item,
-				&who,
-			)?;
-
-			Self::deposit_event(Event::ForceNftUnlock { collection, item, who });
-
-			Ok(())
-		}
-	}
-
-	impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
-		type Err = Error<T>;
-
-		fn try_get_asset_id(
-			token_id: impl AsRef<[u8]>,
-		) -> Result<<T as Config>::AssetId, Self::Err> {
-			<AssetIdByTokenId<T>>::get(token_id.as_ref().to_vec()).ok_or(Error::<T>::NoTokenId)
-		}
-
-		fn try_get_token_id(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
-			let token_id = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
-			match token_id {
-				Some(id) => Ok(id),
-				_ => Err(Error::<T>::NoAssetId),
-			}
-		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn account_id() -> T::AccountId {
-			T::PalletId::get().into_account_truncating()
-		}
-
 		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
 				"https://rpc.testnet.near.org".to_string()
@@ -1341,45 +898,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Emits `Unlocked` event when successful.
-		fn unlock_inner(
-			sender_id: Vec<u8>,
-			receiver: T::AccountId,
-			amount: u128,
-			sequence: u32,
-		) -> DispatchResultWithPostInfo {
-			let amount_unwrapped = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
-			// unlock native token
-			T::Currency::transfer(&Self::account_id(), &receiver, amount_unwrapped, KeepAlive)?;
-			Self::deposit_event(Event::Unlocked {
-				sender: sender_id,
-				receiver,
-				amount: amount_unwrapped,
-				sequence,
-			});
-
-			Ok(().into())
-		}
-
-		fn mint_asset_inner(
-			asset_id: T::AssetId,
-			sender_id: Vec<u8>,
-			receiver: T::AccountId,
-			amount: T::AssetBalance,
-			sequence: Option<u32>,
-		) -> DispatchResult {
-			<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(asset_id, &receiver, amount)?;
-			Self::deposit_event(Event::AssetMinted {
-				asset_id,
-				sender: sender_id,
-				receiver,
-				amount,
-				sequence,
-			});
-
-			Ok(())
-		}
-
 		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
 			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
 				if let Some(v) = next_id.checked_add(1) {
@@ -1559,7 +1077,7 @@ pub mod pallet {
 					Observation::Burn(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
-						if let Err(error) = Self::unlock_inner(
+						if let Err(error) = T::BridgeInterface::unlock(
 							event.sender_id.clone(),
 							event.receiver.clone(),
 							event.amount,
@@ -1571,12 +1089,13 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.amount,
 							error);
-							let min = T::Currency::minimum_balance();
-							let amount_unwrapped = event.amount.checked_into().unwrap_or(min); //Check: should not return error.
+							// let min = T::Currency::minimum_balance();
+							// let amount_unwrapped = event.amount.checked_into().unwrap_or(0);
+							// //Check: should not return error. TODO
 							Self::deposit_event(Event::UnlockFailed {
 								sender: event.sender_id,
 								receiver: event.receiver,
-								amount: amount_unwrapped,
+								amount: event.amount,
 								sequence: event.index,
 							});
 							result = NotificationResult::UnlockFailed;
@@ -1593,56 +1112,39 @@ pub mod pallet {
 					Observation::LockAsset(event) => {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
-						if let Ok(asset_id) = T::AssetIdByTokenId::try_get_asset_id(&event.token_id)
-						{
-							log!(
+
+						log!(
 								info,
 								"️️️sequence: {:?}, mint asset:{:?}, sender_id:{:?}, receiver:{:?}, amount:{:?}",
 								event.index,
-								asset_id,
+								event.token_id,
 								event.sender_id,
 								event.receiver,
 								event.amount,
 							);
-							let sequence = event.index;
-							if let Err(error) = Self::mint_asset_inner(
-								asset_id,
-								event.sender_id.clone(),
-								event.receiver.clone(),
-								event.amount.into(),
-								Some(sequence),
-							) {
-								log!(warn, "️️️failed to mint asset, sequence: {:?}, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
+						let sequence = event.index;
+						if let Err(error) = T::BridgeInterface::mint_nep141(
+							event.token_id.clone(),
+							event.sender_id.clone(),
+							event.receiver.clone(),
+							event.amount,
+							sequence,
+						) {
+							log!(warn, "️️️failed to mint asset, sequence: {:?}, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
 								event.index,
-								asset_id,
+								event.token_id,
 								event.sender_id.clone(),
 								event.receiver.clone(),
 								event.amount,
 								error);
-								Self::deposit_event(Event::AssetMintFailed {
-									asset_id,
-									sender: event.sender_id,
-									receiver: event.receiver,
-									amount: event.amount.into(),
-									sequence: Some(sequence),
-								});
-								result = NotificationResult::AssetMintFailed;
-							}
-						} else {
-							log!(
-								warn,
-								"️️️failed to mint asset, sequence: {:?}, token_id: {:?}, error: AssetIdGetFailed",
-								event.index,
-								event.token_id
-							);
-							Self::deposit_event(Event::AssetIdGetFailed {
+							Self::deposit_event(Event::MintNep141Failed {
 								token_id: event.token_id,
 								sender: event.sender_id,
 								receiver: event.receiver,
 								amount: event.amount.into(),
-								sequence: event.index,
+								sequence: sequence,
 							});
-							result = NotificationResult::AssetGetFailed;
+							result = NotificationResult::AssetMintFailed;
 						}
 
 						NotificationHistory::<T>::insert(obs_id, Some(result.clone()));
@@ -1658,11 +1160,11 @@ pub mod pallet {
 						Self::increase_next_notification_id()?;
 						let mut result = NotificationResult::Success;
 
-						if let Err(error) = Self::unlock_nft_inner(
+						if let Err(error) = T::BridgeInterface::unlock_nonfungible(
+							event.collection,
+							event.item,
 							event.sender_id.clone(),
 							event.receiver.clone(),
-							event.collection.into(),
-							event.item.into(),
 							event.index,
 						) {
 							log!(warn, "️️️failed to unlock nft, sequence: {:?}, send_id: {:?}, receiver: {:?}, collection: {:?}, item: {:?}, error: {:?}",
@@ -1673,11 +1175,11 @@ pub mod pallet {
 							event.item,
 							error);
 
-							Self::deposit_event(Event::NftUnlockFailed {
+							Self::deposit_event(Event::UnlockNonfungibleFailed {
+								collection: event.collection,
+								item: event.item,
 								sender: event.sender_id,
 								receiver: event.receiver,
-								collection: event.collection.into(),
-								item: event.item.into(),
 								sequence: event.index,
 							});
 
@@ -1750,48 +1252,24 @@ pub mod pallet {
 				.build()
 		}
 
-		fn unlock_nft_inner(
-			sender_id: Vec<u8>,
-			receiver: T::AccountId,
-			collection: T::CollectionId,
-			item: T::ItemId,
-			sequence: u32,
-		) -> DispatchResultWithPostInfo {
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
-				&collection,
-				&item,
-				&receiver,
-			)?;
+		// fn migration_to_v1() {
+		// 	let account = <Pallet<T>>::account_id();
+		// 	OctopusPalletId::<T>::put(Some(account));
+		// 	log!(info, "updating to version 1 ");
+		// }
 
-			Self::deposit_event(Event::NftUnlocked {
-				sender: sender_id,
-				receiver,
-				collection,
-				item,
-				sequence,
-			});
+		// fn migration_to_v2(translated: u64) -> u64 {
+		// 	let mut translated = translated;
+		// 	let _ = AssetIdByName::<T>::iter()
+		// 		.map(|(token_id, asset_id)| {
+		// 			AssetIdByTokenId::<T>::insert(token_id, asset_id);
+		// 			translated += 1u64;
+		// 		})
+		// 		.collect::<Vec<_>>();
 
-			Ok(().into())
-		}
-
-		fn migration_to_v1() {
-			let account = <Pallet<T>>::account_id();
-			OctopusPalletId::<T>::put(Some(account));
-			log!(info, "updating to version 1 ");
-		}
-
-		fn migration_to_v2(translated: u64) -> u64 {
-			let mut translated = translated;
-			let _ = AssetIdByName::<T>::iter()
-				.map(|(token_id, asset_id)| {
-					AssetIdByTokenId::<T>::insert(token_id, asset_id);
-					translated += 1u64;
-				})
-				.collect::<Vec<_>>();
-
-			log!(info, "updating to version 2 ",);
-			translated
-		}
+		// 	log!(info, "updating to version 2 ",);
+		// 	translated
+		// }
 	}
 
 	impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -1817,12 +1295,6 @@ pub mod pallet {
 
 		fn on_disabled(_i: u32) {
 			// ignore
-		}
-	}
-
-	impl<T: Config> ValidatorsProvider<T::AccountId> for Pallet<T> {
-		fn validators() -> Vec<(T::AccountId, u128)> {
-			<PlannedValidators<T>>::get()
 		}
 	}
 }

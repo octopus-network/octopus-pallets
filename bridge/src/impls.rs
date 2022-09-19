@@ -1,9 +1,4 @@
 use super::*;
-use frame_support::traits::tokens::{
-	fungibles, nonfungibles, DepositConsequence, WithdrawConsequence,
-};
-use serde_json::json;
-use sp_runtime::{DispatchError, DispatchResult};
 
 pub struct UnImplementUniques<T>(sp_std::marker::PhantomData<T>);
 
@@ -123,14 +118,13 @@ where
 		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
-		if let Some(collection_attribute) =
-			<T::Uniques as nonfungibles::Inspect<T::AccountId>>::collection_attribute(
-				&collection,
-				&vec![],
-			) {
+		if let Some(collection_attribute) = <T::Nonfungibles as nonfungibles::Inspect<
+			T::AccountId,
+		>>::collection_attribute(&collection, &vec![])
+		{
 			data.extend(collection_attribute);
 		}
-		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		if let Some(attribute) = <T::Nonfungibles as nonfungibles::Inspect<T::AccountId>>::attribute(
 			&collection,
 			&item,
 			&vec![],
@@ -213,7 +207,7 @@ where
 		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
-		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		if let Some(attribute) = <T::Nonfungibles as nonfungibles::Inspect<T::AccountId>>::attribute(
 			&collection,
 			&item,
 			&vec![],
@@ -270,5 +264,36 @@ where
 		log!(debug, "After, the Nep171 media data is {:?} ", metadata.clone());
 
 		Some(metadata)
+	}
+}
+
+impl<T: Config> BridgeInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
+	fn unlock(
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult {
+		Self::do_unlock(sender_id, receiver, amount, sequence)
+	}
+
+	fn mint_nep141(
+		token_id: Vec<u8>,
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		amount: u128,
+		sequence: u32,
+	) -> DispatchResult {
+		Self::do_mint_nep141(token_id, sender_id, receiver, amount, sequence)
+	}
+
+	fn unlock_nonfungible(
+		collection: u128,
+		item: u128,
+		sender_id: Vec<u8>,
+		receiver: T::AccountId,
+		sequence: u32,
+	) -> DispatchResult {
+		Self::do_unlock_nonfungible(collection, item, sender_id, receiver, sequence)
 	}
 }

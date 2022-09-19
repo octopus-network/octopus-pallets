@@ -20,7 +20,7 @@ use frame_support::{
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::{
 	log,
-	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface, ValidatorsProvider},
+	traits::{AppchainInterface, LposInterface, UpwardMessagesInterface},
 	types::{EraPayoutPayload, Offender, PayloadType, PlanNewEraPayload},
 };
 use pallet_session::historical;
@@ -137,7 +137,7 @@ where
 	) -> Option<<T as frame_system::Config>::AccountId> {
 		let who = <pallet_session::Pallet<T>>::key_owner(id, key_data);
 		if who.is_none() {
-			return None;
+			return None
 		}
 
 		Self::validators().into_iter().find(|v| {
@@ -190,9 +190,6 @@ pub mod pallet {
 		/// genesis is not used.
 		type UnixTime: UnixTime;
 
-		/// Something that provides the next validators.
-		type ValidatorsProvider: ValidatorsProvider<Self::AccountId>;
-
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -213,7 +210,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		type AppchainInterface: AppchainInterface;
+		type AppchainInterface: AppchainInterface<Self::AccountId>;
 
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
@@ -507,8 +504,8 @@ impl<T: Config> Pallet<T> {
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {
 				// The 5th session of the era.
-				if T::AppchainInterface::is_activated()
-					&& (era_length == T::SessionsPerEra::get() - 1)
+				if T::AppchainInterface::is_activated() &&
+					(era_length == T::SessionsPerEra::get() - 1)
 				{
 					let next_set_id = T::AppchainInterface::next_set_id();
 					let message = PlanNewEraPayload { new_era: next_set_id };
@@ -525,7 +522,7 @@ impl<T: Config> Pallet<T> {
 						Self::deposit_event(Event::<T>::PlanNewEraFailed);
 					}
 				}
-				return None;
+				return None
 			}
 
 			// New era.
@@ -618,7 +615,7 @@ impl<T: Config> Pallet<T> {
 		// All validators did not produce blocks, so they should be excluded.
 		if era_reward_points.individual.is_empty() {
 			log!(warn, "Era {:?}, no validator produce block", index);
-			return validators;
+			return validators
 		}
 
 		let expect_points = era_reward_points.total / validators.len() as u32 * 80 / 100;
@@ -651,14 +648,14 @@ impl<T: Config> Pallet<T> {
 	/// Compute payout for era.
 	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-			return;
+			return
 		}
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
 				log!(warn, "era reward {:?} has already been paid", active_era.index);
-				return;
+				return
 			}
 
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -750,9 +747,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Potentially plan a new era.
 	///
-	/// Get planned validator set from `T::ValidatorsProvider`.
+	/// Get planned validator set from `T::AppchainInterface`.
 	fn try_trigger_new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		let validators = T::ValidatorsProvider::validators();
+		let validators = T::AppchainInterface::planned_validators();
 		log!(info, "Next validator set: {:?}", validators);
 
 		<Pallet<T>>::deposit_event(Event::<T>::TriggerNewEra);

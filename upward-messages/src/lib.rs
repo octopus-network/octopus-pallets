@@ -51,9 +51,6 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The overarching dispatch call type.
-		type Call: From<Call<Self>>;
-
 		/// The limit for submit messages.
 		#[pallet::constant]
 		type UpwardMessagesLimit: Get<u32>;
