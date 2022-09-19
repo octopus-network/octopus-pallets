@@ -359,11 +359,6 @@ pub fn new_tester() -> sp_io::TestExternalities {
 		pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
-			premined_amount: 1024 * DOLLARS,
-			asset_id_by_token_id: vec![
-				("test-account.testnet".to_string(), 0),
-				("usdc.testnet".to_string(), 2),
-			],
 		};
 	config.assimilate_storage(&mut storage).unwrap();
 
