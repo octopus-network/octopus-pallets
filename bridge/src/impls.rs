@@ -118,14 +118,13 @@ where
 		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
-		if let Some(collection_attribute) =
-			<T::Uniques as nonfungibles::Inspect<T::AccountId>>::collection_attribute(
-				&collection,
-				&vec![],
-			) {
+		if let Some(collection_attribute) = <T::Nonfungibles as nonfungibles::Inspect<
+			T::AccountId,
+		>>::collection_attribute(&collection, &vec![])
+		{
 			data.extend(collection_attribute);
 		}
-		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		if let Some(attribute) = <T::Nonfungibles as nonfungibles::Inspect<T::AccountId>>::attribute(
 			&collection,
 			&item,
 			&vec![],
@@ -208,7 +207,7 @@ where
 		item: Self::ItemId,
 	) -> Option<Nep171TokenMetadata> {
 		let mut data: Vec<u8> = Vec::new();
-		if let Some(attribute) = <T::Uniques as nonfungibles::Inspect<T::AccountId>>::attribute(
+		if let Some(attribute) = <T::Nonfungibles as nonfungibles::Inspect<T::AccountId>>::attribute(
 			&collection,
 			&item,
 			&vec![],

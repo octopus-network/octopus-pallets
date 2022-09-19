@@ -18,7 +18,7 @@ impl<T: Config> Pallet<T> {
 			None => return Err(Error::<T>::ConvertorNotImplement.into()),
 		};
 
-		<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+		<T::Nonfungibles as nonfungibles::Transfer<T::AccountId>>::transfer(
 			&collection,
 			&item,
 			&Self::account_id(),
@@ -60,7 +60,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collection = collection.checked_into().ok_or(Error::<T>::CollectionOverflow)?;
 		let item = item.checked_into().ok_or(Error::<T>::ItemOverflow)?;
-		<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+		<T::Nonfungibles as nonfungibles::Transfer<T::AccountId>>::transfer(
 			&collection,
 			&item,
 			&receiver,

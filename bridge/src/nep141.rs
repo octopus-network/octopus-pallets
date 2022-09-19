@@ -15,7 +15,7 @@ impl<T: Config> Pallet<T> {
 
 		let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
-		<T::Assets as fungibles::Mutate<T::AccountId>>::burn_from(asset_id, &sender, amount)?;
+		<T::Fungibles as fungibles::Mutate<T::AccountId>>::burn_from(asset_id, &sender, amount)?;
 
 		let prefix = String::from("0x");
 		let hex_sender = prefix + &hex::encode(sender.encode());
@@ -53,7 +53,7 @@ impl<T: Config> Pallet<T> {
 			T::AssetIdByTokenId::try_get_asset_id(token_id).map_err(|_| Error::<T>::NoTokenId)?;
 
 		let amount_unwrapped = amount.checked_into().ok_or(Error::<T>::AmountOverflow)?;
-		<T::Assets as fungibles::Mutate<T::AccountId>>::mint_into(
+		<T::Fungibles as fungibles::Mutate<T::AccountId>>::mint_into(
 			asset_id,
 			&receiver,
 			amount_unwrapped,

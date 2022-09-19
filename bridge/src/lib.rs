@@ -90,7 +90,7 @@ pub mod pallet {
 
 		type AssetBalance: AssetBalance + From<u128> + Into<u128>;
 
-		type Assets: fungibles::Mutate<
+		type Fungibles: fungibles::Mutate<
 			<Self as frame_system::Config>::AccountId,
 			AssetId = Self::AssetId,
 			Balance = Self::AssetBalance,
@@ -102,7 +102,7 @@ pub mod pallet {
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Parameter + Copy + From<u128> + Into<u128>;
 
-		type Uniques: nonfungibles::Inspect<
+		type Nonfungibles: nonfungibles::Inspect<
 				Self::AccountId,
 				ItemId = Self::ItemId,
 				CollectionId = Self::CollectionId,
@@ -236,7 +236,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			T::Assets::mint_into(asset_id, &who, amount)?;
+			T::Fungibles::mint_into(asset_id, &who, amount)?;
 
 			Self::deposit_event(Event::ForceNep141Minted { asset_id, who, amount });
 
@@ -253,7 +253,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			let who = T::Lookup::lookup(who)?;
-			<T::Uniques as nonfungibles::Transfer<T::AccountId>>::transfer(
+			<T::Nonfungibles as nonfungibles::Transfer<T::AccountId>>::transfer(
 				&collection,
 				&item,
 				&who,
