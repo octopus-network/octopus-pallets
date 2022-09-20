@@ -105,11 +105,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn resource_id_by_asset_id)]
 	pub type ResourceIdOfAssetId<T: Config> =
-		StorageMap<_, Blake2_128Concat, ResourceId, T::AssetId>;
+		StorageMap<_, Blake2_128Concat, ResourceId, (T::AssetId, Vec<u8>)>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub asset_id_by_resource_id: Vec<(ResourceId, T::AssetId)>,
+		pub asset_id_by_resource_id: Vec<(ResourceId, T::AssetId, String)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -122,8 +122,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (token_id, id) in self.asset_id_by_resource_id.iter() {
-				<ResourceIdOfAssetId<T>>::insert(token_id, id);
+			for (token_id, id, token_name) in self.asset_id_by_resource_id.iter() {
+				<ResourceIdOfAssetId<T>>::insert(token_id, (id, token_name.as_bytes().to_vec()));
 			}
 		}
 	}
@@ -153,6 +153,7 @@ pub mod pallet {
 		InvalidTransfer,
 		InvalidTokenId,
 		WrongAssetId,
+		InvalidTokenName,
 	}
 
 	#[pallet::hooks]
@@ -165,10 +166,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			resource_id: ResourceId,
 			token_id: T::AssetId,
+			token_name: Vec<u8>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			ResourceIdOfAssetId::<T>::insert(resource_id, token_id);
+			// verify token name is valid
+			String::from_utf8(token_name.clone()).map_err(|_| Error::<T>::InvalidTokenName)?;
+
+			ResourceIdOfAssetId::<T>::insert(resource_id, (token_id, token_name));
 
 			Ok(())
 		}
@@ -302,13 +307,13 @@ impl<T: Config> AssetIdResourceIdProvider<T::AssetId> for Pallet<T> {
 	fn try_get_asset_id(resource_id: ResourceId) -> Result<<T as Config>::AssetId, Self::Err> {
 		let asset_id = <ResourceIdOfAssetId<T>>::try_get(resource_id);
 		match asset_id {
-			Ok(id) => Ok(id),
+			Ok(id) => Ok(id.0),
 			_ => Err(Error::<T>::InvalidTokenId),
 		}
 	}
 
 	fn try_get_asset_name(asset_id: T::AssetId) -> Result<ResourceId, Self::Err> {
-		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
+		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1.0 == asset_id).map(|p| p.0);
 		match token_id {
 			Some(id) => Ok(id),
 			_ => Err(Error::<T>::WrongAssetId),
