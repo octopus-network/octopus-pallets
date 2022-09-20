@@ -64,7 +64,6 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Call = Call;
 	type Event = Event;
 	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = ();
