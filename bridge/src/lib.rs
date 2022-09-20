@@ -49,6 +49,7 @@ pub use pallet::*;
 
 mod fungible;
 mod impls;
+mod migration;
 mod near;
 mod nep141;
 mod nep171;
@@ -62,7 +63,7 @@ type BalanceOf<T> =
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-bridge";
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -123,6 +124,33 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration in octopus bridge pallet with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 1 && onchain == 0 {
+				let translated = Self::migration_to_v1();
+				current.put::<Pallet<T>>();
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else {
+				log!(
+					info,
+					"The storageVersion is already the matching version, and the migration is not repeated."
+				);
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -356,10 +384,6 @@ pub mod pallet {
 		ConvertorNotImplement,
 	}
 
-	#[pallet::storage]
-	#[pallet::getter(fn octopus_pallet_id)]
-	pub(crate) type OctopusPalletId<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
-
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
 	pub(super) type AssetIdByTokenId<T: Config> =
@@ -391,7 +415,6 @@ pub mod pallet {
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
-			<OctopusPalletId<T>>::put(Some(account_id));
 			for (token_id, asset_id) in self.asset_id_by_token_id.iter() {
 				<AssetIdByTokenId<T>>::insert(token_id.as_bytes(), asset_id);
 			}
