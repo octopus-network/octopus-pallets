@@ -451,7 +451,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
-			let who = payload.public.clone().into_account();
 
 			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data);
 			if val_id.is_none() {
@@ -464,6 +463,7 @@ pub mod pallet {
 			}
 			let val_id = val_id.expect("Validator is valid; qed").clone();
 
+			let who = payload.public.clone().into_account();
 			//
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
 			//
