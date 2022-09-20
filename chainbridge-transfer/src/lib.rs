@@ -26,6 +26,7 @@ use frame_system::ensure_signed;
 use pallet_chainbridge as bridge;
 use sp_core::U256;
 use sp_std::{convert::From, prelude::*};
+use scale_info::prelude::string::String;
 
 use crate::traits::AssetIdResourceIdProvider;
 pub use pallet::*;
@@ -215,7 +216,7 @@ pub mod pallet {
 
 			match r_id == T::NativeTokenId::get() {
 				true => {
-					dbg!("transfer native token");
+					log::info!("transfer native token");
 					let bridge_id = <bridge::Pallet<T>>::account_id();
 					<T as Config>::Currency::transfer(
 						&source,
@@ -223,7 +224,7 @@ pub mod pallet {
 						amount.into(),
 						AllowDeath,
 					)?;
-					dbg!("transfer native token successful");
+					log::info!("transfer native token successful");
 
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
@@ -233,7 +234,7 @@ pub mod pallet {
 					)?;
 				},
 				false => {
-					dbg!("transfer non-native_token: burn assets");
+					log::info!("transfer non-native_token: burn assets");
 					let amount = amount.saturated_into::<u128>();
 					let token_id = Self::try_get_asset_id(r_id)?;
 					<T::Assets as Mutate<T::AccountId>>::burn_from(
@@ -241,7 +242,7 @@ pub mod pallet {
 						&source,
 						amount.into(),
 					)?;
-					dbg!("transfer non-native_token: burn successful!");
+					log::info!("transfer non-native_token: burn successful!");
 					<bridge::Pallet<T>>::transfer_fungible(
 						dest_id,
 						r_id,
@@ -276,11 +277,11 @@ pub mod pallet {
 					<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
 				},
 				false => {
-					dbg!("mint assets");
+					log::info!("mint assets");
 					let amount = amount.saturated_into::<u128>();
 					let token_id = Self::try_get_asset_id(r_id)?;
 					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &to, amount.into())?;
-					dbg!("mint assets successful!");
+					log::info!("mint assets successful!");
 				},
 			}
 			Ok(())
