@@ -1,5 +1,5 @@
 use super::*;
-use crate::{self as pallet_octopus_appchain, impls::ExampleConvertor};
+use crate::{self as pallet_octopus_appchain};
 use sp_runtime::{
 	generic, impl_opaque_keys,
 	testing::TestXt,
@@ -229,7 +229,6 @@ impl pallet_octopus_lpos::Config for Test {
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 }
@@ -251,6 +250,7 @@ construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
+		OctopusBridge: pallet_octopus_bridge::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -281,6 +281,23 @@ impl pallet_uniques::Config for Test {
 	type Locker = ();
 }
 
+impl pallet_octopus_bridge::Config for Test {
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type WeightInfo = ();
+}
+
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
 	   pub const GracePeriod: u32 = 10;
@@ -290,22 +307,13 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
-	type AssetIdByTokenId = OctopusAppchain;
 	type AuthorityId = OctopusId;
 	type AppCrypto = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
-	type PalletId = OctopusAppchainPalletId;
+	type BridgeInterface = OctopusBridge;
 	type LposInterface = OctopusLpos;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type CollectionId = CollectionId;
-	type ItemId = ItemId;
-	type Uniques = Uniques;
-	type Convertor = ExampleConvertor<Test>;
-	type Currency = Balances;
-	type Assets = Assets;
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
@@ -359,11 +367,6 @@ pub fn new_tester() -> sp_io::TestExternalities {
 		pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
-			premined_amount: 1024 * DOLLARS,
-			asset_id_by_token_id: vec![
-				("test-account.testnet".to_string(), 0),
-				("usdc.testnet".to_string(), 2),
-			],
 		};
 	config.assimilate_storage(&mut storage).unwrap();
 
