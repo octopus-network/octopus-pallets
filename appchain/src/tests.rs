@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, *, types::BurnEvent};
+use crate::{mock::*, types::BurnEvent, Error, *};
 use frame_support::{assert_noop, assert_ok};
 use pallet_octopus_support::traits::AppchainInterface;
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};

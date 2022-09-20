@@ -281,7 +281,6 @@ impl pallet_uniques::Config for Test {
 	type Locker = ();
 }
 
-
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
 	   pub const GracePeriod: u32 = 10;
@@ -305,20 +304,20 @@ impl pallet_octopus_appchain::Config for Test {
 }
 
 impl Config for Test {
-    type Event = Event;
-    type PalletId = OctopusAppchainPalletId;
-    type Currency = Balances;
-    type AppchainInterface = OctopusAppchain;
-    type UpwardMessagesInterface = OctopusUpwardMessages;
-    type AssetIdByTokenId = OctopusBridge;
-    type AssetId = AssetId;
-    type AssetBalance = AssetBalance;
-    type Fungibles = Assets;
-    type CollectionId = u128;
-    type ItemId = u128;
-    type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
-    type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
-    type WeightInfo = ();
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type WeightInfo = ();
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

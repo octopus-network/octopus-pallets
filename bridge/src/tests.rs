@@ -75,7 +75,6 @@ fn test_delete_token_id() {
 	});
 }
 
-
 // #[test]
 // fn test_mint_asset() {
 // 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
@@ -247,11 +246,7 @@ pub fn test_force_unlock() {
 		));
 
 		assert_noop!(
-			OctopusBridge::force_unlock(
-				origin,
-				sp_runtime::MultiAddress::Id(alice.clone()),
-				10000
-			),
+			OctopusBridge::force_unlock(origin, sp_runtime::MultiAddress::Id(alice.clone()), 10000),
 			BadOrigin
 		);
 
@@ -328,7 +323,12 @@ pub fn test_force_unlock_nft() {
 		));
 
 		assert_noop!(
-			OctopusBridge::force_unlock_nonfungible(origin2, sp_runtime::MultiAddress::Id(alice), 0, 42,),
+			OctopusBridge::force_unlock_nonfungible(
+				origin2,
+				sp_runtime::MultiAddress::Id(alice),
+				0,
+				42,
+			),
 			BadOrigin,
 		);
 	});

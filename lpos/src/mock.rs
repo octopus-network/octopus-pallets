@@ -241,20 +241,20 @@ pub type AssetId = u32;
 pub type AssetBalance = u128;
 
 impl pallet_octopus_bridge::Config for Test {
-    type Event = Event;
-    type PalletId = OctopusAppchainPalletId;
-    type Currency = Balances;
-    type AppchainInterface = OctopusAppchain;
-    type UpwardMessagesInterface = OctopusUpwardMessages;
-    type AssetIdByTokenId = OctopusBridge;
-    type AssetId = AssetId;
-    type AssetBalance = AssetBalance;
-    type Fungibles = Assets;
-    type CollectionId = u128;
-    type ItemId = u128;
-    type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
-    type Convertor = ();
-    type WeightInfo = ();
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Convertor = ();
+	type WeightInfo = ();
 }
 
 impl pallet_octopus_appchain::Config for Test {
@@ -334,7 +334,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			validators,
 		},
 		session: pallet_session::GenesisConfig { keys },
-    	octopus_bridge: pallet_octopus_bridge::GenesisConfig {
+		octopus_bridge: pallet_octopus_bridge::GenesisConfig {
 			premined_amount: 1024 * DOLLARS,
 			asset_id_by_token_id: vec![("usdc.testnet".to_string(), 2)],
 		},
