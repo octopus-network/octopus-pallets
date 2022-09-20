@@ -17,21 +17,21 @@ scale-info = { version = "2.0.1", default-features = false, features = ["derive"
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 log = { version = "0.4.14", default-features = false }
 
-frame-support = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-frame-system = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-sp-io = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-sp-runtime = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-sp-std = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-sp-arithmetic = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
-sp-core = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge", default-features = false }
+frame-support = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
+sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
 
 pallet-chainbridge = { path = "../chainbridge", default-features = false }
 
 [dev-dependencies]
-sp-keyring = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge" }
-sp-core = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge" }
-pallet-balances = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge" }
-pallet-assets = { git = "https://github.com/octopus-network/substrate.git", branch = "polkadot-v0.9.28-chainbridge" }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+pallet-assets = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
 
 [features]
 default = ["std"]
