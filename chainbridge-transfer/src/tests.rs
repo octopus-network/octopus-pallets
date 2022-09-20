@@ -69,7 +69,7 @@ fn transfer_non_native() {
 		let ferdie: AccountId = AccountKeyring::Ferdie.into();
 		let recipient = vec![99];
 		// set token_id
-		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0));
+		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0, b"DENOM".to_vec()));
 
 		// force_create Assets token_id 0
 		assert_ok!(Assets::force_create(
@@ -208,7 +208,7 @@ fn create_sucessful_transfer_proposal_non_native_token() {
 		let proposal = make_transfer_proposal(resource_id, RELAYER_A, 10);
 		let ferdie: AccountId = AccountKeyring::Ferdie.into();
 		// set token_id
-		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0));
+		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0, b"DENOM".to_vec()));
 
 		// force_create Assets token_id 0
 		assert_ok!(Assets::force_create(
