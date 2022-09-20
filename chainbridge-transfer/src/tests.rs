@@ -2,29 +2,23 @@
 
 use super::{
 	mock::{
-		assert_events, event_exists, expect_event, new_test_ext, Assets, Balances, Bridge, Call,
-		ChainBridgeTransfer, Event, HashId, NativeTokenId, Origin, ProposalLifetime,
+		assert_events, expect_event, new_test_ext, Assets, Balances, Bridge, Call,
+		ChainBridgeTransfer, Event, NativeTokenId, Origin, ProposalLifetime,
 		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
 };
-use frame_support::{assert_noop, assert_ok, dispatch::DispatchError};
+use frame_support::assert_ok;
 use pallet_assets as assets;
 
 use crate::{
-	mock::{AccountId, Balance, DOLLARS},
-	Event as ChainBridgeTransferEvent,
+	mock::{AccountId, Balance, DOLLARS}
 };
-use codec::Encode;
-use sp_core::{blake2_256, crypto::AccountId32, H256};
+use sp_core::crypto::AccountId32;
 use sp_keyring::AccountKeyring;
 
 const TEST_THRESHOLD: u32 = 2;
 
-fn make_remark_proposal(hash: H256) -> Call {
-	let resource_id = HashId::get();
-	Call::ChainBridgeTransfer(crate::Call::remark { hash, r_id: resource_id })
-}
 
 fn make_transfer_proposal(resource_id: ResourceId, to: AccountId32, amount: u64) -> Call {
 	Call::ChainBridgeTransfer(crate::Call::handle_transfer {
@@ -110,64 +104,6 @@ fn transfer_non_native() {
 			U256::from(amount),
 			recipient,
 		))]);
-	})
-}
-
-#[test]
-fn execute_remark() {
-	new_test_ext().execute_with(|| {
-		let hash: H256 = "ABC".using_encoded(blake2_256).into();
-		let proposal = make_remark_proposal(hash.clone());
-		let prop_id = 1;
-		let src_id = 1;
-		let r_id = bridge::derive_resource_id(src_id, b"hash");
-		let resource = b"ChainBridgeTransfer.remark".to_vec();
-
-		assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
-		assert_ok!(Bridge::add_relayer(Origin::root(), RELAYER_A));
-		assert_ok!(Bridge::add_relayer(Origin::root(), RELAYER_B));
-		assert_ok!(Bridge::whitelist_chain(Origin::root(), src_id));
-		assert_ok!(Bridge::set_resource(Origin::root(), r_id, resource));
-
-		assert_ok!(Bridge::acknowledge_proposal(
-			Origin::signed(RELAYER_A),
-			prop_id,
-			src_id,
-			r_id,
-			Box::new(proposal.clone())
-		));
-		assert_ok!(Bridge::acknowledge_proposal(
-			Origin::signed(RELAYER_B),
-			prop_id,
-			src_id,
-			r_id,
-			Box::new(proposal.clone())
-		));
-
-		event_exists(ChainBridgeTransferEvent::Remark(hash));
-	})
-}
-
-#[test]
-fn execute_remark_bad_origin() {
-	new_test_ext().execute_with(|| {
-		let hash: H256 = "ABC".using_encoded(blake2_256).into();
-		let resource_id = HashId::get();
-		assert_ok!(ChainBridgeTransfer::remark(
-			Origin::signed(Bridge::account_id()),
-			hash,
-			resource_id
-		));
-		// Don't allow any signed origin except from bridge addr
-		assert_noop!(
-			ChainBridgeTransfer::remark(Origin::signed(RELAYER_A), hash, resource_id),
-			DispatchError::BadOrigin
-		);
-		// Don't allow root calls
-		assert_noop!(
-			ChainBridgeTransfer::remark(Origin::root(), hash, resource_id),
-			DispatchError::BadOrigin
-		);
 	})
 }
 

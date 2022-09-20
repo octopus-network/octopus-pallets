@@ -1,7 +1,6 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
-// #![allow(unused_imports)]
-// #![allow(dead_code)]
+#![allow(dead_code)]
 
 #[cfg(test)]
 mod mock;
@@ -65,9 +64,6 @@ pub mod pallet {
 
 		/// The currency mechanism.
 		type Currency: Currency<Self::AccountId>;
-
-		/// Ids can be defined by the runtime and passed in, perhaps from blake2b_128 hashes.
-		type HashId: Get<ResourceId>;
 
 		type NativeTokenId: Get<ResourceId>;
 
@@ -144,8 +140,7 @@ pub mod pallet {
 			recipient: Vec<u8>,
 			resource_id: ResourceId,
 			amount: BalanceOf<T>,
-		},
-		Remark(T::Hash),
+		}
 	}
 
 	#[pallet::error]
@@ -291,13 +286,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// This can be called by the bridge to demonstrate an arbitrary call from a proposal.
-		#[pallet::weight(195_000_0000)]
-		pub fn remark(origin: OriginFor<T>, hash: T::Hash, _r_id: ResourceId) -> DispatchResult {
-			T::BridgeOrigin::ensure_origin(origin)?;
-			Self::deposit_event(Event::<T>::Remark(hash));
-			Ok(())
-		}
 	}
 }
 

@@ -137,7 +137,6 @@ impl pallet_assets::Config<pallet_assets::Instance1> for Test {
 }
 
 parameter_types! {
-	pub HashId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"hash"));
 	pub NativeTokenId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"DAV")); // native token id
 }
 
@@ -148,7 +147,6 @@ impl Config for Test {
 	type Event = Event;
 	type BridgeOrigin = bridge::EnsureBridge<Test>;
 	type Currency = Balances;
-	type HashId = HashId;
 	type NativeTokenId = NativeTokenId;
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
