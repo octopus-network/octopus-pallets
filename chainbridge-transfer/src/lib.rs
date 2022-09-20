@@ -43,11 +43,9 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 pub mod pallet {
 	use super::*;
 	use crate::traits::AssetIdResourceIdProvider;
-	use codec::Codec;
-	use core::fmt::Debug;
-	use frame_support::traits::fungibles::{Inspect, Mutate, Transfer};
-	use sp_arithmetic::traits::AtLeast32BitUnsigned;
-
+	use frame_support::traits::fungibles::Mutate;
+	use frame_support::traits::tokens::{AssetId, Balance as AssetBalance};
+	
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
@@ -69,31 +67,13 @@ pub mod pallet {
 		type NativeTokenId: Get<ResourceId>;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member
-			+ Parameter
-			+ AtLeast32BitUnsigned
-			+ Codec
-			+ Copy
-			+ Debug
-			+ Default
-			+ MaybeSerializeDeserialize;
+		type AssetId: AssetId + MaybeSerializeDeserialize;
 
 		/// The units in which we record balances.
-		type AssetBalance: Parameter
-			+ Member
-			+ AtLeast32BitUnsigned
-			+ Codec
-			+ Default
-			+ From<u128>
-			+ Into<u128>
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Debug;
+		type AssetBalance: AssetBalance + From<u128> + Into<u128>;
 
 		/// Expose customizable associated type of asset transfer, lock and unlock
-		type Assets: Transfer<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Mutate<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>;
+		type Assets: Mutate<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>;
 
 		/// Map of cross-chain asset ID & name
 		type AssetIdByName: AssetIdResourceIdProvider<Self::AssetId>;
