@@ -21,7 +21,7 @@ const TEST_THRESHOLD: u32 = 2;
 
 
 fn make_transfer_proposal(resource_id: ResourceId, to: AccountId32, amount: u64) -> Call {
-	Call::ChainBridgeTransfer(crate::Call::handle_transfer {
+	Call::ChainBridgeTransfer(crate::Call::transfer {
 		to,
 		amount: amount.into(),
 		r_id: resource_id,
@@ -86,7 +86,7 @@ fn transfer_non_native() {
 		assert_eq!(Assets::balance(0, ferdie.clone()), amount);
 
 		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
-		assert_ok!(ChainBridgeTransfer::transfer(
+		assert_ok!(ChainBridgeTransfer::generic_token_transfer(
 			Origin::signed(ferdie.clone()),
 			amount,
 			resource_id,
@@ -115,7 +115,7 @@ fn transfer() {
 		let resource_id = NativeTokenId::get();
 		assert_eq!(Balances::free_balance(&bridge_id), ENDOWED_BALANCE);
 		// Transfer and check result
-		assert_ok!(ChainBridgeTransfer::handle_transfer(
+		assert_ok!(ChainBridgeTransfer::transfer(
 			Origin::signed(Bridge::account_id()),
 			RELAYER_A,
 			10,

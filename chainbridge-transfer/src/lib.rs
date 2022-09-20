@@ -195,13 +195,13 @@ pub mod pallet {
 		) -> DispatchResult {
 			let native_token = T::NativeTokenId::get();
 
-			Self::transfer(origin, amount, native_token, recipient, dest_id)
+			Self::generic_token_transfer(origin, amount, native_token, recipient, dest_id)
 		}
 
 		/// Transfers some amount of the native token to some recipient on a (whitelisted)
 		/// destination chain.
 		#[pallet::weight(195_000_0000)]
-		pub fn transfer(
+		pub fn generic_token_transfer(
 			origin: OriginFor<T>,
 			amount: BalanceOf<T>,
 			r_id: ResourceId,
@@ -262,7 +262,7 @@ pub mod pallet {
 		/// Triggered by a initial transfer on source chain, executed by relayer when proposal was
 		/// resolved. this function by bridge triggered transfer
 		#[pallet::weight(195_000_0000)]
-		pub fn handle_transfer(
+		pub fn transfer(
 			origin: OriginFor<T>,
 			to: T::AccountId,
 			amount: BalanceOf<T>,
