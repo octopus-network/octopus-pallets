@@ -3,7 +3,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	traits::{OneSessionHandler, StorageVersion},
+	traits::{OneSessionHandler, StorageVersion, ConstU32},
 	transactional, BoundedSlice, BoundedVec,
 };
 use frame_system::offchain::{
@@ -174,6 +174,13 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	// AnchorContract's length.
+	type AnchorContractLen = ConstU32<100> ;
+
+	// Observing's length
+	type ObservingLen = ConstU32<100> ;
+
+	type ObservationsLen = ConstU32<100> ; 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
@@ -181,14 +188,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(crate) fn DefaultForAnchorContract() -> Vec<u8> {
-		Vec::new()
+	pub(crate) fn DefaultForAnchorContract() -> BoundedVec< u8 , AnchorContractLen > {
+		Vec::new().try_into().unwrap()
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
 	pub(crate) type AnchorContract<T: Config> =
-		StorageValue<_, Vec<u8>, ValueQuery, DefaultForAnchorContract>;
+		StorageValue<_, BoundedVec< u8 , AnchorContractLen >, ValueQuery, DefaultForAnchorContract>;
 
 	// /// A storage discarded after StorageVersion 2.
 	// #[pallet::storage]
@@ -218,13 +225,13 @@ pub mod pallet {
 		ObservationType,
 		Twox64Concat,
 		u32,
-		Vec<Observation<T::AccountId>>,
+		BoundedVec<Observation<T::AccountId> , ObservationsLen >,
 		ValueQuery,
 	>;
 
 	#[pallet::storage]
 	pub(crate) type Observing<T: Config> =
-		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Observation<T::AccountId>, BoundedVec<T::AccountId , ObservingLen>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type NotificationHistory<T: Config> =
@@ -255,7 +262,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<AnchorContract<T>>::put(self.anchor_contract.as_bytes());
+			let bounded_anchor_contract = BoundedSlice::<u8, AnchorContractLen>::try_from( self.anchor_contract.as_bytes())
+				.expect("Exceed the limit of max validators.");
+			<AnchorContract<T>>::put(bounded_anchor_contract);
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
 			let bounded_validators =
@@ -327,7 +336,7 @@ pub mod pallet {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			let anchor_contract = Self::anchor_contract();
+			let anchor_contract = Self::anchor_contract().to_vec();
 			if !sp_io::offchain::is_validator() ||
 				!IsActivated::<T>::get() ||
 				anchor_contract.is_empty()
@@ -755,57 +764,6 @@ pub mod pallet {
 			})
 		}
 
-		fn check_observation(
-			observation_type: ObservationType,
-			obs_id: u32,
-		) -> DispatchResultWithPostInfo {
-			match observation_type {
-				ObservationType::UpdateValidatorSet => {
-					let next_set_id = NextSetId::<T>::get();
-					if obs_id != next_set_id {
-						log!(
-							warn,
-							"wrong set id for update validator set: {:?}, expected: {:?}",
-							obs_id,
-							next_set_id
-						);
-						return Err(Error::<T>::WrongSetId.into())
-					}
-				},
-				_ => {
-					let next_notification_id = NextNotificationId::<T>::get();
-					let limit = T::RequestEventLimit::get();
-					if (obs_id < next_notification_id) || (obs_id >= next_notification_id + limit) {
-						log!(
-							warn,
-							"invalid notification id for observation: {:?}, expected: [{:?}, {:?})",
-							obs_id,
-							next_notification_id,
-							next_notification_id + limit
-						);
-						return Err(Error::<T>::InvalidNotificationId.into())
-					}
-				},
-			}
-
-			// The maximum number of observation for the same obs_id is the number of validators
-			// (100), that is, each validator submits a observation.
-			let obs = <Observations<T>>::try_get(observation_type, obs_id);
-			if let Ok(obs) = obs {
-				if obs.len() > 100 {
-					log!(
-						warn,
-						"the number of observations with ({:?}, {:?}) exceeded the upper limit",
-						obs_id,
-						observation_type
-					);
-					return Err(Error::<T>::ObservationsExceededLimit.into())
-				}
-			}
-
-			Ok(().into())
-		}
-
 		fn prune_old_histories() {
 			// let next_notification_id = NextNotificationId::<T>::get();
 			// if next_notification_id <= T::NotificationHistoryDepth::get() {
@@ -854,22 +812,25 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let observation_type = Self::get_observation_type(&observation);
 			let obs_id = observation.observation_index();
-			Self::check_observation(observation_type, obs_id)?;
 
 			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
-					obs.push(observation.clone())
+					obs.try_push(observation.clone()) 
+				} else {
+					Ok(())
 				}
-			});
+			}).map_err(|_|Error::<T>::ObservationsExceededLimit)? ;
+			// .map_err(|_| "Failed to get_validator_list_of")?;
 			<Observing<T>>::mutate(&observation, |vals| {
 				let found = vals.iter().any(|id| id == validator_id);
 				if !found {
-					vals.push(validator_id.clone());
+					vals.try_push(validator_id.clone())
 				} else {
 					log!(warn, "{:?} submits a duplicate ocw tx", validator_id);
+					Ok(())
 				}
-			});
+			}).map_err(|_|Error::<T>::ObservationsExceededLimit)? ;
 			let total_stake: u128 = T::LposInterface::active_total_stake()
 				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
 			let stake: u128 = <Observing<T>>::get(&observation)
