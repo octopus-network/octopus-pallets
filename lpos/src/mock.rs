@@ -235,6 +235,7 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators:u32 = 6 ;
 }
 
 pub type AssetId = u32;
@@ -252,6 +253,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators ;
 }
 
 impl pallet_octopus_bridge::Config for Test {

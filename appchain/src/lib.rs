@@ -3,7 +3,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	traits::{OneSessionHandler, StorageVersion, ConstU32},
+	traits::{ConstU32, OneSessionHandler, StorageVersion},
 	transactional, BoundedSlice, BoundedVec,
 };
 use frame_system::offchain::{
@@ -175,12 +175,12 @@ pub mod pallet {
 	}
 
 	// AnchorContract's length.
-	type AnchorContractLen = ConstU32<100> ;
+	type AnchorContractLen = ConstU32<100>;
 
 	// Observing's length
-	type ObservingLen = ConstU32<100> ;
+	type ObservingLen = ConstU32<100>;
 
-	type ObservationsLen = ConstU32<100> ; 
+	type ObservationsLen = ConstU32<100>;
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
@@ -188,14 +188,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::type_value]
-	pub(crate) fn DefaultForAnchorContract() -> BoundedVec< u8 , AnchorContractLen > {
+	pub(crate) fn DefaultForAnchorContract() -> BoundedVec<u8, AnchorContractLen> {
 		Vec::new().try_into().unwrap()
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn anchor_contract)]
 	pub(crate) type AnchorContract<T: Config> =
-		StorageValue<_, BoundedVec< u8 , AnchorContractLen >, ValueQuery, DefaultForAnchorContract>;
+		StorageValue<_, BoundedVec<u8, AnchorContractLen>, ValueQuery, DefaultForAnchorContract>;
 
 	// /// A storage discarded after StorageVersion 2.
 	// #[pallet::storage]
@@ -225,13 +225,18 @@ pub mod pallet {
 		ObservationType,
 		Twox64Concat,
 		u32,
-		BoundedVec<Observation<T::AccountId> , ObservationsLen >,
+		BoundedVec<Observation<T::AccountId>, ObservationsLen>,
 		ValueQuery,
 	>;
 
 	#[pallet::storage]
-	pub(crate) type Observing<T: Config> =
-		StorageMap<_, Twox64Concat, Observation<T::AccountId>, BoundedVec<T::AccountId , ObservingLen>, ValueQuery>;
+	pub(crate) type Observing<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		Observation<T::AccountId>,
+		BoundedVec<T::AccountId, ObservingLen>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	pub(crate) type NotificationHistory<T: Config> =
@@ -262,8 +267,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			let bounded_anchor_contract = BoundedSlice::<u8, AnchorContractLen>::try_from( self.anchor_contract.as_bytes())
-				.expect("Exceed the limit of max validators.");
+			let bounded_anchor_contract =
+				BoundedSlice::<u8, AnchorContractLen>::try_from(self.anchor_contract.as_bytes())
+					.expect("Exceed the limit of max validators.");
 			<AnchorContract<T>>::put(bounded_anchor_contract);
 
 			<NextSetId<T>>::put(1); // set 0 is already in the genesis
@@ -816,11 +822,12 @@ pub mod pallet {
 			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
-					obs.try_push(observation.clone()) 
+					obs.try_push(observation.clone())
 				} else {
 					Ok(())
 				}
-			}).map_err(|_|Error::<T>::ObservationsExceededLimit)? ;
+			})
+			.map_err(|_| Error::<T>::ObservationsExceededLimit)?;
 			// .map_err(|_| "Failed to get_validator_list_of")?;
 			<Observing<T>>::mutate(&observation, |vals| {
 				let found = vals.iter().any(|id| id == validator_id);
@@ -830,7 +837,8 @@ pub mod pallet {
 					log!(warn, "{:?} submits a duplicate ocw tx", validator_id);
 					Ok(())
 				}
-			}).map_err(|_|Error::<T>::ObservationsExceededLimit)? ;
+			})
+			.map_err(|_| Error::<T>::ObservationsExceededLimit)?;
 			let total_stake: u128 = T::LposInterface::active_total_stake()
 				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
 			let stake: u128 = <Observing<T>>::get(&observation)
