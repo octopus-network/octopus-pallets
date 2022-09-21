@@ -243,13 +243,13 @@ construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		OctopusAppchain: pallet_octopus_appchain::{Pallet, Call, Storage, Config<T>, Event<T>, ValidateUnsigned}, // must before session
 		OctopusLpos: pallet_octopus_lpos::{Pallet, Call, Config, Storage, Event<T>},
 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		OctopusBridge: pallet_octopus_bridge::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
@@ -304,6 +304,7 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators: u32 = 5 ;
 }
 
 impl Config for Test {
@@ -318,6 +319,7 @@ impl Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};
