@@ -391,10 +391,10 @@ pub mod pallet {
 			let account_id = <Pallet<T>>::account_id();
 
 			let min = T::Currency::minimum_balance();
-			let amount =
+			let amount_unwrap =
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 
-			let init_amount = min + amont;
+			let init_amount = min + amount_unwrap;
 			T::Currency::make_free_balance_be(&account_id, init_amount);
 
 			<OctopusPalletId<T>>::put(Some(account_id));
