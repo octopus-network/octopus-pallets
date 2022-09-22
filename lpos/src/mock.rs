@@ -277,6 +277,7 @@ parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
 	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
+	pub const MaxBondedEras: u32 = 100 ;
 }
 
 impl Config for Test {
@@ -291,6 +292,7 @@ impl Config for Test {
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
 	type WeightInfo = ();
+	type MaxBondedEras = MaxBondedEras;
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

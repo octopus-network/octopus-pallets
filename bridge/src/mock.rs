@@ -211,6 +211,7 @@ parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
 	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
+	pub const MaxBondedEras: u32 = 10;
 }
 
 impl pallet_octopus_lpos::Config for Test {
@@ -225,6 +226,7 @@ impl pallet_octopus_lpos::Config for Test {
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
 	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
+	type MaxBondedEras = MaxBondedEras ;
 }
 
 impl pallet_octopus_upward_messages::Config for Test {
@@ -287,6 +289,7 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators:u32 = 6 ;
 }
 
 impl pallet_octopus_appchain::Config for Test {
@@ -301,6 +304,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl Config for Test {
