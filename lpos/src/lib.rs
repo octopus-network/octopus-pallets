@@ -16,7 +16,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
-	PalletId,
+	BoundedVec, PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::{
@@ -216,6 +216,8 @@ pub mod pallet {
 		type UpwardMessagesInterface: UpwardMessagesInterface<Self::AccountId>;
 
 		type PalletId: Get<PalletId>;
+
+		type MaxBondedEras: Get<u32>;
 	}
 
 	#[pallet::type_value]
@@ -296,7 +298,7 @@ pub mod pallet {
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
 	pub(crate) type BondedEras<T: Config> =
-		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
+		StorageValue<_, BoundedVec<(EraIndex, SessionIndex), T::MaxBondedEras>, ValueQuery>;
 
 	/// The last planned session scheduled by the session pallet.
 	///
@@ -410,6 +412,8 @@ pub mod pallet {
 		NoClaimedRewards,
 		/// Amount overflow.
 		AmountOverflow,
+		/// BondedEras Limit.
+		BondedErasExceededLimit,
 	}
 
 	#[pallet::hooks]
@@ -587,7 +591,9 @@ impl<T: Config> Pallet<T> {
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::<T>::mutate(|bonded| {
-			bonded.push((active_era, start_session));
+			bonded
+				.try_push((active_era, start_session))
+				.expect("Exceed the limit of BondedEras.");
 
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;

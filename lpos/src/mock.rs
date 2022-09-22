@@ -205,13 +205,13 @@ impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
 construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -226,6 +226,7 @@ construct_runtime!(
 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
+		OctopusBridge: pallet_octopus_bridge::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -235,31 +236,42 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators: u32 = 100 ;
+	   pub const MaxBondedEras: u32 = 100 ;
 }
 
 pub type AssetId = u32;
 pub type AssetBalance = u128;
 
 impl pallet_octopus_appchain::Config for Test {
-	type CollectionId = u128;
-	type ItemId = u128;
-	type Uniques = pallet_octopus_appchain::impls::UnImplementUniques<Test>;
-	type Convertor = ();
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
 	type AuthorityId = OctopusId;
 	type AppCrypto = OctopusAppCrypto;
-	type AssetIdByTokenId = OctopusAppchain;
 	type Event = Event;
 	type Call = Call;
-	type PalletId = OctopusAppchainPalletId;
+	type BridgeInterface = OctopusBridge;
 	type LposInterface = OctopusLpos;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type Currency = Balances;
-	type Assets = Assets;
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
+	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
+}
+
+impl pallet_octopus_bridge::Config for Test {
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Convertor = ();
 	type WeightInfo = ();
 }
 
@@ -281,6 +293,7 @@ impl Config for Test {
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
 	type WeightInfo = ();
+	type MaxBondedEras = MaxBondedEras;
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};
@@ -324,6 +337,8 @@ pub fn new_tester() -> sp_io::TestExternalities {
 		octopus_appchain: pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
+		},
+		octopus_bridge: pallet_octopus_bridge::GenesisConfig {
 			premined_amount: 1024 * DOLLARS,
 			asset_id_by_token_id: vec![("usdc.testnet".to_string(), 2)],
 		},

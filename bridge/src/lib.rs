@@ -48,7 +48,7 @@ use weights::WeightInfo;
 pub use pallet::*;
 
 mod fungible;
-mod impls;
+pub mod impls;
 mod migration;
 mod near;
 mod nep141;

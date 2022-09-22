@@ -44,6 +44,7 @@ pallet-uniques = { git = "https://github.com/paritytech/substrate.git", branch =
 
 pallet-octopus-appchain = { path = "../appchain" }
 pallet-octopus-upward-messages = { path = "../upward-messages" }
+pallet-octopus-bridge = {path = "../bridge"}
 
 [features]
 default = ["std"]
