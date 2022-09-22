@@ -16,7 +16,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
-	PalletId, BoundedVec,
+	BoundedVec, PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
 use pallet_octopus_support::{
@@ -218,7 +218,6 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 
 		type MaxBondedEras: Get<u32>;
-
 	}
 
 	#[pallet::type_value]
@@ -299,7 +298,7 @@ pub mod pallet {
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
 	pub(crate) type BondedEras<T: Config> =
-		StorageValue<_, BoundedVec<(EraIndex, SessionIndex) , T::MaxBondedEras>, ValueQuery>;
+		StorageValue<_, BoundedVec<(EraIndex, SessionIndex), T::MaxBondedEras>, ValueQuery>;
 
 	/// The last planned session scheduled by the session pallet.
 	///
@@ -412,7 +411,7 @@ pub mod pallet {
 		/// There are not claimed rewards for this validator.
 		NoClaimedRewards,
 		/// Amount overflow.
-		AmountOverflow, 
+		AmountOverflow,
 		// BondedEras Limit
 		BondedErasExceededLimit,
 	}
@@ -592,9 +591,10 @@ impl<T: Config> Pallet<T> {
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::<T>::mutate(|bonded| {
-			bonded.try_push((active_era, start_session))
-				.expect("Exceed the limit of BondedEras."); 
-			
+			bonded
+				.try_push((active_era, start_session))
+				.expect("Exceed the limit of BondedEras.");
+
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;
 
@@ -606,7 +606,6 @@ impl<T: Config> Pallet<T> {
 					T::SessionInterface::prune_historical_up_to(first_session);
 				}
 			}
-			
 		});
 	}
 

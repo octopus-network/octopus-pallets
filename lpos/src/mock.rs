@@ -253,7 +253,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
-	type MaxValidators = MaxValidators ;
+	type MaxValidators = MaxValidators;
 }
 
 impl pallet_octopus_bridge::Config for Test {
