@@ -77,6 +77,7 @@ construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Bridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		ChainBridgeTransfer: pallet_chainbridge_transfer::{Pallet, Call, Storage, Event<T>},
+		Erc721: pallet_chainbridge_erc721::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -138,6 +139,13 @@ impl pallet_assets::Config<pallet_assets::Instance1> for Test {
 
 parameter_types! {
 	pub NativeTokenId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"DAV")); // native token id
+	pub HashId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"hash"));
+	pub Erc721Id: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"NFT"));
+}
+
+impl pallet_chainbridge_erc721::Config for Test {
+	type Event = Event;
+	type Identifier = Erc721Id;
 }
 
 pub type AssetBalance = u128;
@@ -152,6 +160,8 @@ impl Config for Test {
 	type AssetBalance = AssetBalance;
 	type Assets = Assets;
 	type AssetIdByName = ChainBridgeTransfer;
+	type HashId = HashId;
+	type Erc721Id = Erc721Id;
 }
 
 pub const RELAYER_A: AccountId32 = AccountId32::new([2u8; 32]);

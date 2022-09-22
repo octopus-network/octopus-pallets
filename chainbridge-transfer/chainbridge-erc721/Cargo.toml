@@ -1,5 +1,5 @@
 [package]
-name = "pallet-chainbridge-transfer"
+name = "pallet-chainbridge-erc721"
 version = "0.1.0"
 edition = "2021"
 authors = ["Parity Technologies <admin@parity.io>", "Octopus Network <hi@oct.network>"]
@@ -22,17 +22,13 @@ frame-system = { git = "https://github.com/paritytech/substrate.git", branch = "
 sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
 sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
-sp-arithmetic = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
 sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28", default-features = false }
-
-pallet-chainbridge = { path = "../chainbridge", default-features = false }
-pallet-chainbridge-erc721 = {path = "./chainbridge-erc721", default-features = false}
 
 [dev-dependencies]
 sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
 sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
 pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
-pallet-assets = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.28" }
+pallet-chainbridge = { path = "../../chainbridge" }
 
 [features]
 default = ["std"]
@@ -46,7 +42,5 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"pallet-chainbridge/std",
-	"pallet-chainbridge-erc721/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

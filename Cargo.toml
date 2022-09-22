@@ -9,4 +9,5 @@ members = [
 	"upward-messages",
 	"chainbridge",
     "chainbridge-transfer",
+	"chainbridge-transfer/chainbridge-erc721",
 ]

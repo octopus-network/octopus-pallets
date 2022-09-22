@@ -2,29 +2,62 @@
 
 use super::{
 	mock::{
-		assert_events, expect_event, new_test_ext, Assets, Balances, Bridge, Call,
-		ChainBridgeTransfer, Event, NativeTokenId, Origin, ProposalLifetime,
+		assert_events, expect_event, new_test_ext, Assets, Balances, Bridge, Call, HashId, Erc721, Erc721Id,
+		ChainBridgeTransfer, Event, NativeTokenId, Origin, ProposalLifetime, Test,
 		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
 };
-use frame_support::assert_ok;
+use frame_support::{assert_ok, assert_noop, dispatch::DispatchError};
 use pallet_assets as assets;
 
 use crate::{
-	mock::{AccountId, Balance, DOLLARS}
+	mock::{AccountId, Balance, DOLLARS, event_exists},
+	Event as ChainBridgeTransferEvent,
 };
-use sp_core::crypto::AccountId32;
+use sp_core::{crypto::AccountId32, H256, blake2_256};
 use sp_keyring::AccountKeyring;
+use pallet_chainbridge_erc721::Erc721Token;
 
 const TEST_THRESHOLD: u32 = 2;
 
+
+
+fn make_remark_proposal(hash: H256) -> Call {
+	let resource_id = HashId::get();
+	Call::ChainBridgeTransfer(crate::Call::remark { hash, r_id: resource_id })
+}
 
 fn make_transfer_proposal(resource_id: ResourceId, to: AccountId32, amount: u64) -> Call {
 	Call::ChainBridgeTransfer(crate::Call::transfer {
 		to,
 		amount: amount.into(),
 		r_id: resource_id,
+	})
+}
+
+#[test]
+fn transfer_hash() {
+	new_test_ext().execute_with(|| {
+		let dest_chain = 0;
+		let resource_id = HashId::get();
+		let hash: H256 = "ABC".using_encoded(blake2_256).into();
+
+		assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
+
+		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
+		assert_ok!(ChainBridgeTransfer::transfer_hash(
+			Origin::signed(AccountId32::new([1u8; 32])),
+			hash.clone(),
+			dest_chain,
+		));
+
+		expect_event(bridge::Event::GenericTransfer(
+			dest_chain,
+			1,
+			resource_id,
+			hash.as_ref().to_vec(),
+		));
 	})
 }
 
@@ -51,6 +84,95 @@ fn transfer_native() {
 			amount.into(),
 			recipient,
 		));
+	})
+}
+
+#[test]
+fn transfer_erc721() {
+	new_test_ext().execute_with(|| {
+		let dest_chain = 0;
+		let resource_id = Erc721Id::get();
+		let token_id: U256 = U256::from(100);
+		let token_id_slice: &mut [u8] = &mut [0; 32];
+		token_id.to_big_endian(token_id_slice);
+		let metadata: Vec<u8> = vec![1, 2, 3, 4];
+		let recipient = vec![99];
+
+		// Create a token
+		assert_ok!(Erc721::mint(Origin::root(), RELAYER_A, token_id, metadata.clone()));
+		assert_eq!(
+			Erc721::tokens(token_id).unwrap(),
+			Erc721Token { id: token_id, metadata: metadata.clone() }
+		);
+
+		// Whitelist destination and transfer
+		assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
+		assert_ok!(ChainBridgeTransfer::transfer_erc721(
+			Origin::signed(RELAYER_A),
+			recipient.clone(),
+			token_id,
+			dest_chain,
+		));
+
+		expect_event(bridge::Event::NonFungibleTransfer(
+			dest_chain,
+			1,
+			resource_id,
+			token_id_slice.to_vec(),
+			recipient.clone(),
+			metadata,
+		));
+
+		// Ensure token no longer exists
+		assert_eq!(Erc721::tokens(token_id), None);
+
+		// Transfer should fail as token doesn't exist
+		assert_noop!(
+			ChainBridgeTransfer::transfer_erc721(
+				Origin::signed(RELAYER_A),
+				recipient.clone(),
+				token_id,
+				dest_chain,
+			),
+			Error::<Test>::InvalidTransfer
+		);
+	})
+}
+
+#[test]
+fn mint_erc721() {
+	new_test_ext().execute_with(|| {
+		let token_id = U256::from(99);
+		let recipient = RELAYER_A;
+		let metadata = vec![1, 1, 1, 1];
+		let bridge_id: AccountId32 = Bridge::account_id();
+		let resource_id = HashId::get();
+		// Token doesn't yet exist
+		assert_eq!(Erc721::tokens(token_id), None);
+		// Mint
+		assert_ok!(ChainBridgeTransfer::mint_erc721(
+			Origin::signed(bridge_id.clone()),
+			recipient.clone(),
+			token_id,
+			metadata.clone(),
+			resource_id,
+		));
+		// Ensure token exists
+		assert_eq!(
+			Erc721::tokens(token_id).unwrap(),
+			Erc721Token { id: token_id, metadata: metadata.clone() }
+		);
+		// Cannot mint same token
+		assert_noop!(
+			ChainBridgeTransfer::mint_erc721(
+				Origin::signed(bridge_id),
+				recipient,
+				token_id,
+				metadata.clone(),
+				resource_id,
+			),
+			erc721::Error::<Test>::TokenAlreadyExists
+		);
 	})
 }
 
@@ -131,6 +253,58 @@ fn transfer() {
 		})]);
 	})
 }
+
+#[test]
+fn execute_remark() {
+	new_test_ext().execute_with(|| {
+		let hash: H256 = "ABC".using_encoded(blake2_256).into();
+		let proposal = make_remark_proposal(hash.clone());
+		let prop_id = 1;
+		let src_id = 1;
+		let r_id = bridge::derive_resource_id(src_id, b"hash");
+		let resource = b"Example.remark".to_vec();
+
+		assert_ok!(Bridge::set_threshold(Origin::root(), TEST_THRESHOLD,));
+		assert_ok!(Bridge::add_relayer(Origin::root(), RELAYER_A));
+		assert_ok!(Bridge::add_relayer(Origin::root(), RELAYER_B));
+		assert_ok!(Bridge::whitelist_chain(Origin::root(), src_id));
+		assert_ok!(Bridge::set_resource(Origin::root(), r_id, resource));
+
+		assert_ok!(Bridge::acknowledge_proposal(
+			Origin::signed(RELAYER_A),
+			prop_id,
+			src_id,
+			r_id,
+			Box::new(proposal.clone())
+		));
+		assert_ok!(Bridge::acknowledge_proposal(
+			Origin::signed(RELAYER_B),
+			prop_id,
+			src_id,
+			r_id,
+			Box::new(proposal.clone())
+		));
+
+		event_exists(ChainBridgeTransferEvent::Remark(hash));
+	})
+}
+
+#[test]
+fn execute_remark_bad_origin() {
+	new_test_ext().execute_with(|| {
+		let hash: H256 = "ABC".using_encoded(blake2_256).into();
+		let resource_id = HashId::get();
+		assert_ok!(ChainBridgeTransfer::remark(Origin::signed(Bridge::account_id()), hash, resource_id));
+		// Don't allow any signed origin except from bridge addr
+		assert_noop!(
+			ChainBridgeTransfer::remark(Origin::signed(RELAYER_A), hash, resource_id),
+			DispatchError::BadOrigin
+		);
+		// Don't allow root calls
+		assert_noop!(ChainBridgeTransfer::remark(Origin::root(), hash, resource_id), DispatchError::BadOrigin);
+	})
+}
+
 
 #[test]
 fn create_sucessful_transfer_proposal_non_native_token() {

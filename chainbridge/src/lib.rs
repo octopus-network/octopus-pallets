@@ -18,8 +18,7 @@ pub use pallet::*;
 
 #[cfg(test)]
 mod tests;
-
-mod benchmarking;
+#[cfg(test)]
 mod mock;
 
 const DEFAULT_RELAYER_THRESHOLD: u32 = 1;
@@ -188,10 +187,6 @@ pub mod pallet {
 		ProposalVotes<T::AccountId, T::BlockNumber>,
 	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn bridge_fee)]
-	pub type BridgeFee<T: Config> = StorageMap<_, Twox64Concat, ChainId, u128>;
-
 	/// Utilized by the bridge software to map resource IDs to actual methods
 	#[pallet::storage]
 	#[pallet::getter(fn resources)]
@@ -228,10 +223,6 @@ pub mod pallet {
 		ProposalSucceeded(ChainId, DepositNonce),
 		/// Execution of call failed \[bridge_chain_id, nonce\]
 		ProposalFailed(ChainId, DepositNonce),
-		FeeUpdated {
-			dest_id: ChainId,
-			fee: u128,
-		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -267,8 +258,6 @@ pub mod pallet {
 		ProposalAlreadyComplete,
 		/// Lifetime of proposal has been exceeded
 		ProposalExpired,
-		///
-		InvalidFeeOption,
 	}
 
 	#[pallet::hooks]
