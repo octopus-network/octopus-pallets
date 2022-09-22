@@ -363,7 +363,6 @@ pub fn new_tester() -> sp_io::TestExternalities {
 	let config: pallet_session::GenesisConfig<Test> = pallet_session::GenesisConfig { keys };
 	config.assimilate_storage(&mut storage).unwrap();
 
-
 	let config: pallet_octopus_appchain::GenesisConfig<Test> =
 		pallet_octopus_appchain::GenesisConfig {
 			anchor_contract: "oct-test.testnet".to_string(),

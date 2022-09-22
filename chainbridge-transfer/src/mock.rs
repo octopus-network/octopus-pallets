@@ -158,7 +158,7 @@ impl Config for Test {
 	type NativeTokenId = NativeTokenId;
 	type AssetId = AssetId;
 	type AssetBalance = AssetBalance;
-	type Assets = Assets;
+	type Fungibles = Assets;
 	type AssetIdByName = ChainBridgeTransfer;
 	type HashId = HashId;
 	type Erc721Id = Erc721Id;

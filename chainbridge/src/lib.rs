@@ -17,9 +17,9 @@ use sp_std::prelude::*;
 pub use pallet::*;
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
 
 const DEFAULT_RELAYER_THRESHOLD: u32 = 1;
 const MODULE_ID: PalletId = PalletId(*b"oc/bridg");
@@ -621,13 +621,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(Self::chain_whitelisted(dest_id), <Error<T>>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
-			Self::deposit_event(Event::FungibleTransfer(
-				dest_id,
-				nonce,
-				resource_id,
-				amount,
-				to,
-			));
+			Self::deposit_event(Event::FungibleTransfer(dest_id, nonce, resource_id, amount, to));
 
 			Ok(().into())
 		}

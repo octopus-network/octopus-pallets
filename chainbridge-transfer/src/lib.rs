@@ -7,14 +7,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod fungible;
+pub mod token;
 mod traits;
 
-use pallet_chainbridge_erc721 as erc721;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, Get, StorageVersion},
 };
 use frame_system::pallet_prelude::*;
+use pallet_chainbridge_erc721 as erc721;
 
 use sp_runtime::traits::SaturatedConversion;
 
@@ -25,9 +27,9 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 use pallet_chainbridge as bridge;
+use scale_info::prelude::string::String;
 use sp_core::U256;
 use sp_std::{convert::From, prelude::*};
-use scale_info::prelude::string::String;
 
 use crate::traits::AssetIdResourceIdProvider;
 pub use pallet::*;
@@ -44,9 +46,11 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 pub mod pallet {
 	use super::*;
 	use crate::traits::AssetIdResourceIdProvider;
-	use frame_support::traits::fungibles::Mutate;
-	use frame_support::traits::tokens::{AssetId, Balance as AssetBalance};
-	
+	use frame_support::traits::{
+		fungibles::Mutate,
+		tokens::{AssetId, Balance as AssetBalance},
+	};
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
@@ -65,7 +69,6 @@ pub mod pallet {
 		/// The currency mechanism.
 		type Currency: Currency<Self::AccountId>;
 
-
 		/// Identifier for the class of asset.
 		type AssetId: AssetId + MaybeSerializeDeserialize;
 
@@ -73,14 +76,20 @@ pub mod pallet {
 		type AssetBalance: AssetBalance + From<u128> + Into<u128>;
 
 		/// Expose customizable associated type of asset transfer, lock and unlock
-		type Assets: Mutate<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>;
+		type Fungibles: Mutate<
+			Self::AccountId,
+			AssetId = Self::AssetId,
+			Balance = Self::AssetBalance,
+		>;
 
 		/// Map of cross-chain asset ID & name
 		type AssetIdByName: AssetIdResourceIdProvider<Self::AssetId>;
 
 		/// Ids can be defined by the runtime and passed in, perhaps from blake2b_128 hashes.
 		type HashId: Get<ResourceId>;
+
 		type NativeTokenId: Get<ResourceId>;
+
 		type Erc721Id: Get<ResourceId>;
 	}
 
@@ -187,8 +196,6 @@ pub mod pallet {
 			<bridge::Pallet<T>>::transfer_generic(dest_id, resource_id, metadata)
 		}
 
-		
-
 		#[pallet::weight(195_000_0000)]
 		pub fn transfer_native(
 			origin: OriginFor<T>,
@@ -217,41 +224,8 @@ pub mod pallet {
 			// check recipient address is verify
 
 			match r_id == T::NativeTokenId::get() {
-				true => {
-					log::info!("transfer native token");
-					let bridge_id = <bridge::Pallet<T>>::account_id();
-					<T as Config>::Currency::transfer(
-						&source,
-						&bridge_id,
-						amount.into(),
-						AllowDeath,
-					)?;
-					log::info!("transfer native token successful");
-
-					<bridge::Pallet<T>>::transfer_fungible(
-						dest_id,
-						r_id,
-						recipient.clone(),
-						U256::from(amount.saturated_into::<u128>()),
-					)?;
-				},
-				false => {
-					log::info!("transfer non-native_token: burn assets");
-					let amount = amount.saturated_into::<u128>();
-					let token_id = Self::try_get_asset_id(r_id)?;
-					<T::Assets as Mutate<T::AccountId>>::burn_from(
-						token_id,
-						&source,
-						amount.into(),
-					)?;
-					log::info!("transfer non-native_token: burn successful!");
-					<bridge::Pallet<T>>::transfer_fungible(
-						dest_id,
-						r_id,
-						recipient.clone(),
-						U256::from(amount.saturated_into::<u128>()),
-					)?;
-				},
+				true => Self::do_lock(source, amount, r_id, recipient, dest_id)?,
+				false => Self::do_burn_assets(source, amount, r_id, recipient, dest_id)?,
 			}
 
 			Ok(())
@@ -303,15 +277,9 @@ pub mod pallet {
 
 			// this do native transfer
 			match r_id == T::NativeTokenId::get() {
-				true => {
-					<T as Config>::Currency::transfer(&source, &to, amount.into(), AllowDeath)?;
-				},
+				true => Self::do_unlock(source, to, amount.into())?,
 				false => {
-					log::info!("mint assets");
-					let amount = amount.saturated_into::<u128>();
-					let token_id = Self::try_get_asset_id(r_id)?;
-					<T::Assets as Mutate<T::AccountId>>::mint_into(token_id, &to, amount.into())?;
-					log::info!("mint assets successful!");
+					Self::do_mint_assets(to, amount, r_id)?;
 				},
 			}
 			Ok(())
@@ -338,7 +306,6 @@ pub mod pallet {
 			<erc721::Pallet<T>>::mint_token(recipient, id, metadata)?;
 			Ok(())
 		}
-
 	}
 }
 
@@ -354,7 +321,7 @@ impl<T: Config> AssetIdResourceIdProvider<T::AssetId> for Pallet<T> {
 	}
 
 	fn try_get_asset_name(asset_id: T::AssetId) -> Result<ResourceId, Self::Err> {
-		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1.0 == asset_id).map(|p| p.0);
+		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1 .0 == asset_id).map(|p| p.0);
 		match token_id {
 			Some(id) => Ok(id),
 			_ => Err(<Error<T>>::WrongAssetId),

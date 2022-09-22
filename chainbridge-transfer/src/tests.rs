@@ -2,26 +2,24 @@
 
 use super::{
 	mock::{
-		assert_events, expect_event, new_test_ext, Assets, Balances, Bridge, Call, HashId, Erc721, Erc721Id,
-		ChainBridgeTransfer, Event, NativeTokenId, Origin, ProposalLifetime, Test,
-		ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
+		assert_events, expect_event, new_test_ext, Assets, Balances, Bridge, Call,
+		ChainBridgeTransfer, Erc721, Erc721Id, Event, HashId, NativeTokenId, Origin,
+		ProposalLifetime, Test, ENDOWED_BALANCE, RELAYER_A, RELAYER_B, RELAYER_C,
 	},
 	*,
 };
-use frame_support::{assert_ok, assert_noop, dispatch::DispatchError};
+use frame_support::{assert_noop, assert_ok, dispatch::DispatchError};
 use pallet_assets as assets;
 
 use crate::{
-	mock::{AccountId, Balance, DOLLARS, event_exists},
+	mock::{event_exists, AccountId, Balance, DOLLARS},
 	Event as ChainBridgeTransferEvent,
 };
-use sp_core::{crypto::AccountId32, H256, blake2_256};
-use sp_keyring::AccountKeyring;
 use pallet_chainbridge_erc721::Erc721Token;
+use sp_core::{blake2_256, crypto::AccountId32, H256};
+use sp_keyring::AccountKeyring;
 
 const TEST_THRESHOLD: u32 = 2;
-
-
 
 fn make_remark_proposal(hash: H256) -> Call {
 	let resource_id = HashId::get();
@@ -185,7 +183,12 @@ fn transfer_non_native() {
 		let ferdie: AccountId = AccountKeyring::Ferdie.into();
 		let recipient = vec![99];
 		// set token_id
-		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0, b"DENOM".to_vec()));
+		assert_ok!(ChainBridgeTransfer::set_token_id(
+			Origin::root(),
+			resource_id.clone(),
+			0,
+			b"DENOM".to_vec()
+		));
 
 		// force_create Assets token_id 0
 		assert_ok!(Assets::force_create(
@@ -294,17 +297,23 @@ fn execute_remark_bad_origin() {
 	new_test_ext().execute_with(|| {
 		let hash: H256 = "ABC".using_encoded(blake2_256).into();
 		let resource_id = HashId::get();
-		assert_ok!(ChainBridgeTransfer::remark(Origin::signed(Bridge::account_id()), hash, resource_id));
+		assert_ok!(ChainBridgeTransfer::remark(
+			Origin::signed(Bridge::account_id()),
+			hash,
+			resource_id
+		));
 		// Don't allow any signed origin except from bridge addr
 		assert_noop!(
 			ChainBridgeTransfer::remark(Origin::signed(RELAYER_A), hash, resource_id),
 			DispatchError::BadOrigin
 		);
 		// Don't allow root calls
-		assert_noop!(ChainBridgeTransfer::remark(Origin::root(), hash, resource_id), DispatchError::BadOrigin);
+		assert_noop!(
+			ChainBridgeTransfer::remark(Origin::root(), hash, resource_id),
+			DispatchError::BadOrigin
+		);
 	})
 }
-
 
 #[test]
 fn create_sucessful_transfer_proposal_non_native_token() {
@@ -318,7 +327,12 @@ fn create_sucessful_transfer_proposal_non_native_token() {
 		let proposal = make_transfer_proposal(resource_id, RELAYER_A, 10);
 		let ferdie: AccountId = AccountKeyring::Ferdie.into();
 		// set token_id
-		assert_ok!(ChainBridgeTransfer::set_token_id(Origin::root(), resource_id.clone(), 0, b"DENOM".to_vec()));
+		assert_ok!(ChainBridgeTransfer::set_token_id(
+			Origin::root(),
+			resource_id.clone(),
+			0,
+			b"DENOM".to_vec()
+		));
 
 		// force_create Assets token_id 0
 		assert_ok!(Assets::force_create(

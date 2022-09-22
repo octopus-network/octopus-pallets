@@ -203,7 +203,6 @@ impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	type GenericPublic = sp_core::sr25519::Public;
 }
 
-
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
 	type UpwardMessagesLimit = UpwardMessagesLimit;
@@ -230,7 +229,6 @@ construct_runtime!(
 	}
 );
 
-
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
 	   pub const GracePeriod: u32 = 10;
@@ -241,7 +239,6 @@ parameter_types! {
 
 pub type AssetId = u32;
 pub type AssetBalance = u128;
-
 
 impl pallet_octopus_bridge::Config for Test {
 	type Event = Event;
