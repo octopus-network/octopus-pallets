@@ -130,7 +130,7 @@ pub mod pallet {
 		pub fn burn(origin: OriginFor<T>, id: TokenId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let owner = Self::owner_of(id).ok_or(Error::<T>::TokenIdDoesNotExist)?;
+			let owner = Self::owner_of(id).ok_or(<Error<T>>::TokenIdDoesNotExist)?;
 
 			Self::burn_token(owner, id)?;
 
@@ -141,16 +141,16 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Creates a new token in the system.
 		pub fn mint_token(owner: T::AccountId, id: TokenId, metadata: Vec<u8>) -> DispatchResult {
-			ensure!(!Tokens::<T>::contains_key(id), Error::<T>::TokenAlreadyExists);
+			ensure!(!Tokens::<T>::contains_key(id), <Error<T>>::TokenAlreadyExists);
 
 			let new_token = Erc721Token { id, metadata };
 
-			Tokens::<T>::insert(&id, new_token);
-			TokenOwner::<T>::insert(&id, owner.clone());
-			let new_total = TokenCount::<T>::get().saturating_add(U256::one());
-			TokenCount::<T>::put(new_total);
+			<Tokens<T>>::insert(&id, new_token);
+			<TokenOwner<T>>::insert(&id, owner.clone());
+			let new_total = <TokenCount<T>>::get().saturating_add(U256::one());
+			<TokenCount<T>>::put(new_total);
 
-			Self::deposit_event(Event::<T>::Minted(owner, id));
+			Self::deposit_event(Event::Minted(owner, id));
 
 			Ok(().into())
 		}
@@ -159,26 +159,26 @@ pub mod pallet {
 		pub fn transfer_from(from: T::AccountId, to: T::AccountId, id: TokenId) -> DispatchResult {
 			// Check from is owner and token exists
 			let owner = Self::owner_of(id).ok_or(Error::<T>::TokenIdDoesNotExist)?;
-			ensure!(owner == from, Error::<T>::NotOwner);
+			ensure!(owner == from, <Error<T>>::NotOwner);
 			// Update owner
-			TokenOwner::<T>::insert(&id, to.clone());
+			<TokenOwner<T>>::insert(&id, to.clone());
 
-			Self::deposit_event(Event::<T>::Transferred(from, to, id));
+			Self::deposit_event(Event::Transferred(from, to, id));
 
 			Ok(().into())
 		}
 
 		/// Deletes a token from the system.
 		pub fn burn_token(from: T::AccountId, id: TokenId) -> DispatchResult {
-			let owner = Self::owner_of(id).ok_or(Error::<T>::TokenIdDoesNotExist)?;
-			ensure!(owner == from, Error::<T>::NotOwner);
+			let owner = Self::owner_of(id).ok_or(<Error<T>>::TokenIdDoesNotExist)?;
+			ensure!(owner == from, <Error<T>>::NotOwner);
 
-			Tokens::<T>::remove(&id);
-			TokenOwner::<T>::remove(&id);
-			let new_total = TokenCount::<T>::get().saturating_sub(U256::one());
-			TokenCount::<T>::put(new_total);
+			<Tokens<T>>::remove(&id);
+			<TokenOwner<T>>::remove(&id);
+			let new_total = <TokenCount<T>>::get().saturating_sub(U256::one());
+			<TokenCount<T>>::put(new_total);
 
-			Self::deposit_event(Event::<T>::Burned(id));
+			Self::deposit_event(Event::Burned(id));
 
 			Ok(().into())
 		}

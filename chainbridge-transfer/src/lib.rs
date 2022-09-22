@@ -153,9 +153,9 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			// verify token name is valid
-			String::from_utf8(token_name.clone()).map_err(|_| Error::<T>::InvalidTokenName)?;
+			String::from_utf8(token_name.clone()).map_err(|_| <Error<T>>::InvalidTokenName)?;
 
-			ResourceIdOfAssetId::<T>::insert(resource_id, (token_id, token_name));
+			<ResourceIdOfAssetId<T>>::insert(resource_id, (token_id, token_name));
 
 			Ok(())
 		}
@@ -164,7 +164,7 @@ pub mod pallet {
 		pub fn remove_token_id(origin: OriginFor<T>, resource_id: ResourceId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			ResourceIdOfAssetId::<T>::remove(resource_id);
+			<ResourceIdOfAssetId<T>>::remove(resource_id);
 
 			Ok(())
 		}
@@ -212,7 +212,7 @@ pub mod pallet {
 			dest_id: bridge::ChainId,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
-			ensure!(<bridge::Pallet::<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
+			ensure!(<bridge::Pallet<T>>::chain_whitelisted(dest_id), <Error<T>>::InvalidTransfer);
 			// TODO
 			// check recipient address is verify
 
@@ -321,7 +321,7 @@ pub mod pallet {
 		#[pallet::weight(195_000_0000)]
 		pub fn remark(origin: OriginFor<T>, hash: T::Hash, _r_id: ResourceId) -> DispatchResult {
 			T::BridgeOrigin::ensure_origin(origin)?;
-			Self::deposit_event(Event::<T>::Remark(hash));
+			Self::deposit_event(Event::Remark(hash));
 			Ok(())
 		}
 
@@ -349,7 +349,7 @@ impl<T: Config> AssetIdResourceIdProvider<T::AssetId> for Pallet<T> {
 		let asset_id = <ResourceIdOfAssetId<T>>::try_get(resource_id);
 		match asset_id {
 			Ok(id) => Ok(id.0),
-			_ => Err(Error::<T>::InvalidTokenId),
+			_ => Err(<Error<T>>::InvalidTokenId),
 		}
 	}
 
@@ -357,7 +357,7 @@ impl<T: Config> AssetIdResourceIdProvider<T::AssetId> for Pallet<T> {
 		let token_id = <ResourceIdOfAssetId<T>>::iter().find(|p| p.1.0 == asset_id).map(|p| p.0);
 		match token_id {
 			Some(id) => Ok(id),
-			_ => Err(Error::<T>::WrongAssetId),
+			_ => Err(<Error<T>>::WrongAssetId),
 		}
 	}
 }

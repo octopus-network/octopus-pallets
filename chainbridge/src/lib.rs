@@ -448,7 +448,7 @@ pub mod pallet {
 		/// Increments the deposit nonce for the specified chain ID
 		fn bump_nonce(id: ChainId) -> DepositNonce {
 			let nonce = Self::chains(id).unwrap_or_default() + 1;
-			ChainNonces::<T>::insert(id, nonce);
+			<ChainNonces<T>>::insert(id, nonce);
 			nonce
 		}
 
@@ -456,50 +456,50 @@ pub mod pallet {
 
 		/// Set a new voting threshold
 		pub fn set_relayer_threshold(threshold: u32) -> DispatchResult {
-			ensure!(threshold > 0, Error::<T>::InvalidThreshold);
-			RelayerThreshold::<T>::put(threshold);
-			Self::deposit_event(Event::<T>::RelayerThresholdChanged(threshold));
+			ensure!(threshold > 0, <Error<T>>::InvalidThreshold);
+			<RelayerThreshold<T>>::put(threshold);
+			Self::deposit_event(Event::RelayerThresholdChanged(threshold));
 			Ok(().into())
 		}
 
 		/// Register a method for a resource Id, enabling associated transfers
 		pub fn register_resource(id: ResourceId, method: Vec<u8>) -> DispatchResult {
-			Resources::<T>::insert(id, method);
+			<Resources<T>>::insert(id, method);
 			Ok(().into())
 		}
 
 		/// Removes a resource ID, disabling associated transfer
 		pub fn unregister_resource(id: ResourceId) -> DispatchResult {
-			Resources::<T>::remove(id);
+			<Resources<T>>::remove(id);
 			Ok(().into())
 		}
 
 		/// Whitelist a chain ID for transfer
 		pub fn whitelist(id: ChainId) -> DispatchResult {
 			// Cannot whitelist this chain
-			ensure!(id != T::ChainId::get(), Error::<T>::InvalidChainId);
+			ensure!(id != T::ChainId::get(), <Error<T>>::InvalidChainId);
 			// Cannot whitelist with an existing entry
-			ensure!(!Self::chain_whitelisted(id), Error::<T>::ChainAlreadyWhitelisted);
-			ChainNonces::<T>::insert(&id, 0);
-			Self::deposit_event(Event::<T>::ChainWhitelisted(id));
+			ensure!(!Self::chain_whitelisted(id), <Error<T>>::ChainAlreadyWhitelisted);
+			<ChainNonces<T>>::insert(&id, 0);
+			Self::deposit_event(Event::ChainWhitelisted(id));
 			Ok(().into())
 		}
 
 		/// Adds a new relayer to the set
 		pub fn register_relayer(relayer: T::AccountId) -> DispatchResult {
-			ensure!(!Self::is_relayer(&relayer), Error::<T>::RelayerAlreadyExists);
-			Relayers::<T>::insert(&relayer, true);
-			RelayerCount::<T>::mutate(|i| *i += 1);
-			Self::deposit_event(Event::<T>::RelayerAdded(relayer));
+			ensure!(!Self::is_relayer(&relayer), <Error<T>>::RelayerAlreadyExists);
+			<Relayers<T>>::insert(&relayer, true);
+			<RelayerCount<T>>::mutate(|i| *i += 1);
+			Self::deposit_event(Event::RelayerAdded(relayer));
 			Ok(().into())
 		}
 
 		/// Removes a relayer from the set
 		pub fn unregister_relayer(relayer: T::AccountId) -> DispatchResult {
-			ensure!(Self::is_relayer(&relayer), Error::<T>::RelayerInvalid);
-			Relayers::<T>::remove(&relayer);
-			RelayerCount::<T>::mutate(|i| *i -= 1);
-			Self::deposit_event(Event::<T>::RelayerRemoved(relayer));
+			ensure!(Self::is_relayer(&relayer), <Error<T>>::RelayerInvalid);
+			<Relayers<T>>::remove(&relayer);
+			<RelayerCount<T>>::mutate(|i| *i -= 1);
+			Self::deposit_event(Event::RelayerRemoved(relayer));
 			Ok(().into())
 		}
 
@@ -513,8 +513,8 @@ pub mod pallet {
 			prop: Box<T::Proposal>,
 			in_favour: bool,
 		) -> DispatchResult {
-			let now = frame_system::Pallet::<T>::block_number();
-			let mut votes = match Votes::<T>::get(src_id, (nonce, prop.clone())) {
+			let now = <frame_system::Pallet<T>>::block_number();
+			let mut votes = match <Votes<T>>::get(src_id, (nonce, prop.clone())) {
 				Some(v) => v,
 				None => {
 					let mut v = ProposalVotes::default();
@@ -524,19 +524,19 @@ pub mod pallet {
 			};
 
 			// Ensure the proposal isn't complete and relayer hasn't already voted
-			ensure!(!votes.is_complete(), Error::<T>::ProposalAlreadyComplete);
-			ensure!(!votes.is_expired(now), Error::<T>::ProposalExpired);
-			ensure!(!votes.hash_voted(&who), Error::<T>::RelayerAlreadyVoted);
+			ensure!(!votes.is_complete(), <Error<T>>::ProposalAlreadyComplete);
+			ensure!(!votes.is_expired(now), <Error<T>>::ProposalExpired);
+			ensure!(!votes.hash_voted(&who), <Error<T>>::RelayerAlreadyVoted);
 
 			if in_favour {
 				votes.votes_for.push(who.clone());
-				Self::deposit_event(Event::<T>::VoteFor(src_id, nonce, who.clone()));
+				Self::deposit_event(Event::VoteFor(src_id, nonce, who.clone()));
 			} else {
 				votes.votes_against.push(who.clone());
-				Self::deposit_event(Event::<T>::VoteAgainst(src_id, nonce, who.clone()));
+				Self::deposit_event(Event::VoteAgainst(src_id, nonce, who.clone()));
 			}
 
-			Votes::<T>::insert(src_id, (nonce, prop.clone()), votes.clone());
+			<Votes<T>>::insert(src_id, (nonce, prop.clone()), votes.clone());
 
 			Ok(().into())
 		}
@@ -547,14 +547,14 @@ pub mod pallet {
 			src_id: ChainId,
 			prop: Box<T::Proposal>,
 		) -> DispatchResult {
-			if let Some(mut votes) = Votes::<T>::get(src_id, (nonce, prop.clone())) {
-				let now = frame_system::Pallet::<T>::block_number();
-				ensure!(!votes.is_complete(), Error::<T>::ProposalAlreadyComplete);
-				ensure!(!votes.is_expired(now), Error::<T>::ProposalExpired);
+			if let Some(mut votes) = <Votes<T>>::get(src_id, (nonce, prop.clone())) {
+				let now = <frame_system::Pallet<T>>::block_number();
+				ensure!(!votes.is_complete(), <Error<T>>::ProposalAlreadyComplete);
+				ensure!(!votes.is_expired(now), <Error<T>>::ProposalExpired);
 
 				let status =
-					votes.try_to_complete(RelayerThreshold::<T>::get(), RelayerCount::<T>::get());
-				Votes::<T>::insert(src_id, (nonce, prop.clone()), votes.clone());
+					votes.try_to_complete(<RelayerThreshold<T>>::get(), <RelayerCount<T>>::get());
+				<Votes<T>>::insert(src_id, (nonce, prop.clone()), votes.clone());
 
 				match status {
 					ProposalStatus::Approved => Self::finalize_execution(src_id, nonce, prop),
@@ -562,7 +562,7 @@ pub mod pallet {
 					_ => Ok(().into()),
 				}
 			} else {
-				Err(Error::<T>::ProposalDoesNotExist.into())
+				Err(<Error<T>>::ProposalDoesNotExist.into())
 			}
 		}
 
@@ -595,19 +595,19 @@ pub mod pallet {
 			nonce: DepositNonce,
 			call: Box<T::Proposal>,
 		) -> DispatchResult {
-			Self::deposit_event(Event::<T>::ProposalApproved(src_id, nonce));
+			Self::deposit_event(<Event<T>>::ProposalApproved(src_id, nonce));
 
 			call.dispatch(frame_system::RawOrigin::Signed(Self::account_id()).into())
 				.map(|_| ())
 				.map_err(|e| e.error)?;
 
-			Self::deposit_event(Event::<T>::ProposalSucceeded(src_id, nonce));
+			Self::deposit_event(Event::ProposalSucceeded(src_id, nonce));
 			Ok(().into())
 		}
 
 		/// Cancels a proposal.
 		fn cancel_execution(src_id: ChainId, nonce: DepositNonce) -> DispatchResult {
-			Self::deposit_event(Event::<T>::ProposalRejected(src_id, nonce));
+			Self::deposit_event(Event::ProposalRejected(src_id, nonce));
 			Ok(().into())
 		}
 
@@ -619,9 +619,9 @@ pub mod pallet {
 			to: Vec<u8>,
 			amount: U256,
 		) -> DispatchResult {
-			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+			ensure!(Self::chain_whitelisted(dest_id), <Error<T>>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
-			Self::deposit_event(Event::<T>::FungibleTransfer(
+			Self::deposit_event(Event::FungibleTransfer(
 				dest_id,
 				nonce,
 				resource_id,
@@ -641,9 +641,9 @@ pub mod pallet {
 			to: Vec<u8>,
 			metadata: Vec<u8>,
 		) -> DispatchResult {
-			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+			ensure!(Self::chain_whitelisted(dest_id), <Error<T>>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
-			Self::deposit_event(Event::<T>::NonFungibleTransfer(
+			Self::deposit_event(Event::NonFungibleTransfer(
 				dest_id,
 				nonce,
 				resource_id,
@@ -662,10 +662,10 @@ pub mod pallet {
 			resource_id: ResourceId,
 			metadata: Vec<u8>,
 		) -> DispatchResult {
-			ensure!(Self::chain_whitelisted(dest_id), Error::<T>::ChainNotWhitelisted);
+			ensure!(Self::chain_whitelisted(dest_id), <Error<T>>::ChainNotWhitelisted);
 			let nonce = Self::bump_nonce(dest_id);
 
-			Self::deposit_event(Event::<T>::GenericTransfer(dest_id, nonce, resource_id, metadata));
+			Self::deposit_event(Event::GenericTransfer(dest_id, nonce, resource_id, metadata));
 			Ok(().into())
 		}
 	}
