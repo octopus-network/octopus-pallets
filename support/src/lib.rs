@@ -2,8 +2,11 @@
 
 use crate::types::Nep171TokenMetadata;
 use borsh::{BorshDeserialize, BorshSerialize};
-use codec::{Decode, Encode};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+};
 use scale_info::{prelude::string::String, TypeInfo};
 use sp_runtime::{KeyTypeId, RuntimeDebug};
 use sp_std::prelude::*;
