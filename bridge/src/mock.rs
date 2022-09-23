@@ -1,11 +1,11 @@
 use super::*;
-use crate::{self as pallet_octopus_appchain};
+use crate::{self as pallet_octopus_bridge};
 use sp_runtime::{
 	generic, impl_opaque_keys,
 	testing::TestXt,
 	traits::{
 		AccountIdLookup, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT, IdentifyAccount,
-		OpaqueKeys, Verify,
+		OpaqueKeys, Verify
 	},
 	MultiSignature,
 };
@@ -17,6 +17,9 @@ pub use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize,
 		OnInitialize, Randomness, StorageInfo,
+        tokens::{
+            nonfungibles
+        }
 	},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
@@ -211,7 +214,7 @@ parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
 	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
-	pub const MaxMessagePayloadSize:u32 = 256;
+    pub const MaxMessagePayloadSize:u32 = 256;
     pub const MaxMessagesPerCommit: u32 = 20 ;
 }
 
@@ -232,7 +235,7 @@ impl pallet_octopus_lpos::Config for Test {
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
-	type MaxMessagePayloadSize = MaxMessagePayloadSize ;
+    type MaxMessagePayloadSize = MaxMessagePayloadSize ;
     type MaxMessagesPerCommit = MaxMessagesPerCommit;
     type Hashing = BlakeTwo256;
 }
@@ -285,33 +288,16 @@ impl pallet_uniques::Config for Test {
 	type Locker = ();
 }
 
-impl pallet_octopus_bridge::Config for Test {
-	type Event = Event;
-	type PalletId = OctopusAppchainPalletId;
-	type Currency = Balances;
-	type AppchainInterface = OctopusAppchain;
-	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type AssetIdByTokenId = OctopusBridge;
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
-	type Fungibles = Assets;
-	type CollectionId = u128;
-	type ItemId = u128;
-	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
-	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
-	type WeightInfo = ();
-}
-
 parameter_types! {
 	   pub const OctopusAppchainPalletId: PalletId = PalletId(*b"py/octps");
 	   pub const GracePeriod: u32 = 10;
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
-	   pub const MaxValidators: u32 = 5 ;
+       pub const MaxValidators: u32 = 10 ;
 }
 
-impl Config for Test {
+impl pallet_octopus_appchain::Config for Test {
 	type AuthorityId = OctopusId;
 	type AppCrypto = OctopusAppCrypto;
 	type Event = Event;
@@ -323,7 +309,24 @@ impl Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
-	type MaxValidators = MaxValidators;
+    type MaxValidators = MaxValidators;
+}
+
+impl Config for Test {
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = Uniques ; 
+	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type WeightInfo = ();
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};
@@ -346,12 +349,13 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, OctopusId) {
 	(get_account_id_from_seed::<sr25519::Public>(s), get_from_seed::<OctopusId>(s))
 }
 
-pub fn advance_session() {
-	let now = System::block_number().max(1);
-	System::set_block_number(now + 1);
-	Session::rotate_session();
-	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
-}
+// Never used.
+// pub fn advance_session() {
+// 	let now = System::block_number().max(1);
+// 	System::set_block_number(now + 1);
+// 	Session::rotate_session();
+// 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
+// }
 
 pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals
