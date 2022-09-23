@@ -237,7 +237,6 @@ parameter_types! {
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
 	   pub const MaxValidators: u32 = 100 ;
-	   pub const MaxBondedEras: u32 = 100 ;
 }
 
 pub type AssetId = u32;
@@ -293,7 +292,6 @@ impl Config for Test {
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
 	type WeightInfo = ();
-	type MaxBondedEras = MaxBondedEras;
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

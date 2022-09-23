@@ -18,21 +18,6 @@ fn test_force_set_params() {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000;
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
 	new_tester().execute_with(|| {
-		assert_noop!(
-			OctopusAppchain::force_set_planned_validators(
-				Origin::root(),
-				vec![
-					(AccountKeyring::Alice.into(), stash),
-					(AccountKeyring::Bob.into(), stash),
-					(AccountKeyring::Charlie.into(), stash),
-					(AccountKeyring::Dave.into(), stash),
-					(AccountKeyring::Eve.into(), stash),
-					(AccountKeyring::Ferdie.into(), stash),
-				],
-			),
-			Error::<Test>::PlannedValidatorsExceededLimit
-		);
-
 		assert_ok!(OctopusAppchain::force_set_planned_validators(
 			Origin::root(),
 			vec![
