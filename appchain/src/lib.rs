@@ -3,8 +3,8 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	traits::{OneSessionHandler, StorageVersion},
-	transactional,
+	traits::{ConstU32, OneSessionHandler, StorageVersion},
+	transactional, BoundedVec,
 };
 use frame_system::offchain::{
 	AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
@@ -168,8 +168,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type RequestEventLimit: Get<u32>;
 
+		#[pallet::constant]
+		type MaxValidators: Get<u32>;
+
 		type WeightInfo: WeightInfo;
 	}
+
+	type MaxObservations = ConstU32<100>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -215,13 +220,18 @@ pub mod pallet {
 		ObservationType,
 		Twox64Concat,
 		u32,
-		Vec<Observation<T::AccountId>>,
+		BoundedVec<Observation<T::AccountId>, MaxObservations>,
 		ValueQuery,
 	>;
 
 	#[pallet::storage]
-	pub(crate) type Observing<T: Config> =
-		StorageMap<_, Twox64Concat, Observation<T::AccountId>, Vec<T::AccountId>, ValueQuery>;
+	pub(crate) type Observing<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		Observation<T::AccountId>,
+		BoundedVec<T::AccountId, T::MaxValidators>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	pub(crate) type NotificationHistory<T: Config> =
@@ -771,21 +781,6 @@ pub mod pallet {
 				},
 			}
 
-			// The maximum number of observation for the same obs_id is the number of validators
-			// (100), that is, each validator submits a observation.
-			let obs = <Observations<T>>::try_get(observation_type, obs_id);
-			if let Ok(obs) = obs {
-				if obs.len() > 100 {
-					log!(
-						warn,
-						"the number of observations with ({:?}, {:?}) exceeded the upper limit",
-						obs_id,
-						observation_type
-					);
-					return Err(Error::<T>::ObservationsExceededLimit.into())
-				}
-			}
-
 			Ok(().into())
 		}
 
@@ -842,17 +837,23 @@ pub mod pallet {
 			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
 				let found = obs.iter().any(|o| o == &observation);
 				if !found {
-					obs.push(observation.clone())
+					obs.try_push(observation.clone())
+				} else {
+					Ok(())
 				}
-			});
+			})
+			.map_err(|_| Error::<T>::ObservationsExceededLimit)?;
+
 			<Observing<T>>::mutate(&observation, |vals| {
 				let found = vals.iter().any(|id| id == validator_id);
 				if !found {
-					vals.push(validator_id.clone());
+					vals.try_push(validator_id.clone())
 				} else {
 					log!(warn, "{:?} submits a duplicate ocw tx", validator_id);
+					Ok(())
 				}
-			});
+			})
+			.map_err(|_| Error::<T>::ObservationsExceededLimit)?;
 			let total_stake: u128 = T::LposInterface::active_total_stake()
 				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
 			let stake: u128 = <Observing<T>>::get(&observation)
