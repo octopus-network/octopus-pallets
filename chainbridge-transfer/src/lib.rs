@@ -85,6 +85,9 @@ pub mod pallet {
 		/// Map of cross-chain asset ID & name
 		type AssetIdByName: AssetIdResourceIdProvider<Self::AssetId>;
 
+		/// Max native token value
+		type NativeTokenMaxValue: Get<BalanceOf<Self>>;
+
 		/// Ids can be defined by the runtime and passed in, perhaps from blake2b_128 hashes.
 		type HashId: Get<ResourceId>;
 
@@ -97,6 +100,10 @@ pub mod pallet {
 	#[pallet::getter(fn resource_id_by_asset_id)]
 	pub type ResourceIdOfAssetId<T: Config> =
 		StorageMap<_, Blake2_128Concat, ResourceId, (T::AssetId, Vec<u8>)>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn native_check)]
+	pub type NativeCheck<T> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -145,6 +152,7 @@ pub mod pallet {
 		InvalidTokenId,
 		WrongAssetId,
 		InvalidTokenName,
+		OverTransferLimit,
 	}
 
 	#[pallet::hooks]
@@ -178,6 +186,15 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(195_000_0000)]
+		pub fn native_limit(origin: OriginFor<T>, value: bool) -> DispatchResult {
+			ensure_root(origin)?;
+
+			<NativeCheck<T>>::put(value);
+
+			Ok(())
+		}
+		
 		//
 		// Initiation calls. These start a bridge transfer.
 		//

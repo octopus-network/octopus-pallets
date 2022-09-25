@@ -141,6 +141,7 @@ parameter_types! {
 	pub NativeTokenId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"DAV")); // native token id
 	pub HashId: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"hash"));
 	pub Erc721Id: bridge::ResourceId = bridge::derive_resource_id(1, &blake2_128(b"NFT"));
+	pub NativeTokenMaxValue : Balance = 1000_000_000_000_000_0000u128; // need to set correct value
 }
 
 impl pallet_chainbridge_erc721::Config for Test {
@@ -151,6 +152,7 @@ impl pallet_chainbridge_erc721::Config for Test {
 pub type AssetBalance = u128;
 pub type AssetId = u32;
 
+
 impl Config for Test {
 	type Event = Event;
 	type BridgeOrigin = bridge::EnsureBridge<Test>;
@@ -160,6 +162,7 @@ impl Config for Test {
 	type AssetBalance = AssetBalance;
 	type Fungibles = Assets;
 	type AssetIdByName = ChainBridgeTransfer;
+	type NativeTokenMaxValue = NativeTokenMaxValue;
 	type HashId = HashId;
 	type Erc721Id = Erc721Id;
 }

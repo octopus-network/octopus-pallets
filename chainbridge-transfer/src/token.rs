@@ -11,6 +11,16 @@ impl<T: Config> Pallet<T> {
 		log::info!("transfer native token");
 		let bridge_id = <bridge::Pallet<T>>::account_id();
 
+		if <NativeCheck<T>>::get() {
+			let free_balance = <T as Config>::Currency::free_balance(&bridge_id);
+			let total_balance = free_balance + amount;
+
+			let right_balance = T::NativeTokenMaxValue::get() / 3u8.into();
+			if total_balance > right_balance {
+				return Err(Error::<T>::OverTransferLimit)?;
+			}
+		}
+
 		<T as Config>::Currency::transfer(&sender, &bridge_id, amount.into(), AllowDeath)?;
 
 		log::info!("transfer native token successful");
