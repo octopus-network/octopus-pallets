@@ -44,7 +44,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
 
 mod mainchain;
-mod types;
+pub mod types;
 pub mod weights;
 
 #[cfg(test)]

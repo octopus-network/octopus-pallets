@@ -1,5 +1,5 @@
 [package]
-name = "pallet-octopus-appchain-benchmarking"
+name = "pallet-octopus-bridge-benchmarking"
 version = "4.0.0-pre.0"
 edition = "2021"
 authors = ["Octopus Network <hi@oct.network>"]

@@ -154,7 +154,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::lock())]
 		#[transactional]
 		pub fn lock(
 			origin: OriginFor<T>,
@@ -169,7 +169,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::burn_nep141())]
 		#[transactional]
 		pub fn burn_nep141(
 			origin: OriginFor<T>,
@@ -185,7 +185,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::lock_nonfungible())]
 		#[transactional]
 		pub fn lock_nonfungible(
 			origin: OriginFor<T>,
@@ -201,7 +201,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
 		pub fn set_token_id(
 			origin: OriginFor<T>,
 			token_id: Vec<u8>,
@@ -255,7 +255,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_mint_asset())]
+		#[pallet::weight(<T as Config>::WeightInfo::force_mint_nep141())]
 		pub fn force_mint_nep141(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -271,7 +271,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nft())]
+		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nonfungible())]
 		pub fn force_unlock_nonfungible(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,

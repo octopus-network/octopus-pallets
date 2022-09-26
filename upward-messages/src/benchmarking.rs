@@ -9,12 +9,8 @@ use crate::Pallet as OctopusUpwardMessages;
 
 benchmarks! {
 	on_initialize {
-		let m in 1 .. T::UpwardMessagesLimit::get() as u32;
-		// Note: The message with the largest length may be erapayoutpayload,
-		// so the maximum possible length may be:
-		//      len(end_era) + len(excluded_validators) = 32 + 32 * 33 = 1088.
-		// However, the test found that if the value exceeds 255, an error will be reported.
-		let p in 0 .. 255u32;
+		let m in 1 .. T::MaxMessagesPerCommit::get() as u32;
+		let p in 0 .. T::MaxMessagePayloadSize::get() as u32;
 
 		for i in 0 .. m {
 			let payload: Vec<u8> = (0..).take(p as usize).collect();
@@ -28,19 +24,43 @@ benchmarks! {
 			} else {
 				payload_type = PayloadType::EraPayout;
 			}
-			<MessageQueue<T>>::append(Message {
+			<MessageQueue<T>>::try_append(Message {
 				nonce: 0u64,
 				payload_type,
-				payload,
-			});
+				payload: payload.try_into().unwrap(),
+			}).unwrap();
 		}
 
-		let block_number: T::BlockNumber = 1u32.into();
+		let block_number = Interval::<T>::get();
 
 	}: { OctopusUpwardMessages::<T>::on_initialize(block_number) }
 	verify {
 		assert_eq!(<MessageQueue<T>>::get().len(), 0);
 	}
+
+
+	on_initialize_non_interval {
+			<MessageQueue<T>>::try_append(Message {
+				nonce: 0u64,
+				payload_type: PayloadType::EraPayout,
+				payload: vec![1u8; T::MaxMessagePayloadSize::get() as usize].try_into().unwrap(),
+			}).unwrap();
+
+		Interval::<T>::put::<T::BlockNumber>(10u32.into());
+		let block_number: T::BlockNumber = 11u32.into();
+
+	}: { OctopusUpwardMessages::<T>::on_initialize(block_number) }
+	verify {
+		assert_eq!(<MessageQueue<T>>::get().len(), 1);
+	}
+
+
+	on_initialize_no_messages {
+		<MessageQueue<T>>::kill();
+
+		let block_number = Interval::<T>::get();
+
+	}: { OctopusUpwardMessages::<T>::on_initialize(block_number) }
 }
 
 impl_benchmark_test_suite!(OctopusUpwardMessages, crate::tests::new_tester(), crate::tests::Test,);
