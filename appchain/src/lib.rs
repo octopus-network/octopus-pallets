@@ -623,7 +623,7 @@ pub mod pallet {
 				if val_id.is_none() {
 					continue
 				}
-				
+
 				let generic_public = <T::AppCrypto as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
