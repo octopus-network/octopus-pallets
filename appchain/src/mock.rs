@@ -212,7 +212,7 @@ parameter_types! {
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
 	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
 	pub const MaxMessagePayloadSize:u32 = 256;
-    pub const MaxMessagesPerCommit: u32 = 20 ;
+	pub const MaxMessagesPerCommit: u32 = 20 ;
 }
 
 impl pallet_octopus_lpos::Config for Test {
@@ -232,9 +232,9 @@ impl pallet_octopus_lpos::Config for Test {
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
-	type MaxMessagePayloadSize = MaxMessagePayloadSize ;
-    type MaxMessagesPerCommit = MaxMessagesPerCommit;
-    type Hashing = BlakeTwo256;
+	type MaxMessagePayloadSize = MaxMessagePayloadSize;
+	type MaxMessagesPerCommit = MaxMessagesPerCommit;
+	type Hashing = BlakeTwo256;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

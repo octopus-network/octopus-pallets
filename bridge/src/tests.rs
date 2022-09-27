@@ -1,14 +1,13 @@
 use crate::{mock::*, Error, *};
 use frame_support::{assert_noop, assert_ok};
 use sp_keyring::AccountKeyring;
-use sp_runtime::traits::{BadOrigin};
+use sp_runtime::traits::BadOrigin;
 
 #[test]
-fn test_set_asset_name() {
+fn test_set_token_id() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let _origin = Origin::signed(alice);
 	new_tester().execute_with(|| {
-
 		assert_noop!(
 			OctopusBridge::set_token_id(
 				Origin::root(),
@@ -21,21 +20,15 @@ fn test_set_asset_name() {
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 
 		assert_noop!(
-			OctopusBridge::set_token_id(
-				_origin ,
-				"usdc.testnet".to_string().as_bytes().to_vec(),
-				2,
-			),
+			OctopusBridge::set_token_id(_origin, "usdc.testnet".to_string().as_bytes().to_vec(), 2,),
 			BadOrigin
 		);
 
-		assert_ok!(
-			OctopusBridge::set_token_id(
-				Origin::root(),
-				"usdc.testnet".to_string().as_bytes().to_vec(),
-				2,
-			)
-		);
+		assert_ok!(OctopusBridge::set_token_id(
+			Origin::root(),
+			"usdc.testnet".to_string().as_bytes().to_vec(),
+			2,
+		));
 
 		assert_noop!(
 			OctopusBridge::set_token_id(
@@ -100,7 +93,12 @@ fn test_lock() {
 	let origin = Origin::signed(alice.clone());
 	let source = sp_runtime::MultiAddress::Id(alice.clone());
 	new_tester().execute_with(|| {
-		assert_ok!(Balances::set_balance(Origin::root(), source.clone(), 1000000000000000000, 100000));
+		assert_ok!(Balances::set_balance(
+			Origin::root(),
+			source.clone(),
+			1000000000000000000,
+			100000
+		));
 		let minimum_amount = Balances::minimum_balance();
 		assert_noop!(
 			OctopusBridge::lock(
@@ -126,7 +124,7 @@ fn test_lock() {
 }
 
 #[test]
-pub fn test_lock_nft() {
+pub fn test_lock_nonfungible() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let origin = Origin::signed(alice.clone());
 	new_tester().execute_with(|| {
