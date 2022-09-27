@@ -46,6 +46,8 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std",
+	"sp-core/std",
 	"pallet-chainbridge/std",
 	"pallet-chainbridge-erc721/std",
 ]
