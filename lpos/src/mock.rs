@@ -205,15 +205,15 @@ impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 
 parameter_types! {
 	pub const MaxMessagePayloadSize:u32 = 256;
-    pub const MaxMessagesPerCommit: u32 = 20 ;
+	pub const MaxMessagesPerCommit: u32 = 20 ;
 }
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
-	type MaxMessagePayloadSize = MaxMessagePayloadSize ;
-    type MaxMessagesPerCommit = MaxMessagesPerCommit;
-    type Hashing = BlakeTwo256;
+	type MaxMessagePayloadSize = MaxMessagePayloadSize;
+	type MaxMessagesPerCommit = MaxMessagesPerCommit;
+	type Hashing = BlakeTwo256;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
