@@ -39,7 +39,7 @@ use scale_info::prelude::string::{String, ToString};
 use serde::Deserialize;
 use serde_json::json;
 use sp_runtime::{
-	traits::{AccountIdConversion, CheckedConversion, StaticLookup},
+	traits::{AccountIdConversion, CheckedAdd, CheckedConversion, StaticLookup},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -79,7 +79,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
-		type Currency: Currency<Self::AccountId>;
+		type Currency: Currency<Self::AccountId> + CheckedAdd;
 
 		type AppchainInterface: AppchainInterface<Self::AccountId>;
 
@@ -413,7 +413,7 @@ pub mod pallet {
 			let amount =
 				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
 
-			let init_amount = min + amount;
+			let init_amount = min.checked_add(&amount).ok_or(Error::<T>::AmountOverflow).unwrap();
 
 			T::Currency::make_free_balance_be(&account_id, init_amount);
 
