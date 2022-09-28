@@ -218,7 +218,6 @@ impl pallet_octopus_lpos::Config for Test {
 	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
-	// type BlocksPerEra = BlocksPerEra;
 	type SessionInterface = Self;
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
