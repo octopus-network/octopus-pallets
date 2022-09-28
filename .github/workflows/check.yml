@@ -42,7 +42,7 @@ jobs:
         with: 
           repository: octopus-network/barnacle
           path: ./octopus-pallets  
-          ref: main
+          ref: master
       - name: Copy barancle Cargo.lock to Octopus-pallet
         run: | 
           cp ./octopus-pallets/barnacle/Cargo.lock .
