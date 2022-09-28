@@ -57,6 +57,11 @@ mod nonfungible;
 mod token;
 mod weights;
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
