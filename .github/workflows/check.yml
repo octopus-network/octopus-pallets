@@ -43,12 +43,8 @@ jobs:
           cargo fmt -- --check
           
       - name: Lint rust sources
-        uses: actions/checkout@v2 
-          with: 
-            repository: octopus-network/barnacle
-            path: ./octopus-pallets  
-            ref: master
         run: |
+          git clone --branch master https://github.com/octopus-network/barnacle.git .
           cp ./barnacle/Cargo.lock .
           cargo clippy --all-targets --all-features --tests --benches -- -D warnings
           
