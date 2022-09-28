@@ -42,7 +42,7 @@ pub struct Message<M: Get<u32>> {
 }
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[allow(dead_code)]
 #[frame_support::pallet]
@@ -99,7 +99,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { interval: Default::default() }
+			Self { interval: 1u32.into() }
 		}
 	}
 
@@ -139,6 +139,30 @@ pub mod pallet {
 				Self::commit()
 			} else {
 				T::WeightInfo::on_initialize_non_interval()
+			}
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration in octopus-upward-messages pallet with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 1 && onchain == 0 {
+				Self::migration_to_v1();
+				current.put::<Pallet<T>>();
+				T::DbWeight::get().reads_writes(2, 2)
+			} else {
+				log!(
+					info,
+					"The storageVersion of upward-messages is already the matching version, and the migration is not repeated."
+				);
+				T::DbWeight::get().reads(1)
 			}
 		}
 	}
@@ -185,6 +209,12 @@ pub mod pallet {
 		fn average_payload_size(messages: &[Message<T::MaxMessagePayloadSize>]) -> u32 {
 			let sum: usize = messages.iter().fold(0, |acc, x| acc + x.payload.len());
 			(sum / messages.len()).saturating_add(1) as u32
+		}
+
+		fn migration_to_v1() {
+			let interval: T::BlockNumber = 1u32.into();
+			<Interval<T>>::put(interval);
+			log!(info, "upward-messages updating to version 1 ");
 		}
 	}
 }
