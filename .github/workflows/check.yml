@@ -44,7 +44,8 @@ jobs:
           path: ./octopus-pallets  
           ref: master
       - name: Copy barancle Cargo.lock to Octopus-pallet
-        run: | 
+        run: |
+          pwd
           cp ./octopus-pallets/barnacle/Cargo.lock .
       - name: Check Build
         run: |
