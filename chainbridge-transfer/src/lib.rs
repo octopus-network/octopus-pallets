@@ -101,6 +101,11 @@ pub mod pallet {
 	pub type ResourceIdOfAssetId<T: Config> =
 		StorageMap<_, Blake2_128Concat, ResourceId, (T::AssetId, Vec<u8>)>;
 
+	/// store generic hash
+	#[pallet::storage]
+	#[pallet::getter(fn assets_stored)]
+	pub type AssetsStored<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, bool>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn native_check)]
 	pub type NativeCheck<T> = StorageValue<_, bool, ValueQuery>;
@@ -153,6 +158,7 @@ pub mod pallet {
 		WrongAssetId,
 		InvalidTokenName,
 		OverTransferLimit,
+		AssetAlreadyExists,
 	}
 
 	#[pallet::hooks]
@@ -306,6 +312,9 @@ pub mod pallet {
 		#[pallet::weight(195_000_0000)]
 		pub fn remark(origin: OriginFor<T>, hash: T::Hash, _r_id: ResourceId) -> DispatchResult {
 			T::BridgeOrigin::ensure_origin(origin)?;
+			ensure!(!AssetsStored::<T>::contains_key(hash), <Error<T>>::AssetAlreadyExists);
+			//store the hash value
+			<AssetsStored<T>>::insert(&hash, true);
 			Self::deposit_event(Event::Remark(hash));
 			Ok(())
 		}
