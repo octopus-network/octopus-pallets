@@ -45,8 +45,9 @@ jobs:
           ref: master
       - name: Copy barancle Cargo.lock to Octopus-pallet
         run: |
-          pwd
-          cp ./barnacle/Cargo.lock .
+          pwd 
+          ls -l barnacle
+          cp /home/runner/work/octopus-pallets/octopus-pallets/barnacle/Cargo.lock .
       - name: Check Build
         run: |
           SKIP_WASM_BUILD=1 cargo check --release
