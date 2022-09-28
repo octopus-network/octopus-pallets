@@ -40,12 +40,12 @@ jobs:
       - name: Clone barancle Cargo.lock
         uses: actions/checkout@v2 
         with: 
-          repository: octopus-network/barancle 
+          repository: octopus-network/barnacle
           path: ./octopus-pallets  
           ref: main
       - name: Copy barancle Cargo.lock to Octopus-pallet
         run: | 
-          cp ./octopus-pallets/barancle/Cargo.lock .
+          cp ./octopus-pallets/barnacle/Cargo.lock .
       - name: Check Build
         run: |
           SKIP_WASM_BUILD=1 cargo check --release
