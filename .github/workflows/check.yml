@@ -33,6 +33,19 @@ jobs:
           rustup update nightly
           rustup update stable
           rustup target add wasm32-unknown-unknown --toolchain nightly
+      # This part here is cloning a second repository
+      # While cloning the repository:
+      #   - it clones the repo into the given `path`
+      #   - it checks out the branch defined at `ref`
+      - name: Clone barancle Cargo.lock
+        uses: actions/checkout@v2 
+        with: 
+          repository: octopus-network/barancle 
+          path: ./octopus-pallets  
+          ref: main
+      - name: Copy barancle Cargo.lock to Octopus-pallet
+        run: | 
+          cp ./octopus-pallets/barancle/Cargo.lock .
       - name: Check Build
         run: |
           SKIP_WASM_BUILD=1 cargo check --release
