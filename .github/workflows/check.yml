@@ -53,5 +53,5 @@ jobs:
           cargo test
         
       - name: Check Build for Benchmarking
-        run: >
+        run: |
           cargo check --features=runtime-benchmarks --release

@@ -384,36 +384,6 @@ pub mod pallet {
 				},
 			}
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			let current = Pallet::<T>::current_storage_version();
-			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			log!(
-				info,
-				"Running migration in octopus appchain pallet with current storage version {:?} / onchain {:?}",
-				current,
-				onchain
-			);
-
-			// if current == 2 && onchain == 1 {
-			// 	let translated = Self::migration_to_v2(1u64);
-			// 	current.put::<Pallet<T>>();
-			// 	T::DbWeight::get().reads_writes(translated, translated)
-			// } else if current == 2 && onchain == 0 {
-			// 	Self::migration_to_v1();
-			// 	let translated = Self::migration_to_v2(1u64);
-			// 	current.put::<Pallet<T>>();
-			// 	T::DbWeight::get().reads_writes(translated + 1, translated + 1)
-			// } else {
-			// 	log!(
-			// 		info,
-			// 		"The storageVersion is already the matching version, and the migration is not
-			// repeated." 	);
-			// 	T::DbWeight::get().reads(1)
-			// }
-			0
-		}
 	}
 
 	#[pallet::validate_unsigned]
