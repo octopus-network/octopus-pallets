@@ -1,6 +1,8 @@
 use super::*;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 
@@ -73,7 +75,11 @@ impl Config for Test {
 }
 
 pub fn new_tester() -> sp_io::TestExternalities {
-	let storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let config: pallet_octopus_upward_messages::GenesisConfig<Test> =
+		pallet_octopus_upward_messages::GenesisConfig { interval: 1u32.into() };
+	config.assimilate_storage(&mut storage).unwrap();
+
 	let mut ext: sp_io::TestExternalities = storage.into();
 
 	ext.execute_with(|| System::set_block_number(1));

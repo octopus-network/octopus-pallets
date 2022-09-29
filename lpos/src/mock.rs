@@ -291,7 +291,6 @@ impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type Event = Event;
-	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;

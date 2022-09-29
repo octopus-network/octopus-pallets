@@ -219,7 +219,6 @@ impl pallet_octopus_lpos::Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type Event = Event;
-	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;

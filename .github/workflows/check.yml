@@ -53,6 +53,5 @@ jobs:
           cargo test --all-features -- --test-threads=1 --nocapture
         
       - name: Check Build for Benchmarking
-        run: >
-          pushd node &&
+        run: |
           cargo check --features=runtime-benchmarks --release
