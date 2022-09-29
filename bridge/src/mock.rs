@@ -15,8 +15,8 @@ pub use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize,
-		OnInitialize, Randomness, StorageInfo,
+		tokens::nonfungibles, AsEnsureOriginWithArg, ConstU128, ConstU32, Hooks,
+		KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness, StorageInfo,
 	},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
@@ -211,13 +211,14 @@ parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
 	pub const BlocksPerEra: u32 = EPOCH_DURATION_IN_BLOCKS * 6 / (SECS_PER_BLOCK as u32);
+	pub const MaxMessagePayloadSize:u32 = 256;
+	pub const MaxMessagesPerCommit: u32 = 20 ;
 }
 
 impl pallet_octopus_lpos::Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type Event = Event;
-	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
@@ -229,8 +230,10 @@ impl pallet_octopus_lpos::Config for Test {
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
-	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
+	type MaxMessagePayloadSize = MaxMessagePayloadSize;
+	type MaxMessagesPerCommit = MaxMessagesPerCommit;
+	type Hashing = BlakeTwo256;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -287,6 +290,7 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators: u32 = 10 ;
 }
 
 impl pallet_octopus_appchain::Config for Test {
@@ -301,6 +305,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl Config for Test {
@@ -315,7 +320,7 @@ impl Config for Test {
 	type Fungibles = Assets;
 	type CollectionId = u128;
 	type ItemId = u128;
-	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Nonfungibles = Uniques;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
 	type WeightInfo = ();
 }
@@ -340,12 +345,13 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, OctopusId) {
 	(get_account_id_from_seed::<sr25519::Public>(s), get_from_seed::<OctopusId>(s))
 }
 
-pub fn advance_session() {
-	let now = System::block_number().max(1);
-	System::set_block_number(now + 1);
-	Session::rotate_session();
-	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
-}
+// Never used.
+// pub fn advance_session() {
+// 	let now = System::block_number().max(1);
+// 	System::set_block_number(now + 1);
+// 	Session::rotate_session();
+// 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
+// }
 
 pub fn new_tester() -> sp_io::TestExternalities {
 	let stash: Balance = 100 * 1_000_000_000_000_000_000; // 100 OCT with 18 decimals

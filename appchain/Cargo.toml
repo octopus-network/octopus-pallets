@@ -48,7 +48,7 @@ pallet-uniques = { git = "https://github.com/paritytech/substrate.git", branch =
 
 pallet-octopus-lpos = { path = "../lpos" }
 pallet-octopus-upward-messages = { path = "../upward-messages" }
-pallet-octopus-bridge  = {path = "../bridge" }
+pallet-octopus-bridge = {path = "../bridge" }
 
 [features]
 default = ["std"]

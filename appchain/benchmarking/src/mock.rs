@@ -1,5 +1,4 @@
 #![cfg(test)]
-use pallet_octopus_appchain::traits_default_impl::ExampleConvertor;
 
 use sp_runtime::{
 	generic, impl_opaque_keys,
@@ -251,6 +250,7 @@ construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Assets: pallet_assets::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
+		OctopusBridge: pallet_octopus_bridge::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -309,27 +309,35 @@ parameter_types! {
 	   pub const UpwardMessagesLimit: u32 = 10;
 }
 
+impl pallet_octopus_bridge::Config for Test {
+	type Event = Event;
+	type PalletId = OctopusAppchainPalletId;
+	type Currency = Balances;
+	type AppchainInterface = OctopusAppchain;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type AssetIdByTokenId = OctopusBridge;
+	type AssetId = AssetId;
+	type AssetBalance = AssetBalance;
+	type Fungibles = Assets;
+	type CollectionId = u128;
+	type ItemId = u128;
+	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
+	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type WeightInfo = ();
+}
+
 impl pallet_octopus_appchain::Config for Test {
 	type AuthorityId = pallet_octopus_appchain::sr25519::AuthorityId;
 	type AppCrypto = OctopusAppCrypto;
 	type Event = Event;
 	type Call = Call;
-	type PalletId = OctopusAppchainPalletId;
-	// type LposInterface = OctopusLpos;
+	type BridgeInterface = OctopusBridge;
 	type LposInterface = MockLpos<Test>;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type CollectionId = CollectionId;
-	type ItemId = ItemId;
-	type Uniques = Uniques;
-	type Convertor = ExampleConvertor<Test>;
-	type Currency = Balances;
-	type Assets = Assets;
-	type AssetId = AssetId;
-	type AssetBalance = AssetBalance;
-	type AssetIdByTokenId = OctopusAppchain;
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -390,6 +398,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 				("usdc.testnet".to_string(), 2),
 			],
 		};
+	config.assimilate_storage(&mut storage).unwrap();
+
+	let config: pallet_octopus_bridge::GenesisConfig<Test> = pallet_octopus_bridge::GenesisConfig {
+		premined_amount: 1024 * DOLLARS,
+		asset_id_by_token_id: vec![
+			("test-account.testnet".to_string(), 0),
+			("usdc.testnet".to_string(), 2),
+		],
+	};
 	config.assimilate_storage(&mut storage).unwrap();
 
 	let mut ext: sp_io::TestExternalities = storage.into();

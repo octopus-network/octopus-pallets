@@ -33,6 +33,7 @@ jobs:
           rustup update nightly
           rustup update stable
           rustup target add wasm32-unknown-unknown --toolchain nightly
+
       - name: Check Build
         run: |
           SKIP_WASM_BUILD=1 cargo check --release
@@ -42,9 +43,11 @@ jobs:
           cargo fmt -- --check
           
       - name: Lint rust sources
-        run: | 
+        run: |
+          git clone --branch master https://github.com/octopus-network/barnacle.git
+          cp ./barnacle/Cargo.lock .
           cargo clippy --all-targets --all-features --tests --benches -- -D warnings
-        
+          
       - name: Run tests
         run: | 
           cargo test

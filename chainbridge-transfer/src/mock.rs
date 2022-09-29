@@ -152,7 +152,6 @@ impl pallet_chainbridge_erc721::Config for Test {
 pub type AssetBalance = u128;
 pub type AssetId = u32;
 
-
 impl Config for Test {
 	type Event = Event;
 	type BridgeOrigin = bridge::EnsureBridge<Test>;

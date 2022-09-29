@@ -1,10 +1,10 @@
 use crate::{mock::*, Error, *};
 use frame_support::{assert_noop, assert_ok};
 use sp_keyring::AccountKeyring;
-use sp_runtime::traits::{BadOrigin, Verify};
+use sp_runtime::traits::BadOrigin;
 
 #[test]
-fn test_set_asset_name() {
+fn test_set_token_id() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let _origin = Origin::signed(alice);
 	new_tester().execute_with(|| {
@@ -18,6 +18,18 @@ fn test_set_asset_name() {
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+
+		assert_noop!(
+			OctopusBridge::set_token_id(_origin, "usdc.testnet".to_string().as_bytes().to_vec(), 2,),
+			BadOrigin
+		);
+
+		assert_ok!(OctopusBridge::set_token_id(
+			Origin::root(),
+			"usdc.testnet".to_string().as_bytes().to_vec(),
+			2,
+		));
+
 		assert_noop!(
 			OctopusBridge::set_token_id(
 				Origin::root(),
@@ -173,35 +185,40 @@ fn test_delete_token_id() {
 fn test_lock() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let origin = Origin::signed(alice.clone());
-	let source = sp_runtime::MultiAddress::Id(alice);
+	let source = sp_runtime::MultiAddress::Id(alice.clone());
 	new_tester().execute_with(|| {
-		assert_ok!(Balances::set_balance(Origin::root(), source, 10000000000000000000, 100));
-
+		assert_ok!(Balances::set_balance(
+			Origin::root(),
+			source.clone(),
+			1000000000000000000,
+			100000
+		));
+		let minimum_amount = Balances::minimum_balance();
 		assert_noop!(
 			OctopusBridge::lock(
 				origin.clone(),
 				"test-account.testnet".to_string().as_bytes().to_vec(),
-				1000000000
+				minimum_amount
 			),
 			Error::<Test>::NotActivated
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 		assert_noop!(
-			OctopusBridge::lock(origin.clone(), vec![0, 159], 1000000000),
+			OctopusBridge::lock(origin.clone(), vec![0, 159], minimum_amount),
 			Error::<Test>::InvalidReceiverId
 		);
 
 		assert_ok!(OctopusBridge::lock(
 			origin,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			100000
+			minimum_amount
 		));
 	});
 }
 
 #[test]
-pub fn test_lock_nft() {
+pub fn test_lock_nonfungible() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let origin = Origin::signed(alice.clone());
 	new_tester().execute_with(|| {

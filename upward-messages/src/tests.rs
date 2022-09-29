@@ -8,7 +8,7 @@ use sp_core::H256;
 use sp_keyring::AccountKeyring;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
+	traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Keccak256, Verify},
 	MultiSignature,
 };
 
@@ -24,8 +24,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>},
-		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		OctopusUpwardMessages: pallet_octopus_upward_messages,
 	}
 );
 
@@ -60,12 +60,15 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const UpwardMessagesLimit: u32 = 10;
+	pub const MaxMessagePayloadSize: u32 = 100;
+	pub const MaxMessagesPerCommit: u32 = 20;
 }
 
 impl Config for Test {
 	type Event = Event;
-	type UpwardMessagesLimit = UpwardMessagesLimit;
+	type Hashing = Keccak256;
+	type MaxMessagePayloadSize = MaxMessagePayloadSize;
+	type MaxMessagesPerCommit = MaxMessagesPerCommit;
 	type WeightInfo = ();
 }
 
@@ -101,7 +104,7 @@ fn test_submit_exceeds_queue_limit() {
 	new_tester().execute_with(|| {
 		let who: AccountId = AccountKeyring::Bob.into();
 
-		let messages_limit = UpwardMessagesLimit::get();
+		let messages_limit = MaxMessagesPerCommit::get();
 		(0..messages_limit).for_each(|_| {
 			OctopusUpwardMessages::submit(Some(who.clone()), PayloadType::Lock, &vec![0, 1, 2])
 				.unwrap();
@@ -110,6 +113,21 @@ fn test_submit_exceeds_queue_limit() {
 		assert_noop!(
 			OctopusUpwardMessages::submit(Some(who), PayloadType::BurnAsset, &vec![0, 1, 2]),
 			Error::<Test>::QueueSizeLimitReached,
+		);
+	})
+}
+
+#[test]
+fn test_submit_exceeds_payload_limit() {
+	new_tester().execute_with(|| {
+		let who: AccountId = AccountKeyring::Bob.into();
+
+		let max_payload_bytes = MaxMessagePayloadSize::get();
+		let payload: Vec<u8> = (0..).take(max_payload_bytes as usize + 1).collect();
+
+		assert_noop!(
+			OctopusUpwardMessages::submit(Some(who), PayloadType::BurnAsset, payload.as_slice()),
+			Error::<Test>::PayloadTooLarge,
 		);
 	})
 }

@@ -48,7 +48,6 @@ pallet-octopus-lpos = { path = "../lpos" }
 pallet-octopus-appchain = { path = "../appchain" }
 pallet-octopus-upward-messages = { path = "../upward-messages" }
 
-
 [features]
 default = ["std"]
 std = [

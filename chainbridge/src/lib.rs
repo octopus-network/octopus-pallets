@@ -678,11 +678,11 @@ impl<T: Config> EnsureOrigin<T::Origin> for EnsureBridge<T> {
 		})
 	}
 
-	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		T::Origin::from(frame_system::RawOrigin::Signed(<Pallet<T>>::account_id()))
-	}
+	// /// Returns an outer origin capable of passing `try_origin` check.
+	// ///
+	// /// ** Should be used for benchmarking only!!! **
+	// #[cfg(feature = "runtime-benchmarks")]
+	// fn successful_origin() -> T::Origin {
+	// 	T::Origin::from(frame_system::RawOrigin::Signed(<Pallet<T>>::account_id()))
+	// }
 }

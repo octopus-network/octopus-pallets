@@ -15,7 +15,7 @@ use borsh::BorshSerialize;
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
-	traits::{Currency, Get, OnUnbalanced, StorageVersion, UnixTime},
+	traits::{Currency, Get, StorageVersion, UnixTime},
 	PalletId,
 };
 use frame_system::{ensure_root, offchain::SendTransactionTypes, pallet_prelude::*};
@@ -50,15 +50,6 @@ pub type EraIndex = u32;
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 
-/// The balance type of this pallet.
-// nerver used.
-// pub(crate) type BalanceOf<T> =
-// 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::PositiveImbalance;
-
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ActiveEraInfo {
@@ -79,9 +70,9 @@ pub struct ActiveEraInfo {
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	total: RewardPoint,
+	pub total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BTreeMap<AccountId, RewardPoint>,
 }
 
 impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
@@ -93,11 +84,10 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 /// Means for interacting with a specialized version of the `session` trait.
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `pallet_session::Config`
-pub trait SessionInterface<AccountId>: frame_system::Config {
+pub trait SessionInterface<AccountId> {
 	/// Disable the validator at the given index, returns `false` if the validator was already
 	/// disabled or the index is out of bounds.
 	fn disable_validator(validator_index: u32) -> bool;
-
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -148,6 +138,24 @@ where
 	}
 }
 
+impl<AccountId> SessionInterface<AccountId> for () {
+	fn disable_validator(_: u32) -> bool {
+		true
+	}
+
+	fn validators() -> Vec<AccountId> {
+		Vec::new()
+	}
+
+	fn prune_historical_up_to(_: SessionIndex) {
+		()
+	}
+
+	fn is_active_validator(_id: KeyTypeId, _key_data: &[u8]) -> Option<AccountId> {
+		None
+	}
+}
+
 impl<T: Config> LposInterface<<T as frame_system::Config>::AccountId> for Pallet<T> {
 	fn is_active_validator(
 		id: KeyTypeId,
@@ -193,9 +201,6 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// Handler for the unbalanced increment when rewarding a staker.
-		type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 		/// Number of sessions per era.
 		#[pallet::constant]
@@ -414,6 +419,11 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+			// just return the weight of the on_finalize.
+			T::DbWeight::get().reads(1)
+		}
+
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -499,8 +509,7 @@ impl<T: Config> Pallet<T> {
 					0
 				});
 
-			let era_length =
-				session_index.checked_sub(current_era_start_session_index).unwrap_or(0); // Must never happen.
+			let era_length = session_index.saturating_sub(current_era_start_session_index); // Must never happen.
 
 			log!(info, "Era length: {:?}", era_length);
 			if era_length < T::SessionsPerEra::get() {

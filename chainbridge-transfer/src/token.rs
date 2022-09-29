@@ -17,7 +17,7 @@ impl<T: Config> Pallet<T> {
 
 			let right_balance = T::NativeTokenMaxValue::get() / 3u8.into();
 			if total_balance > right_balance {
-				return Err(Error::<T>::OverTransferLimit)?;
+				return Err(Error::<T>::OverTransferLimit)?
 			}
 		}
 

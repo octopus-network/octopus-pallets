@@ -203,14 +203,22 @@ impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature>
 	type GenericPublic = sp_core::sr25519::Public;
 }
 
+parameter_types! {
+	pub const MaxMessagePayloadSize:u32 = 256;
+	pub const MaxMessagesPerCommit: u32 = 20 ;
+}
+
 impl pallet_octopus_upward_messages::Config for Test {
 	type Event = Event;
-	type UpwardMessagesLimit = UpwardMessagesLimit;
 	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
+	type MaxMessagePayloadSize = MaxMessagePayloadSize;
+	type MaxMessagesPerCommit = MaxMessagesPerCommit;
+	type Hashing = BlakeTwo256;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
 construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -235,10 +243,26 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const MaxValidators: u32 = 100 ;
 }
 
 pub type AssetId = u32;
 pub type AssetBalance = u128;
+
+impl pallet_octopus_appchain::Config for Test {
+	type AuthorityId = OctopusId;
+	type AppCrypto = OctopusAppCrypto;
+	type Event = Event;
+	type Call = Call;
+	type BridgeInterface = OctopusBridge;
+	type LposInterface = OctopusLpos;
+	type UpwardMessagesInterface = OctopusUpwardMessages;
+	type GracePeriod = GracePeriod;
+	type UnsignedPriority = UnsignedPriority;
+	type RequestEventLimit = RequestEventLimit;
+	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
+}
 
 impl pallet_octopus_bridge::Config for Test {
 	type Event = Event;
@@ -257,20 +281,6 @@ impl pallet_octopus_bridge::Config for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_octopus_appchain::Config for Test {
-	type AuthorityId = OctopusId;
-	type AppCrypto = OctopusAppCrypto;
-	type Event = Event;
-	type Call = Call;
-	type BridgeInterface = OctopusBridge;
-	type LposInterface = OctopusLpos;
-	type UpwardMessagesInterface = OctopusUpwardMessages;
-	type GracePeriod = GracePeriod;
-	type UnsignedPriority = UnsignedPriority;
-	type RequestEventLimit = RequestEventLimit;
-	type WeightInfo = ();
-}
-
 parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_octopus_lpos::EraIndex = 24 * 28;
@@ -281,7 +291,6 @@ impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type Event = Event;
-	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
@@ -333,11 +342,11 @@ pub fn new_tester() -> sp_io::TestExternalities {
 			anchor_contract: "oct-test.testnet".to_string(),
 			validators,
 		},
-		session: pallet_session::GenesisConfig { keys },
 		octopus_bridge: pallet_octopus_bridge::GenesisConfig {
 			premined_amount: 1024 * DOLLARS,
 			asset_id_by_token_id: vec![("usdc.testnet".to_string(), 2)],
 		},
+		session: pallet_session::GenesisConfig { keys },
 	}
 	.build_storage()
 	.unwrap();
