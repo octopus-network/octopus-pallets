@@ -589,6 +589,9 @@ pub mod pallet {
 				log!(trace, "local key: {:?}", key_data);
 
 				let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &key_data);
+				if val_id.is_none() {
+					continue
+				}
 				let generic_public = <T::AppCrypto as AppCrypto<
 					<T as SigningTypes>::Public,
 					<T as SigningTypes>::Signature,
@@ -596,9 +599,6 @@ pub mod pallet {
 				let public: <T as SigningTypes>::Public = generic_public.into();
 				log!(trace, "local public key: {:?}", public);
 
-				if val_id.is_none() {
-					continue
-				}
 				return Some((public, key_data, val_id.unwrap()))
 			}
 			None
@@ -876,9 +876,6 @@ pub mod pallet {
 							event.receiver.clone(),
 							event.amount,
 							error);
-							// let min = T::Currency::minimum_balance();
-							// let amount_unwrapped = event.amount.checked_into().unwrap_or(0);
-							// //Check: should not return error. TODO
 							Self::deposit_event(Event::UnlockFailed {
 								sender: event.sender_id,
 								receiver: event.receiver,
