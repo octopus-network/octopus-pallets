@@ -9,6 +9,7 @@ impl<T: Config> Pallet<T> {
 		item: T::ItemId,
 		sender: T::AccountId,
 		receiver_id: Vec<u8>,
+		fee: BalanceOf<T>,
 	) -> DispatchResult {
 		let receiver_id =
 			String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
@@ -45,6 +46,7 @@ impl<T: Config> Pallet<T> {
 			item,
 			sender,
 			receiver: receiver_id.as_bytes().to_vec(),
+			fee,
 			sequence,
 		});
 

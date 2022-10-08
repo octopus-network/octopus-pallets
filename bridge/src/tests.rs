@@ -1,3 +1,4 @@
+use super::pallet::{CrosschainTransferFee, OracleAccount, TokenPrice};
 use crate::{mock::*, Error, *};
 use frame_support::{assert_noop, assert_ok};
 use sp_keyring::AccountKeyring;
@@ -20,7 +21,7 @@ fn test_set_token_id() {
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 
 		assert_noop!(
-			OctopusBridge::set_token_id(_origin, "usdc.testnet".to_string().as_bytes().to_vec(), 2,),
+			OctopusBridge::set_token_id(_origin, "usdc.testnet".to_string().as_bytes().to_vec(), 2),
 			BadOrigin
 		);
 
@@ -91,7 +92,7 @@ fn test_delete_token_id() {
 fn test_lock() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let origin = Origin::signed(alice.clone());
-	let source = sp_runtime::MultiAddress::Id(alice.clone());
+	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
 		assert_ok!(Balances::set_balance(
 			Origin::root(),
@@ -100,25 +101,69 @@ fn test_lock() {
 			100000
 		));
 		let minimum_amount = Balances::minimum_balance();
+		let fee = Balances::minimum_balance();
 		assert_noop!(
 			OctopusBridge::lock(
 				origin.clone(),
 				"test-account.testnet".to_string().as_bytes().to_vec(),
-				minimum_amount
+				minimum_amount,
+				fee,
 			),
 			Error::<Test>::NotActivated
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
 		assert_noop!(
-			OctopusBridge::lock(origin.clone(), vec![0, 159], minimum_amount),
+			OctopusBridge::lock(origin.clone(), vec![0, 159], minimum_amount, fee),
 			Error::<Test>::InvalidReceiverId
 		);
 
 		assert_ok!(OctopusBridge::lock(
 			origin,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			minimum_amount
+			minimum_amount,
+			fee,
+		));
+	});
+}
+
+#[test]
+fn test_burn_nep141() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let origin = Origin::signed(alice.clone());
+	let source = sp_runtime::MultiAddress::Id(alice);
+	new_tester().execute_with(|| {
+		let fee = Balances::minimum_balance();
+		assert_ok!(Balances::set_balance(
+			Origin::root(),
+			source.clone(),
+			1000000000000000000,
+			100000,
+		));
+		assert_ok!(Assets::force_create(Origin::root(), 0, source.clone(), true, 1));
+		assert_ok!(Assets::mint(origin.clone(), 0, source.clone(), 10000000000000000000000));
+		assert_noop!(
+			OctopusBridge::burn_nep141(
+				origin.clone(),
+				0,
+				"test-account.testnet".to_string().as_bytes().to_vec(),
+				10000000000,
+				fee,
+			),
+			Error::<Test>::NotActivated
+		);
+		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		assert_ok!(OctopusBridge::set_token_id(
+			Origin::root(),
+			"test.testnet".to_string().as_bytes().to_vec(),
+			0,
+		));
+		assert_ok!(OctopusBridge::burn_nep141(
+			origin,
+			0,
+			"test-account.testnet".to_string().as_bytes().to_vec(),
+			100000000,
+			fee,
 		));
 	});
 }
@@ -127,19 +172,25 @@ fn test_lock() {
 pub fn test_lock_nonfungible() {
 	let alice: AccountId = AccountKeyring::Alice.into();
 	let origin = Origin::signed(alice.clone());
+	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
-		assert_ok!(Uniques::force_create(
+		let fee = Balances::minimum_balance();
+		assert_ok!(Balances::set_balance(
 			Origin::root(),
-			sp_runtime::MultiAddress::Id(alice.clone()),
-			true
+			source.clone(),
+			1000000000000000000,
+			100000
 		));
-		assert_ok!(Uniques::mint(origin.clone(), 0, 42, sp_runtime::MultiAddress::Id(alice),));
+		assert_ok!(Uniques::force_create(Origin::root(), source.clone(), true));
+		assert_ok!(Uniques::mint(origin.clone(), 0, 42, source,));
 		assert_noop!(
 			OctopusBridge::lock_nonfungible(
 				origin.clone(),
 				0,
 				42,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
+				fee,
+				1,
 			),
 			Error::<Test>::NotActivated
 		);
@@ -149,6 +200,8 @@ pub fn test_lock_nonfungible() {
 			0,
 			42,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
+			fee,
+			1,
 		));
 	});
 }
@@ -184,29 +237,14 @@ pub fn test_force_unlock() {
 #[test]
 pub fn test_force_mint_nep141() {
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
+	let source = sp_runtime::MultiAddress::Id(ferdie.clone());
 	new_tester().execute_with(|| {
-		assert_ok!(Assets::force_create(
-			Origin::root(),
-			0,
-			sp_runtime::MultiAddress::Id(ferdie.clone()),
-			true,
-			1
-		));
+		assert_ok!(Assets::force_create(Origin::root(), 0, source.clone(), true, 1));
 
-		assert_ok!(OctopusBridge::force_mint_nep141(
-			Origin::root(),
-			0,
-			sp_runtime::MultiAddress::Id(ferdie.clone()),
-			1000000000
-		));
+		assert_ok!(OctopusBridge::force_mint_nep141(Origin::root(), 0, source.clone(), 1000000000));
 
 		assert_noop!(
-			OctopusBridge::force_mint_nep141(
-				Origin::signed(ferdie.clone()),
-				1,
-				sp_runtime::MultiAddress::Id(ferdie),
-				1000000000
-			),
+			OctopusBridge::force_mint_nep141(Origin::signed(ferdie), 1, source, 1000000000),
 			BadOrigin,
 		);
 	});
@@ -218,41 +256,78 @@ pub fn test_force_unlock_nft() {
 	let origin = Origin::signed(alice.clone());
 	let bob: AccountId = AccountKeyring::Bob.into();
 	let origin2 = Origin::signed(bob);
+	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
-		assert_ok!(Uniques::force_create(
-			Origin::root(),
-			sp_runtime::MultiAddress::Id(alice.clone()),
-			true
-		));
-		assert_ok!(Uniques::mint(
-			origin.clone(),
-			0,
-			42,
-			sp_runtime::MultiAddress::Id(alice.clone()),
-		));
+		assert_ok!(Uniques::force_create(Origin::root(), source.clone(), true));
+		assert_ok!(Uniques::mint(origin.clone(), 0, 42, source.clone(),));
 		assert_ok!(OctopusAppchain::force_set_is_activated(Origin::root(), true));
+		let fee = Balances::minimum_balance();
+		assert_ok!(Balances::set_balance(
+			Origin::root(),
+			source.clone(),
+			1000000000000000000,
+			100000
+		));
 		assert_ok!(OctopusBridge::lock_nonfungible(
 			origin,
 			0,
 			42,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
+			fee,
+			1,
 		));
 
-		assert_ok!(OctopusBridge::force_unlock_nonfungible(
-			Origin::root(),
-			sp_runtime::MultiAddress::Id(alice.clone()),
-			0,
-			42,
-		));
+		assert_ok!(OctopusBridge::force_unlock_nonfungible(Origin::root(), source.clone(), 0, 42));
+
+		assert_noop!(OctopusBridge::force_unlock_nonfungible(origin2, source, 0, 42), BadOrigin);
+	});
+}
+
+#[test]
+pub fn test_set_oracle_account() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let bob: AccountId = AccountKeyring::Bob.into();
+	let origin = Origin::signed(bob);
+	let source = sp_runtime::MultiAddress::Id(alice.clone());
+	new_tester().execute_with(|| {
+		assert_noop!(OctopusBridge::set_oracle_account(origin, source.clone()), BadOrigin);
+		assert_ok!(OctopusBridge::set_oracle_account(Origin::root(), source));
+		assert_eq!(OracleAccount::<Test>::get(), alice.into());
+	});
+}
+
+#[test]
+pub fn test_set_token_price() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let origin1 = Origin::signed(alice.clone());
+	let source = sp_runtime::MultiAddress::Id(alice);
+	let bob: AccountId = AccountKeyring::Bob.into();
+	let origin2 = Origin::signed(bob);
+	new_tester().execute_with(|| {
+		assert_noop!(
+			OctopusBridge::set_token_price(origin1.clone(), 1000000),
+			Error::<Test>::NoOracleAccount
+		);
+		assert_ok!(OctopusBridge::set_oracle_account(Origin::root(), source.clone()));
 
 		assert_noop!(
-			OctopusBridge::force_unlock_nonfungible(
-				origin2,
-				sp_runtime::MultiAddress::Id(alice),
-				0,
-				42,
-			),
-			BadOrigin,
+			OctopusBridge::set_token_price(origin2, 1000000),
+			Error::<Test>::UpdatePriceWithNoPermissionAccount
+		);
+		assert_noop!(
+			OctopusBridge::set_token_price(origin1.clone(), 0),
+			Error::<Test>::PriceIsZero
+		);
+		assert_ok!(OctopusBridge::set_token_price(origin1, 1000000));
+
+		assert_eq!(TokenPrice::<Test>::get(), Some(1000000));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(250000)
+		);
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::NoFungible).unwrap(),
+			Some(500000)
 		);
 	});
 }
