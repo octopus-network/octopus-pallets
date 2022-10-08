@@ -11,7 +11,7 @@
 // mainchain:lock_asset()   -> appchain:mint_asset()
 // mainchain:unlock_asset() <- appchain:burn_asset()
 use borsh::BorshSerialize;
-use codec::Encode;
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	traits::{
@@ -35,7 +35,10 @@ use pallet_octopus_support::{
 	},
 	types::{BurnAssetPayload, LockNftPayload, LockPayload, Nep171TokenMetadata, PayloadType},
 };
-use scale_info::prelude::string::{String, ToString};
+use scale_info::{
+	prelude::string::{String, ToString},
+	TypeInfo,
+};
 use serde::Deserialize;
 use serde_json::json;
 use sp_runtime::{
@@ -69,6 +72,12 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-bridge";
 
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum CrossChainTransferType {
+	Fungible,
+	NoFungible,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -165,11 +174,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			receiver_id: Vec<u8>,
 			amount: BalanceOf<T>,
+			fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock(sender, receiver_id, amount)?;
+			Self::do_lock_fungible_transfer_fee(sender.clone(), fee)?;
+			Self::do_lock(sender, receiver_id, amount, fee)?;
 
 			Ok(())
 		}
@@ -181,11 +192,13 @@ pub mod pallet {
 			asset_id: T::AssetId,
 			receiver_id: Vec<u8>,
 			amount: T::AssetBalance,
+			fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_burn_nep141(asset_id, sender, receiver_id, amount)?;
+			Self::do_lock_fungible_transfer_fee(sender.clone(), fee)?;
+			Self::do_burn_nep141(asset_id, sender, receiver_id, amount, fee)?;
 
 			Ok(())
 		}
@@ -197,11 +210,14 @@ pub mod pallet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 			receiver_id: Vec<u8>,
+			fee: BalanceOf<T>,
+			metadata_length: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock_nonfungible(collection_id, item_id, sender, receiver_id)?;
+			Self::do_lock_nofungible_transfer_fee(sender.clone(), fee, metadata_length)?;
+			Self::do_lock_nonfungible(collection_id, item_id, sender, receiver_id, fee)?;
 
 			Ok(())
 		}
@@ -296,6 +312,41 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn set_oracle_account(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+
+			<OracleAccount<T>>::put(who.clone());
+			Self::deposit_event(Event::OracleAccountHasBeenSet { who });
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_token_price(origin: OriginFor<T>, price: u32) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(price != 0, Error::<T>::PriceIsZero);
+
+			let oracle_account = match <OracleAccount<T>>::try_get() {
+				Ok(account) => account,
+				Err(_) => return Err(Error::<T>::NoOracleAccount.into()),
+			};
+
+			ensure!(who == oracle_account, Error::<T>::UpdatePriceWithNoPermissionAccount);
+
+			<TokenPrice<T>>::put(Some(price));
+			Self::calculate_and_update_fee(price);
+
+			Self::deposit_event(Event::TokenPriceUpdated { who, price });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -307,6 +358,7 @@ pub mod pallet {
 			sender: T::AccountId,
 			receiver: Vec<u8>,
 			amount: BalanceOf<T>,
+			fee: BalanceOf<T>,
 			sequence: u64,
 		},
 		/// An `amount` was unlocked to `receiver` from `sender`.
@@ -328,6 +380,7 @@ pub mod pallet {
 			sender: T::AccountId,
 			receiver: Vec<u8>,
 			amount: T::AssetBalance,
+			fee: BalanceOf<T>,
 			sequence: u64,
 		},
 		NonfungibleLocked {
@@ -335,6 +388,7 @@ pub mod pallet {
 			item: T::ItemId,
 			sender: T::AccountId,
 			receiver: Vec<u8>,
+			fee: BalanceOf<T>,
 			sequence: u64,
 		},
 		NonfungibleUnlocked {
@@ -358,6 +412,13 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			who: T::AccountId,
+		},
+		OracleAccountHasBeenSet {
+			who: T::AccountId,
+		},
+		TokenPriceUpdated {
+			who: T::AccountId,
+			price: u32,
 		},
 	}
 
@@ -387,12 +448,33 @@ pub mod pallet {
 		TokenIdNotExist,
 		/// Not implement nep171 convertor.
 		ConvertorNotImplement,
+		/// Not set oracle account.
+		NoOracleAccount,
+		/// Price is zero.
+		PriceIsZero,
+		/// Update token price must use oracle account.
+		UpdatePriceWithNoPermissionAccount,
+		/// Invalid fee.
+		InvalidFee,
 	}
 
 	/// A map from NEAR token account ID to appchain asset ID.
 	#[pallet::storage]
-	pub(super) type AssetIdByTokenId<T: Config> =
+	pub(crate) type AssetIdByTokenId<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, T::AssetId, OptionQuery, GetDefault>;
+
+	/// The oracle account.
+	#[pallet::storage]
+	pub(crate) type OracleAccount<T: Config> = StorageValue<_, T::AccountId>;
+
+	/// A map store the transfer fee for different cross chain transactions.
+	#[pallet::storage]
+	pub(crate) type CrosschainTransferFee<T: Config> =
+		StorageMap<_, Twox64Concat, CrossChainTransferType, Option<BalanceOf<T>>, OptionQuery>;
+
+	/// Token price setted by oracle account.
+	#[pallet::storage]
+	pub(crate) type TokenPrice<T: Config> = StorageValue<_, Option<u32>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -446,5 +528,59 @@ impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	fn account_id() -> T::AccountId {
 		T::PalletId::get().into_account_truncating()
+	}
+
+	fn calculate_and_update_fee(price: u32) {
+		let ft_fee: BalanceOf<T> = (price / 4).checked_into().unwrap();
+		let nft_fee: BalanceOf<T> = (price / 2).checked_into().unwrap();
+
+		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Fungible, Some(ft_fee));
+		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::NoFungible, Some(nft_fee));
+	}
+
+	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
+		let min_fee: BalanceOf<T> =
+			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Fungible) {
+				Ok(Some(fee)) => fee,
+				_ => {
+					// Need Check.
+					log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
+					0u128.checked_into().unwrap()
+				},
+			};
+
+		if fee < min_fee {
+			return Err(Error::<T>::InvalidFee.into())
+		}
+
+		T::Currency::transfer(&sender, &Self::account_id(), fee, AllowDeath)?;
+
+		Ok(())
+	}
+
+	fn do_lock_nofungible_transfer_fee(
+		sender: T::AccountId,
+		fee: BalanceOf<T>,
+		_metadata_length: u32,
+	) -> DispatchResult {
+		let min_fee: BalanceOf<T> =
+			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::NoFungible) {
+				Ok(Some(fee)) => fee,
+				_ => {
+					// Need Check.
+					log!(warn, "Storage CrosschainTransferFee is empty, default nft fee is zero.");
+					0u128.checked_into().unwrap()
+				},
+			};
+
+		// The min_fee will be related to metadata_length in future.
+
+		if fee < min_fee {
+			return Err(Error::<T>::InvalidFee.into())
+		}
+
+		T::Currency::transfer(&sender, &Self::account_id(), fee, AllowDeath)?;
+
+		Ok(())
 	}
 }

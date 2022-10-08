@@ -16,6 +16,7 @@ pub struct LockPayload {
 	pub sender: String,
 	pub receiver_id: String,
 	pub amount: u128,
+	pub fee: u128,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -24,6 +25,7 @@ pub struct BurnAssetPayload {
 	pub sender: String,
 	pub receiver_id: String,
 	pub amount: u128,
+	pub fee: u128,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -52,6 +54,7 @@ pub struct LockNftPayload {
 	pub collection: u128,
 	pub item: u128,
 	pub metadata: Nep171TokenMetadata,
+	pub fee: u128,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
