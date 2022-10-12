@@ -76,7 +76,7 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum CrossChainTransferType {
 	Fungible,
-	NoFungible,
+	Nonfungible,
 }
 
 #[frame_support::pallet]
@@ -216,7 +216,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock_nofungible_transfer_fee(sender.clone(), fee, metadata_length)?;
+			Self::do_lock_nonfungible_transfer_fee(sender.clone(), fee, metadata_length)?;
 			Self::do_lock_nonfungible(collection_id, item_id, sender, receiver_id, fee)?;
 
 			Ok(())
@@ -535,7 +535,7 @@ impl<T: Config> Pallet<T> {
 		let nft_fee: BalanceOf<T> = (price / 2).checked_into().unwrap();
 
 		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Fungible, Some(ft_fee));
-		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::NoFungible, Some(nft_fee));
+		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Nonfungible, Some(nft_fee));
 	}
 
 	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
@@ -558,13 +558,13 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn do_lock_nofungible_transfer_fee(
+	fn do_lock_nonfungible_transfer_fee(
 		sender: T::AccountId,
 		fee: BalanceOf<T>,
 		_metadata_length: u32,
 	) -> DispatchResult {
 		let min_fee: BalanceOf<T> =
-			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::NoFungible) {
+			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible) {
 				Ok(Some(fee)) => fee,
 				_ => {
 					// Need Check.

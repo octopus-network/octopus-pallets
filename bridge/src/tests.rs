@@ -326,7 +326,7 @@ pub fn test_set_token_price() {
 			Some(250000)
 		);
 		assert_eq!(
-			CrosschainTransferFee::<Test>::get(CrossChainTransferType::NoFungible).unwrap(),
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Nonfungible).unwrap(),
 			Some(500000)
 		);
 	});
