@@ -34,7 +34,7 @@ use types::{
 	AppchainNotification, AppchainNotificationHistory, NotificationResult, Observation,
 	ObservationType, ObservationsPayload, Validator, ValidatorSet,
 };
-pub use weights::WeightInfo;
+// pub use weights::WeightInfo;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
@@ -45,7 +45,7 @@ pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git
 
 mod mainchain;
 pub mod types;
-pub mod weights;
+// pub mod weights;
 
 #[cfg(test)]
 mod mock;
@@ -135,7 +135,7 @@ pub mod pallet {
 		type AppCrypto: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
@@ -171,7 +171,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxValidators: Get<u32>;
 
-		type WeightInfo: WeightInfo;
+		// type WeightInfo: WeightInfo;
 	}
 
 	type MaxObservations = ConstU32<100>;
@@ -419,7 +419,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit observations.
-		#[pallet::weight(<T as Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
+		// #[pallet::weight(<T as Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
+		#[pallet::weight(0)]
 		pub fn submit_observations(
 			origin: OriginFor<T>,
 			payload: ObservationsPayload<
@@ -457,14 +458,16 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_is_activated())]
+		// #[pallet::weight(<T as Config>::WeightInfo::force_set_is_activated())]
+		#[pallet::weight(0)]
 		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
 			ensure_root(origin)?;
 			<IsActivated<T>>::put(is_activated);
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id())]
+		// #[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id())]
+		#[pallet::weight(0)]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
@@ -473,7 +476,8 @@ pub mod pallet {
 		}
 
 		// Force set planned validators with sudo permissions.
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len() as u32))]
+		// #[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len() as u32))]
+		#[pallet::weight(0)]
 		pub fn force_set_planned_validators(
 			origin: OriginFor<T>,
 			validators: Vec<(T::AccountId, u128)>,
@@ -483,7 +487,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
+		// #[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
+		#[pallet::weight(0)]
 		pub fn force_set_next_notification_id(
 			origin: OriginFor<T>,
 			next_notification_id: u32,
