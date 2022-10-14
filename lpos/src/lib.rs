@@ -51,7 +51,7 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 /// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
@@ -463,7 +463,8 @@ pub mod pallet {
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
 		///       ErasStartSessionIndex
 		/// # </weight>
-		// #[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth, *_era_items_deleted))]
+		// #[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth,
+		// *_era_items_deleted))]
 		#[pallet::weight(0)]
 		pub fn set_history_depth(
 			origin: OriginFor<T>,

@@ -3,6 +3,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	traits::{ConstU32, OneSessionHandler, StorageVersion},
 	transactional, BoundedVec,
 };
@@ -138,7 +139,10 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching dispatch call type.
-		type Call: From<Call<Self>>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		type BridgeInterface: BridgeInterface<Self::AccountId>;
 
@@ -419,7 +423,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit observations.
-		// #[pallet::weight(<T as Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
+		// #[pallet::weight(<T as
+		// Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
 		#[pallet::weight(0)]
 		pub fn submit_observations(
 			origin: OriginFor<T>,
@@ -476,7 +481,8 @@ pub mod pallet {
 		}
 
 		// Force set planned validators with sudo permissions.
-		// #[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len() as u32))]
+		// #[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len()
+		// as u32))]
 		#[pallet::weight(0)]
 		pub fn force_set_planned_validators(
 			origin: OriginFor<T>,

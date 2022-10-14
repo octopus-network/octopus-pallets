@@ -228,10 +228,10 @@
 // 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 // 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 // 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-// 		OctopusAppchain: pallet_octopus_appchain::{Pallet, Call, Storage, Config<T>, Event<T>, ValidateUnsigned}, // must before session
-// 		OctopusLpos: pallet_octopus_lpos::{Pallet, Call, Config, Storage, Event<T>},
-// 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call, Storage, Event<T>},
-// 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+// 		OctopusAppchain: pallet_octopus_appchain::{Pallet, Call, Storage, Config<T>, Event<T>,
+// ValidateUnsigned}, // must before session 		OctopusLpos: pallet_octopus_lpos::{Pallet, Call,
+// Config, Storage, Event<T>}, 		OctopusUpwardMessages: pallet_octopus_upward_messages::{Pallet, Call,
+// Storage, Event<T>}, 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 // 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
 // 		OctopusBridge: pallet_octopus_bridge::{Pallet, Call, Storage, Event<T>, Config<T>},
 // 	}
