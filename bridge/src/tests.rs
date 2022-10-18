@@ -4,6 +4,7 @@
 // use sp_keyring::AccountKeyring;
 // use sp_runtime::traits::BadOrigin;
 
+
 // #[test]
 // fn test_set_token_id() {
 // 	let alice: AccountId = AccountKeyring::Alice.into();
@@ -24,6 +25,7 @@
 // 			OctopusBridge::set_token_id(_origin, "usdc.testnet".to_string().as_bytes().to_vec(), 2),
 // 			BadOrigin
 // 		);
+
 
 // 		assert_ok!(OctopusBridge::set_token_id(
 // 			Origin::root(),
@@ -167,6 +169,7 @@
 // 		));
 // 	});
 // }
+
 
 // #[test]
 // pub fn test_lock_nonfungible() {
