@@ -159,8 +159,8 @@ pub mod pallet {
 				return frame_support::weights::Weight::zero()
 			}
 
-			let message_count = message_queue.len() as u32;
-			let average_payload_size = Self::average_payload_size(&message_queue);
+			let _message_count = message_queue.len() as u32;
+			let _average_payload_size = Self::average_payload_size(&message_queue);
 
 			let encoded_messages = message_queue.encode();
 			let commitment_hash = <T as Config>::Hashing::hash(&encoded_messages);
