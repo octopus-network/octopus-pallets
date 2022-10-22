@@ -46,7 +46,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
-// use weights::WeightInfo;
+use weights::WeightInfo;
 
 pub use pallet::*;
 
@@ -58,7 +58,7 @@ mod nep141;
 mod nep171;
 mod nonfungible;
 mod token;
-// mod weights;
+pub mod weights;
 
 #[cfg(test)]
 mod mock;
@@ -129,8 +129,8 @@ pub mod pallet {
 
 		type Convertor: ConvertIntoNep171<CollectionId = Self::CollectionId, ItemId = Self::ItemId>;
 
-		// /// Type representing the weight of this pallet
-		// type WeightInfo: WeightInfo;
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -168,8 +168,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// #[pallet::weight(<T as Config>::WeightInfo::lock())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::lock())]
 		#[transactional]
 		pub fn lock(
 			origin: OriginFor<T>,
@@ -186,8 +185,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::burn_nep141())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::burn_nep141())]
 		#[transactional]
 		pub fn burn_nep141(
 			origin: OriginFor<T>,
@@ -205,8 +203,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::lock_nonfungible())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::lock_nonfungible())]
 		#[transactional]
 		pub fn lock_nonfungible(
 			origin: OriginFor<T>,
@@ -225,8 +222,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
 		pub fn set_token_id(
 			origin: OriginFor<T>,
 			token_id: Vec<u8>,
@@ -250,8 +246,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
 		pub fn delete_token_id(origin: OriginFor<T>, token_id: Vec<u8>) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -265,8 +260,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::force_unlock())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_unlock())]
 		pub fn force_unlock(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -282,8 +276,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::force_mint_nep141())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_mint_nep141())]
 		pub fn force_mint_nep141(
 			origin: OriginFor<T>,
 			asset_id: T::AssetId,
@@ -299,8 +292,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// #[pallet::weight(<T as Config>::WeightInfo::force_unlock_nonfungible())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nonfungible())]
 		pub fn force_unlock_nonfungible(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -321,7 +313,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_oracle_account())]
 		pub fn set_oracle_account(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -335,7 +327,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_token_price())]
 		pub fn set_token_price(origin: OriginFor<T>, price: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 

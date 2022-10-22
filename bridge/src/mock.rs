@@ -225,12 +225,12 @@ impl pallet_octopus_lpos::Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	// type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
+	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
 }
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	// type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
+	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 	type MaxMessagePayloadSize = MaxMessagePayloadSize;
 	type MaxMessagesPerCommit = MaxMessagesPerCommit;
 	type Hashing = BlakeTwo256;
@@ -304,7 +304,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 	type MaxValidators = MaxValidators;
 }
 
@@ -322,7 +322,7 @@ impl Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = Uniques;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

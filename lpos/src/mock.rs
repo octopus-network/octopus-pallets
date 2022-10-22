@@ -210,10 +210,10 @@ parameter_types! {
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	// type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 	type MaxMessagePayloadSize = MaxMessagePayloadSize;
 	type MaxMessagesPerCommit = MaxMessagesPerCommit;
 	type Hashing = BlakeTwo256;
+	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -260,7 +260,7 @@ impl pallet_octopus_appchain::Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 	type MaxValidators = MaxValidators;
 }
 
@@ -278,7 +278,7 @@ impl pallet_octopus_bridge::Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
 	type Convertor = ();
-	// type WeightInfo = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -297,7 +297,7 @@ impl Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 }
 
 use sp_core::{sr25519, Pair, Public as OtherPublic};

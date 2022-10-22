@@ -71,7 +71,7 @@ impl Config for Test {
 	type Hashing = Keccak256;
 	type MaxMessagePayloadSize = MaxMessagePayloadSize;
 	type MaxMessagesPerCommit = MaxMessagesPerCommit;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 }
 
 pub fn new_tester() -> sp_io::TestExternalities {
