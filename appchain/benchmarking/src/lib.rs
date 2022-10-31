@@ -50,7 +50,7 @@ fn produce_burn_notification<T: AppchainConfig>(index: u32) -> Observation<T::Ac
 		index,
 		sender_id: "pallet-test.testnet".to_string().as_bytes().to_vec(),
 		receiver,
-		amount: 10000000000000000000,
+		amount: 10_000_000_000_000_000_000,
 	})
 }
 

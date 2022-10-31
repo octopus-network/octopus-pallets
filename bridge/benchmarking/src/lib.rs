@@ -101,7 +101,7 @@ benchmarks! {
 		set_oracle_account_and_update_token_price::<T>();
 		let min = <T as BridgeConfig>::Currency::minimum_balance();
 		let caller = whitelisted_caller();
-		let balance = 1000000000000000000000000u128;
+		let balance = 1_000_000_000_000_000_000_000_000u128;
 		let _ = <T as BridgeConfig>::Currency::make_free_balance_be(&caller, balance.checked_into().unwrap());
 		let origin = RawOrigin::Signed(caller.clone());
 
@@ -144,14 +144,14 @@ benchmarks! {
 			RawOrigin::Root.into(),
 			asset_id,
 			receiver,
-			100000u32.into());
+			100_000u32.into());
 	}: {
 		let origin = RawOrigin::Signed(caller.clone().into());
 		let _ = BridgePallet::<T>::burn_nep141(
 			origin.into(),
 			asset_id,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			10000u32.into(),
+			10_000u32.into(),
 			fee,
 		);
 	}
@@ -160,7 +160,7 @@ benchmarks! {
 			asset_id,
 			sender: caller,
 			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
-			amount: 10000u32.into(),
+			amount: 10_000u32.into(),
 			sequence: 1u64,
 			fee,
 		}
@@ -257,8 +257,8 @@ benchmarks! {
 	force_unlock {
 		type Balance<T> = <<T as BridgeConfig>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-		let ass: Balance<T> = (1000_000_000_000_0000u128).checked_into().unwrap();
-		let amount: Balance<T> = (1000_000_000_000_000_000u128).checked_into().unwrap();
+		let ass: Balance<T> = (10_000_000_000_000_000u128).checked_into().unwrap();
+		let amount: Balance<T> = (1_000_000_000_000_000_000u128).checked_into().unwrap();
 		let account_id = <T as BridgeConfig>::PalletId::get().into_account_truncating();
 		<T as BridgeConfig>::Currency::deposit_creating(&account_id, ass);
 
@@ -290,14 +290,14 @@ benchmarks! {
 			RawOrigin::Root.into(),
 			asset_id,
 			receiver,
-			100000u32.into());
+			100_000u32.into());
 		assert!(ret.is_ok());
 	}
 	verify {
 		assert_last_event::<T>(BridgeEvent::ForceNep141Minted {
 			asset_id,
 			who: caller,
-			amount: 100000u32.into(),
+			amount: 100_000u32.into(),
 		}
 		.into());
 	}
@@ -356,12 +356,12 @@ benchmarks! {
 		let _ = BridgePallet::<T>::set_oracle_account(RawOrigin::Root.into(), source);
 		let origin = RawOrigin::Signed(caller.clone());
 	}: {
-		let ret = BridgePallet::<T>::set_token_price(origin.into(), 1000000);
+		let ret = BridgePallet::<T>::set_token_price(origin.into(), 1_000_000);
 	}
 	verify {
 		assert_last_event::<T>(BridgeEvent::TokenPriceUpdated{
 			who: caller,
-			price: 1000000,
+			price: 1_000_000,
 		}
 		.into());
 	}

@@ -34,14 +34,14 @@ pub type Hash = sp_core::H256;
 pub const MILLICENTS: Balance = 10_000_000_000;
 pub const CENTS: Balance = 1_000 * MILLICENTS;
 pub const DOLLARS: Balance = 100 * CENTS;
-pub const MILLISECS_PER_BLOCK: Moment = 3000;
-pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
+pub const MILLISECS_PER_BLOCK: Moment = 3_000;
+pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1_000;
 pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
 pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 1 * MINUTES;
 pub const MINUTES: BlockNumber = 60 / (SECS_PER_BLOCK as BlockNumber);
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 2400;
+	pub const BlockHashCount: BlockNumber = 2_400;
 	pub const SS58Prefix: u16 = 42;
 }
 impl frame_system::Config for Test {
