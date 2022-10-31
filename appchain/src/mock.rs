@@ -78,8 +78,7 @@ impl pallet_timestamp::Config for Test {
 	type Moment = Moment;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
-	// type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Test>;
-	type WeightInfo = ();
+	type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Test>;
 }
 
 parameter_types! {
@@ -96,8 +95,7 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	// type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
-	type WeightInfo = ();
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
 }
 
 use pallet_octopus_appchain::sr25519::AuthorityId as OctopusId;
@@ -225,12 +223,12 @@ impl pallet_octopus_lpos::Config for Test {
 	type AppchainInterface = OctopusAppchain;
 	type UpwardMessagesInterface = OctopusUpwardMessages;
 	type PalletId = OctopusAppchainPalletId;
-	// type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
+	type WeightInfo = pallet_octopus_lpos::weights::SubstrateWeight<Test>;
 }
 
 impl pallet_octopus_upward_messages::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	// type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
+	type WeightInfo = pallet_octopus_upward_messages::weights::SubstrateWeight<Test>;
 	type MaxMessagePayloadSize = MaxMessagePayloadSize;
 	type MaxMessagesPerCommit = MaxMessagesPerCommit;
 	type Hashing = BlakeTwo256;
@@ -298,7 +296,7 @@ impl pallet_octopus_bridge::Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -321,7 +319,7 @@ impl Config for Test {
 	type GracePeriod = GracePeriod;
 	type UnsignedPriority = UnsignedPriority;
 	type RequestEventLimit = RequestEventLimit;
-	// type WeightInfo = ();
+	type WeightInfo = ();
 	type MaxValidators = MaxValidators;
 }
 

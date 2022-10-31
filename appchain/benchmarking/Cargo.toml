@@ -57,3 +57,5 @@ std = [
 	"scale-info/std",
 	"codec/std",
 ]
+
+runtime-benchmarks = []

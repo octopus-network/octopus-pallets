@@ -2,14 +2,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(deprecated)]
 
-// pub mod benchmarking;
+pub mod benchmarking;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-// pub mod weights;
+pub mod weights;
 
 use borsh::BorshSerialize;
 use codec::{Decode, Encode};
@@ -38,7 +38,7 @@ use sp_staking::{
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
-// pub use weights::WeightInfo;
+pub use weights::WeightInfo;
 
 pub use pallet::*;
 
@@ -150,7 +150,7 @@ impl<AccountId> SessionInterface<AccountId> for () {
 	fn prune_historical_up_to(_: SessionIndex) {
 		()
 	}
-
+	//
 	fn is_active_validator(_id: KeyTypeId, _key_data: &[u8]) -> Option<AccountId> {
 		None
 	}
@@ -213,8 +213,8 @@ pub mod pallet {
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: self::SessionInterface<Self::AccountId>;
 
-		// /// Weight information for extrinsics in this pallet.
-		// type WeightInfo: WeightInfo;
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 
 		type AppchainInterface: AppchainInterface<Self::AccountId>;
 
@@ -463,9 +463,8 @@ pub mod pallet {
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
 		///       ErasStartSessionIndex
 		/// # </weight>
-		// #[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth,
-		// *_era_items_deleted))]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_history_depth(*new_history_depth,
+		*_era_items_deleted))]
 		pub fn set_history_depth(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_history_depth: EraIndex,
@@ -486,8 +485,7 @@ pub mod pallet {
 		}
 
 		// Force set era rewards with sudo permissions.
-		// #[pallet::weight(<T as Config>::WeightInfo::force_set_era_payout())]
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::force_set_era_payout())]
 		pub fn force_set_era_payout(origin: OriginFor<T>, era_payout: u128) -> DispatchResult {
 			ensure_root(origin)?;
 			<EraPayout<T>>::put(era_payout);

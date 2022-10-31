@@ -16,13 +16,13 @@ use sp_runtime::{
 	DigestItem,
 };
 use sp_std::prelude::*;
-// pub use weights::WeightInfo;
+pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-upward-messages";
 
-// pub mod weights;
+pub mod weights;
 
 #[cfg(test)]
 mod tests;
@@ -68,8 +68,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxMessagesPerCommit: Get<u32>;
 
-		////////\\\/ Weight information for extrinsics in this pallet
-		// type WeightInfo: WeightInfo;
+		/// Weight information for extrinsics in this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -139,8 +139,7 @@ pub mod pallet {
 			if (now % Self::interval()).is_zero() {
 				Self::commit()
 			} else {
-				// T::WeightInfo::on_initialize_non_interval()
-				frame_support::weights::Weight::zero()
+				T::WeightInfo::on_initialize_non_interval()
 			}
 		}
 	}
@@ -155,12 +154,11 @@ pub mod pallet {
 		fn commit() -> Weight {
 			let message_queue = <MessageQueue<T>>::take();
 			if message_queue.is_empty() {
-				// return T::WeightInfo::on_initialize_no_messages()
-				return frame_support::weights::Weight::zero()
+				return T::WeightInfo::on_initialize_no_messages()
 			}
 
-			let _message_count = message_queue.len() as u32;
-			let _average_payload_size = Self::average_payload_size(&message_queue);
+			let message_count = message_queue.len() as u32;
+			let average_payload_size = Self::average_payload_size(&message_queue);
 
 			let encoded_messages = message_queue.encode();
 			let commitment_hash = <T as Config>::Hashing::hash(&encoded_messages);
@@ -182,8 +180,7 @@ pub mod pallet {
 
 			offchain_index::set(commitment_hash.as_bytes(), &message_queue.encode());
 
-			// T::WeightInfo::on_initialize(message_count, average_payload_size)
-			frame_support::weights::Weight::zero()
+			T::WeightInfo::on_initialize(message_count, average_payload_size)
 		}
 
 		fn average_payload_size(messages: &[Message<T::MaxMessagePayloadSize>]) -> u32 {
