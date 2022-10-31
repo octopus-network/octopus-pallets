@@ -64,7 +64,7 @@ fn produce_lock_asset_notification<T: AppchainConfig>(
 		token_id,
 		sender_id: "pallet-test.testnet".to_string().as_bytes().to_vec(),
 		receiver,
-		amount: 100000,
+		amount: 100_000,
 	})
 }
 
