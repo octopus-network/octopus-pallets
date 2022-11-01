@@ -43,7 +43,7 @@ use serde::Deserialize;
 use serde_json::json;
 use sp_runtime::{
 	traits::{AccountIdConversion, CheckedConversion, StaticLookup},
-	RuntimeDebug,
+	Perbill, RuntimeDebug,
 };
 use sp_std::prelude::*;
 use weights::WeightInfo;
@@ -128,6 +128,12 @@ pub mod pallet {
 			>;
 
 		type Convertor: ConvertIntoNep171<CollectionId = Self::CollectionId, ItemId = Self::ItemId>;
+
+		#[pallet::constant]
+		type NativeTokenDecimals: Get<u128>;
+
+		#[pallet::constant]
+		type Threshold: Get<u64>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
@@ -328,10 +334,15 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(<T as Config>::WeightInfo::set_token_price())]
-		pub fn set_token_price(origin: OriginFor<T>, price: u32) -> DispatchResult {
+		pub fn set_token_price(
+			origin: OriginFor<T>,
+			near_price: u64,
+			native_token_price: u64,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			ensure!(price != 0, Error::<T>::PriceIsZero);
+			ensure!(near_price != 0, Error::<T>::NearPriceSetedIsZero);
+			ensure!(native_token_price != 0, Error::<T>::NativeTokenPriceSetedIsZero);
 
 			let oracle_account = match <OracleAccount<T>>::try_get() {
 				Ok(account) => account,
@@ -340,11 +351,23 @@ pub mod pallet {
 
 			ensure!(who == oracle_account, Error::<T>::UpdatePriceWithNoPermissionAccount);
 
-			<TokenPrice<T>>::put(Some(price));
-			Self::calculate_and_update_fee(price);
+			<TokenPrice<T>>::put(Some(native_token_price));
+			<NearPrice<T>>::put(Some(near_price));
 
-			Self::deposit_event(Event::TokenPriceUpdated { who, price });
+			Self::calculate_and_update_fee(near_price, native_token_price);
 
+			Self::deposit_event(Event::PriceUpdated { who, near_price, native_token_price });
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_coef_for_calculate_fee(origin: OriginFor<T>, coef: u32) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(coef > 0 && coef <= 100, Error::<T>::InvalidCoef);
+
+			<Coef<T>>::put(coef);
+			Self::deposit_event(Event::CoefUpdated { coef });
 			Ok(())
 		}
 	}
@@ -416,9 +439,13 @@ pub mod pallet {
 		OracleAccountHasBeenSet {
 			who: T::AccountId,
 		},
-		TokenPriceUpdated {
+		PriceUpdated {
 			who: T::AccountId,
-			price: u32,
+			near_price: u64,
+			native_token_price: u64,
+		},
+		CoefUpdated {
+			coef: u32,
 		},
 	}
 
@@ -450,12 +477,16 @@ pub mod pallet {
 		ConvertorNotImplement,
 		/// Not set oracle account.
 		NoOracleAccount,
-		/// Price is zero.
-		PriceIsZero,
+		/// Near price setted by oracle is zero.
+		NearPriceSetedIsZero,
+		/// Native token price setted by oracle is zero.
+		NativeTokenPriceSetedIsZero,
 		/// Update token price must use oracle account.
 		UpdatePriceWithNoPermissionAccount,
 		/// Invalid fee.
 		InvalidFee,
+		/// Invalid coef.
+		InvalidCoef,
 	}
 
 	/// A map from NEAR token account ID to appchain asset ID.
@@ -474,7 +505,20 @@ pub mod pallet {
 
 	/// Token price setted by oracle account.
 	#[pallet::storage]
-	pub(crate) type TokenPrice<T: Config> = StorageValue<_, Option<u32>, ValueQuery>;
+	pub(crate) type TokenPrice<T: Config> = StorageValue<_, Option<u64>, ValueQuery>;
+
+	/// Near price setted by oracle account.
+	#[pallet::storage]
+	pub(crate) type NearPrice<T: Config> = StorageValue<_, Option<u64>, ValueQuery>;
+
+	#[pallet::type_value]
+	pub(crate) fn DefaultForCoef() -> u32 {
+		3u32
+	}
+
+	/// Coef used to calculate fee for cross chain transactions.
+	#[pallet::storage]
+	pub(crate) type Coef<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForCoef>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -530,9 +574,50 @@ impl<T: Config> Pallet<T> {
 		T::PalletId::get().into_account_truncating()
 	}
 
-	fn calculate_and_update_fee(price: u32) {
-		let ft_fee: BalanceOf<T> = (price / 4).checked_into().unwrap();
-		let nft_fee: BalanceOf<T> = (price / 2).checked_into().unwrap();
+	// Calcute:
+	// 		coef = <Coef<T>>::get() / 100,
+	// 		quantity = coef * near_native_token_price / wrapped_appchain_token_price,
+	// If quantity > threshold, then quantity = threshold.
+	fn calculate_quantity_of_native_tokens(
+		near_price: u64,
+		native_token_price: u64,
+	) -> (u64, Perbill) {
+		// (integer, fraction) = near_native_token_price / wrapped_appchain_token_price
+		let integer =
+			if near_price >= native_token_price { near_price / native_token_price } else { 0u64 };
+
+		let remain = near_price % native_token_price;
+		let fraction = Perbill::from_rational(remain, native_token_price);
+
+		// (integer1, fraction1) = integer * coef
+		let value1 = integer * (<Coef<T>>::get() as u64);
+		let integer1 = if value1 >= 100 { value1 / 100 } else { 0u64 };
+
+		if integer >= T::Threshold::get() {
+			return (T::Threshold::get(), Perbill::zero())
+		}
+
+		let remain1 = value1 % 100;
+		let fraction1 = Perbill::from_rational(remain1, 100);
+
+		// fraction2 = fraction * coef
+		let fraction2 = fraction * Perbill::from_rational(<Coef<T>>::get() as u64, 100);
+
+		// result = (coef * integer) + (coef * fraction)
+		// 		  = (integer1, fraction1) + (0, fraction2)
+		(integer1, fraction1 + fraction2)
+	}
+
+	fn calculate_and_update_fee(near_price: u64, native_token_price: u64) {
+		let (integer, fraction) =
+			Self::calculate_quantity_of_native_tokens(near_price, native_token_price);
+
+		let fee_integer = T::NativeTokenDecimals::get() * (integer as u128);
+		let fee_fraction =
+			T::NativeTokenDecimals::get() * (fraction.deconstruct() as u128) / 1_000_000_000;
+		let ft_fee: BalanceOf<T> = (fee_integer + fee_fraction).checked_into().unwrap();
+		// Notes: should modify later.
+		let nft_fee = ft_fee;
 
 		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Fungible, Some(ft_fee));
 		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Nonfungible, Some(nft_fee));

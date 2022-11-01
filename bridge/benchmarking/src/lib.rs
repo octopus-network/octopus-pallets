@@ -92,7 +92,7 @@ fn set_oracle_account_and_update_token_price<T: BridgeConfig>() {
 	let ret = BridgePallet::<T>::set_oracle_account(RawOrigin::Root.into(), source);
 	assert!(ret.is_ok());
 	let origin = RawOrigin::Signed(caller.clone());
-	let ret = BridgePallet::<T>::set_token_price(origin.into(), 100);
+	let ret = BridgePallet::<T>::set_token_price(origin.into(), 11, 1_000_000_000_000);
 	assert!(ret.is_ok());
 }
 
@@ -356,12 +356,13 @@ benchmarks! {
 		let _ = BridgePallet::<T>::set_oracle_account(RawOrigin::Root.into(), source);
 		let origin = RawOrigin::Signed(caller.clone());
 	}: {
-		let ret = BridgePallet::<T>::set_token_price(origin.into(), 1_000_000);
+		let ret = BridgePallet::<T>::set_token_price(origin.into(), 1_000_000, 2000_000);
 	}
 	verify {
-		assert_last_event::<T>(BridgeEvent::TokenPriceUpdated{
+		assert_last_event::<T>(BridgeEvent::PriceUpdated{
 			who: caller,
-			price: 1_000_000,
+			near_price: 1_000_000,
+			native_token_price: 2000_000,
 		}
 		.into());
 	}

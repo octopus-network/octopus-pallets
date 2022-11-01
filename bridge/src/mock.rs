@@ -291,6 +291,8 @@ parameter_types! {
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
 	   pub const MaxValidators: u32 = 10 ;
+	   pub const NativeTokenDecimals: u128 = 1_000_000_000_000_000_000;
+	   pub const FeeTh: u64 = 300;
 }
 
 impl pallet_octopus_appchain::Config for Test {
@@ -322,6 +324,8 @@ impl Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = Uniques;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type NativeTokenDecimals = NativeTokenDecimals;
+	type Threshold = FeeTh;
 	type WeightInfo = ();
 }
 
