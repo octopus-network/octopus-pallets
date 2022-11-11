@@ -306,6 +306,8 @@ parameter_types! {
 	   pub const UnsignedPriority: u64 = 1 << 21;
 	   pub const RequestEventLimit: u32 = 10;
 	   pub const UpwardMessagesLimit: u32 = 10;
+	   pub const NativeTokenDecimals: u128 = 1_000_000_000_000_000_000;
+	   pub const Th: u64 = 300;
 }
 
 impl pallet_octopus_bridge::Config for Test {
@@ -322,6 +324,8 @@ impl pallet_octopus_bridge::Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type NativeTokenDecimals = NativeTokenDecimals;
+	type Threshold = Th;
 	type WeightInfo = ();
 }
 

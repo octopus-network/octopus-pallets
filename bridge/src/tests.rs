@@ -315,29 +315,63 @@ pub fn test_set_token_price() {
 	let origin2 = RuntimeOrigin::signed(bob);
 	new_tester().execute_with(|| {
 		assert_noop!(
-			OctopusBridge::set_token_price(origin1.clone(), 1000000),
+			OctopusBridge::set_token_price(origin1.clone(), 1000, 1000),
 			Error::<Test>::NoOracleAccount
 		);
 		assert_ok!(OctopusBridge::set_oracle_account(RuntimeOrigin::root(), source.clone()));
 
 		assert_noop!(
-			OctopusBridge::set_token_price(origin2, 1000000),
+			OctopusBridge::set_token_price(origin2, 1000, 1000),
 			Error::<Test>::UpdatePriceWithNoPermissionAccount
 		);
 		assert_noop!(
-			OctopusBridge::set_token_price(origin1.clone(), 0),
-			Error::<Test>::PriceIsZero
+			OctopusBridge::set_token_price(origin1.clone(), 0, 0),
+			Error::<Test>::NearPriceSetedIsZero
 		);
-		assert_ok!(OctopusBridge::set_token_price(origin1, 1000000));
+		assert_noop!(
+			OctopusBridge::set_token_price(origin1.clone(), 1000, 0),
+			Error::<Test>::NativeTokenPriceSetedIsZero
+		);
+		assert_ok!(OctopusBridge::set_token_price(origin1.clone(), 1000, 1000));
 
-		assert_eq!(TokenPrice::<Test>::get(), Some(1000000));
+		assert_eq!(TokenPrice::<Test>::get(), Some(1000));
 		assert_eq!(
 			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
-			Some(250000)
+			Some(30_000_000_000_000_000)
 		);
 		assert_eq!(
 			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Nonfungible).unwrap(),
-			Some(500000)
+			Some(30_000_000_000_000_000)
+		);
+
+		assert_ok!(OctopusBridge::set_token_price(origin1.clone(), 3_119_000, 6_620_000));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(14_134_441_000_000_000)
+		);
+
+		assert_ok!(OctopusBridge::set_token_price(origin1.clone(), 3_119_000, 20_535_200_000));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(4_556_000_000_000)
+		);
+
+		assert_ok!(OctopusBridge::set_token_price(origin1.clone(), 3_119_000, 41_000));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(2_282_195_121_000_000_000)
+		);
+
+		assert_ok!(OctopusBridge::set_token_price(origin1.clone(), 3_119_000, 1));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(300_000_000_000_000_000_000)
+		);
+
+		assert_ok!(OctopusBridge::set_token_price(origin1, 3_119_000, 3_119_000));
+		assert_eq!(
+			CrosschainTransferFee::<Test>::get(CrossChainTransferType::Fungible).unwrap(),
+			Some(30_000_000_000_000_000)
 		);
 	});
 }

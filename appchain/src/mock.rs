@@ -282,6 +282,11 @@ impl pallet_uniques::Config for Test {
 	type Locker = ();
 }
 
+parameter_types! {
+	pub const NativeTokenDecimals: u128 = 1_000_000_000_000_000_000;
+	pub const FeeTh: u64 = 300;
+}
+
 impl pallet_octopus_bridge::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = OctopusAppchainPalletId;
@@ -296,6 +301,8 @@ impl pallet_octopus_bridge::Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
 	type Convertor = pallet_octopus_bridge::impls::ExampleConvertor<Test>;
+	type NativeTokenDecimals = NativeTokenDecimals;
+	type Threshold = FeeTh;
 	type WeightInfo = ();
 }
 

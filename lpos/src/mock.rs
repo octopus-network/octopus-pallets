@@ -264,6 +264,11 @@ impl pallet_octopus_appchain::Config for Test {
 	type MaxValidators = MaxValidators;
 }
 
+parameter_types! {
+	pub const NativeTokenDecimals: u128 = 1_000_000_000_000_000_000;
+	pub const FeeTh: u64 = 300;
+}
+
 impl pallet_octopus_bridge::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletId = OctopusAppchainPalletId;
@@ -278,6 +283,8 @@ impl pallet_octopus_bridge::Config for Test {
 	type ItemId = u128;
 	type Nonfungibles = pallet_octopus_bridge::impls::UnImplementUniques<Test>;
 	type Convertor = ();
+	type NativeTokenDecimals = NativeTokenDecimals;
+	type Threshold = FeeTh;
 	type WeightInfo = ();
 }
 
