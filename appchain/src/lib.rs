@@ -789,7 +789,7 @@ pub mod pallet {
 			validator_id: &T::AccountId,
 			observation: Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			let observation_type = Self::get_observation_type(&observation);
+			let observation_type = observation.get_observation_type();
 			let obs_id = observation.observation_index();
 			Self::check_observation(observation_type, obs_id)?;
 
@@ -976,14 +976,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
-			match observation {
-				Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
-				Observation::Burn(_) => ObservationType::Burn,
-				Observation::LockAsset(_) => ObservationType::LockAsset,
-				Observation::BurnNft(_) => ObservationType::BurnNft,
-			}
-		}
 
 		fn validate_transaction_parameters(
 			block_number: &T::BlockNumber,

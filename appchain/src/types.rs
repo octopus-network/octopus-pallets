@@ -166,6 +166,18 @@ pub enum Observation<AccountId> {
 	BurnNft(BurnNftEvent<AccountId>),
 }
 
+impl<AccountId> Observation<AccountId> {
+	pub fn get_observation_type(&self) -> ObservationType {
+		match self {
+			Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+			Observation::Burn(_) => ObservationType::Burn,
+			Observation::LockAsset(_) => ObservationType::LockAsset,
+			Observation::BurnNft(_) => ObservationType::BurnNft,
+		}
+	}
+}
+
+
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum ObservationType {
 	UpdateValidatorSet,
