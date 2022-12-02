@@ -435,16 +435,15 @@ pub mod pallet {
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
 
-			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data);
-			if val_id.is_none() {
-				log!(
-					warn,
-					"Not a validator in current validator set, key_data: {:?}",
-					payload.key_data
-				);
-				return Err(Error::<T>::NotValidator.into())
-			}
-			let val_id = val_id.expect("Validator is valid; qed").clone();
+			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data)
+				.ok_or_else(|| {
+					log!(
+						warn,
+						"Not a validator in current validator set, key_data: {:?}",
+						payload.key_data
+					);
+					Error::<T>::NotValidator
+				})?;
 
 			//
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
