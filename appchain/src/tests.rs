@@ -8,6 +8,7 @@ use sp_runtime::{
 	traits::{BadOrigin, Verify},
 	MultiSigner,
 };
+use codec::{Decode, Encode};
 use std::sync::Arc;
 
 type Public = <Signature as Verify>::Signer;
@@ -156,7 +157,7 @@ fn test_encode_args_works() {
 	];
 
 	for (start, limit, expected) in test_get_notify_data {
-		assert_eq!(expected, OctopusAppchain::encode_get_notification_args(start, limit));
+		assert_eq!(expected, Some(OctopusAppchain::encode_get_notification_args(start, limit)));
 	}
 }
 
