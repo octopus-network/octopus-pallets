@@ -137,10 +137,7 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_notification_args(index, limit).ok_or_else(|| {
-			log!(info, "Encode get_appchain_notification_histories args error");
-			http::Error::Unknown
-		})?;
+		let args = Self::encode_get_notification_args(index, limit);
 
 		let mut body = br#"
 		{
@@ -230,7 +227,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Vec<u8> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");
@@ -238,6 +235,6 @@ impl<T: Config> Pallet<T> {
 		let c = String::from("\"}");
 		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
-		Some(res)
+		res
 	}
 }

@@ -445,9 +445,7 @@ pub mod pallet {
 					Error::<T>::NotValidator
 				})?;
 
-			//
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
-			//
 
 			for observation in payload.observations.iter() {
 				if let Err(e) = Self::submit_observation(&val_id, observation.clone()) {
@@ -621,7 +619,7 @@ pub mod pallet {
 			// Note this call will block until response is received.
 			let mut obs = retry::retry(retry::delay::Fixed::from_millis(100), || {
 				match Self::get_validator_list_of(
-					secondary_mainchain_rpc_endpoint,
+					mainchain_rpc_endpoint,
 					anchor_contract.clone(),
 					next_set_id,
 				) {
@@ -722,7 +720,8 @@ pub mod pallet {
 						obs_id,
 						next_set_id
 					);
-					return Err(Error::<T>::WrongSetId.into())
+
+					Err(Error::<T>::WrongSetId.into())
 				},
 				_ => {
 					let next_notification_id = NextNotificationId::<T>::get();
@@ -735,12 +734,13 @@ pub mod pallet {
 							next_notification_id,
 							next_notification_id + limit
 						);
-						return Err(Error::<T>::InvalidNotificationId.into())
+
+						Err(Error::<T>::InvalidNotificationId.into())
+					} else {
+						Ok(().into())
 					}
 				},
 			}
-
-			Ok(().into())
 		}
 
 		fn prune_old_histories() {

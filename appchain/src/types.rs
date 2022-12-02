@@ -177,10 +177,10 @@ pub enum ObservationType {
 impl<AccountId> Observation<AccountId> {
 	pub fn observation_index(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet(set) => set.set_id,
-			Observation::LockAsset(event) => event.index,
-			Observation::Burn(event) => event.index,
-			Observation::BurnNft(event) => event.index,
+			Observation::UpdateValidatorSet(ValidatorSet { set_id: index, .. }) |
+			Observation::LockAsset(LockAssetEvent { index, .. }) |
+			Observation::Burn(BurnEvent { index, .. }) |
+			Observation::BurnNft(BurnNftEvent { index, .. }) => *index,
 		}
 	}
 }
