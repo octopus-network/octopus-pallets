@@ -959,14 +959,15 @@ where
 				time_slot.encode(),
 				offenders
 			);
-			let result = R::report_offence(reporters.clone(), offence);
-			if result.is_ok() {
-				offenders.iter().for_each(|offender| {
-					// TODO: check max length
-					Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
-				});
-			}
-			result
+
+			let _ = R::report_offence(reporters.clone(), offence)?;
+
+			offenders.iter().for_each(|offender| {
+				// TODO: check max length
+				Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
+			});
+
+			Ok(())
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
 			Ok(())

@@ -1,4 +1,8 @@
-use super::*;
+use borsh::{BorshDeserialize, BorshSerialize};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound};
+use scale_info::{prelude::string::String, TypeInfo};
+use sp_runtime::RuntimeDebug;
 
 #[derive(
 	Encode, Decode, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound, MaxEncodedLen, TypeInfo,

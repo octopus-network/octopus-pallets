@@ -1,7 +1,6 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	traits::{ConstU32, OneSessionHandler, StorageVersion},
@@ -15,11 +14,8 @@ use pallet_octopus_support::{
 	log,
 	traits::{AppchainInterface, BridgeInterface, LposInterface, UpwardMessagesInterface},
 };
-use scale_info::{
-	prelude::string::{String, ToString},
-	TypeInfo,
-};
-use serde::{de, Deserialize, Deserializer};
+use scale_info::prelude::string::{String, ToString};
+use serde::Deserialize;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{
@@ -43,6 +39,8 @@ pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::octopus-appchain";
 
 pub(crate) const GIT_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/git_version"));
+
+const MAINCHAIN_RPC_ENDPOINT_KEY: &[u8] = b"octopus_appchain::mainchain_rpc_endpoint";
 
 mod mainchain;
 pub mod types;
@@ -506,37 +504,35 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://rpc.testnet.near.org".to_string()
+				"https://rpc.testnet.near.org".into()
 			} else {
-				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
+				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
 			}
 		}
 
 		fn primary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
+				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
 			} else {
-				"https://rpc.mainnet.near.org".to_string()
+				"https://rpc.mainnet.near.org".into()
 			}
 		}
 
 		fn get_mainchain_rpc_endpoint(is_testnet: bool) -> String {
 			let kind = sp_core::offchain::StorageKind::PERSISTENT;
-			if let Some(data) = sp_io::offchain::local_storage_get(
-				kind,
-				b"octopus_appchain::mainchain_rpc_endpoint",
-			) {
-				if let Ok(rpc_url) = String::from_utf8(data) {
-					log!(debug, "The configure url is {:?} ", rpc_url.clone());
-					return rpc_url
-				} else {
-					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::primary_rpc_endpoint(is_testnet)
-				}
-			} else {
-				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::primary_rpc_endpoint(is_testnet)
-			}
+			let data = sp_io::offchain::local_storage_get(kind, MAINCHAIN_RPC_ENDPOINT_KEY)
+				.unwrap_or_else(|| {
+					log!(debug, "No configuration for rpc, return default rpc url");
+					Self::primary_rpc_endpoint(is_testnet).into()
+				});
+
+			let rpc_url = String::from_utf8(data).unwrap_or_else(|_| {
+				log!(warn, "Parse configure url error, return default rpc url");
+				Self::primary_rpc_endpoint(is_testnet)
+			});
+
+			log!(debug, "The configure url is {:?} ", rpc_url);
+			rpc_url
 		}
 
 		fn should_send(block_number: T::BlockNumber) -> bool {
@@ -624,25 +620,13 @@ pub mod pallet {
 
 			// Make an external HTTP request to fetch the current price.
 			// Note this call will block until response is received.
-			let ret = Self::get_validator_list_of(
-				mainchain_rpc_endpoint,
-				anchor_contract.clone(),
-				next_set_id,
-			);
-
-			let mut obs = match ret {
-				Ok(observations) => observations,
-				Err(_) => {
-					log!(debug, "retry with failsafe endpoint to get validators");
-					Self::get_validator_list_of(
-						secondary_mainchain_rpc_endpoint,
-						anchor_contract.clone(),
-						next_set_id,
-					)
-					.map_err(|_| "Failed to get_validator_list_of")?
-				},
-			};
-
+			let mut obs = retry::retry(retry::delay::Fixed::from_millis(100), || {
+				match Self::get_validator_list_of(secondary_mainchain_rpc_endpoint, anchor_contract.clone(),next_set_id) {
+					Ok(observations) => Ok(observations),
+					Err(_) => Err("Failed to get_validator_list_of"),
+				}
+			}).map_err(|value| value.error)?;
+	
 			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
@@ -700,24 +684,21 @@ pub mod pallet {
 
 		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
 			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_id.checked_add(1) {
-					*next_id = v;
-					log!(debug, "️️️increase next_notification_id: {:?} ", v);
-				} else {
-					return Err(Error::<T>::NextNotificationIdOverflow.into())
-				}
+				*next_id = next_id
+					.checked_add(1)
+					.ok_or::<Error<T>>(Error::<T>::NextNotificationIdOverflow.into())?;
+
+				log!(debug, "️️️increase next_notification_id: {:?} ", next_id);
 				Ok(().into())
 			})
 		}
 
 		fn increase_next_set_id() -> DispatchResultWithPostInfo {
 			NextSetId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_id.checked_add(1) {
-					*next_id = v;
-					log!(debug, "️️️increase next_set_id: {:?} ", v);
-				} else {
-					return Err(Error::<T>::NextSetIdOverflow.into())
-				}
+				*next_id = next_id
+					.checked_add(1)
+					.ok_or::<Error<T>>(Error::<T>::NextSetIdOverflow.into())?;
+				log!(debug, "️️️increase next_set_id: {:?} ", next_id);
 				Ok(().into())
 			})
 		}
@@ -992,7 +973,7 @@ pub mod pallet {
 		}
 
 		fn get_observation_type(observation: &Observation<T::AccountId>) -> ObservationType {
-			match observation.clone() {
+			match observation {
 				Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
 				Observation::Burn(_) => ObservationType::Burn,
 				Observation::LockAsset(_) => ObservationType::LockAsset,

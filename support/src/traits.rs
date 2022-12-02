@@ -1,4 +1,7 @@
-use super::*;
+use crate::types::Nep171TokenMetadata;
+use frame_support::dispatch::{DispatchError, DispatchResult};
+use sp_runtime::KeyTypeId;
+use sp_std::prelude::*;
 
 pub trait AppchainInterface<AccountId> {
 	fn is_activated() -> bool;

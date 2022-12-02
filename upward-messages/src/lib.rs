@@ -45,7 +45,6 @@ pub struct Message<M: Get<u32>> {
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
-#[allow(dead_code)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -144,12 +143,6 @@ pub mod pallet {
 		}
 	}
 
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
-
 	impl<T: Config> Pallet<T> {
 		fn commit() -> Weight {
 			let message_queue = <MessageQueue<T>>::take();
@@ -212,11 +205,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 		}
 
 		Nonce::<T>::try_mutate(|nonce| -> Result<u64, DispatchError> {
-			if let Some(v) = nonce.checked_add(1) {
-				*nonce = v;
-			} else {
-				return Err(Error::<T>::NonceOverflow.into())
-			}
+			*nonce = nonce.checked_add(1).ok_or::<Error<T>>(Error::<T>::NonceOverflow.into())?;
 
 			<MessageQueue<T>>::try_append(Message {
 				nonce: *nonce,
