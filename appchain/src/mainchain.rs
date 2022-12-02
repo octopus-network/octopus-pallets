@@ -1,7 +1,4 @@
-use core::fmt::{self, Display};
-
 use super::*;
-use scale_info::prelude::collections::HashMap;
 
 #[derive(Deserialize, RuntimeDebug)]
 struct Response {
@@ -19,25 +16,20 @@ struct ResponseResult {
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-struct HttpBody {
+pub struct HttpBody {
 	jsonrpc: String,
 	id: String,
 	method: String,
-	params: HashMap<String, Vec<u8>>,
+	params: Params,
 }
 
-impl Display for HttpBody {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{{\n")?;
-		write!(f, "    jsonrpc: {}\n", self.jsonrpc)?;
-		write!(f, "    id: {}\n", self.id)?;
-		write!(f, "    method: {}\n", self.method)?;
-		for (key, value) in self.params.iter() {
-			let value = String::from_utf8(value.to_vec()).map_err(|_| core::fmt::Error)?;
-			write!(f, "    {}: {}\n", key, value)?;
-		}
-		write!(f, "}}\n")
-	}
+#[derive(Serialize, Deserialize, Default, Debug)]
+struct Params {
+	request_type: String,
+	finality: String,
+	account_id: Vec<u8>,
+	method_name: String,
+	args_base64: Vec<u8>,
 }
 
 impl HttpBody {
@@ -56,8 +48,28 @@ impl HttpBody {
 		self
 	}
 
-	pub fn with_params(mut self, key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
-		self.params.insert(key.into(), value.into());
+	pub fn with_request_type(mut self, value: impl Into<String>) -> Self {
+		self.params.request_type = value.into();
+		self
+	}
+
+	pub fn with_finality(mut self, value: impl Into<String>) -> Self {
+		self.params.finality = value.into();
+		self
+	}
+
+	pub fn with_account_id(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.params.account_id = value.into();
+		self
+	}
+
+	pub fn with_method_name(mut self, value: impl Into<String>) -> Self {
+		self.params.method_name = value.into();
+		self
+	}
+
+	pub fn with_args_base64(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.params.args_base64 = value.into();
 		self
 	}
 }
@@ -86,13 +98,13 @@ impl<T: Config> Pallet<T> {
 			.with_jsonrpc("2.0")
 			.with_id("dontcare")
 			.with_method("query")
-			.with_params("request_type", "call_function")
-			.with_params("finality", "final")
-			.with_params("account_id", anchor_contract)
-			.with_params("method_name", "get_validator_list_of")
-			.with_params("args_base64", args);
+			.with_request_type("call_function")
+			.with_finality("final")
+			.with_account_id(anchor_contract)
+			.with_method_name("get_validator_list_of")
+			.with_args_base64(args);
 
-		let body = serde_json::to_string_pretty(&body)
+		let body = serde_json::to_string(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown
@@ -183,13 +195,13 @@ impl<T: Config> Pallet<T> {
 			.with_jsonrpc("2.0")
 			.with_id("dontcare")
 			.with_method("query")
-			.with_params("request_type", "call_function")
-			.with_params("finality", "final")
-			.with_params("account_id", anchor_contract)
-			.with_params("method_name", "get_appchain_notification_histories")
-			.with_params("args_base64", args);
+			.with_request_type("call_function")
+			.with_finality("final")
+			.with_account_id(anchor_contract)
+			.with_method_name("get_appchain_notification_histories")
+			.with_args_base64(args);
 
-		let body = serde_json::to_string_pretty(&body)
+		let body = serde_json::to_string(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown

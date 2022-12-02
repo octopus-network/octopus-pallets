@@ -743,7 +743,7 @@ impl<T: Config> Pallet<T> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
-			s.unwrap()
+			s.unwrap_or(0)
 		});
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
@@ -866,16 +866,12 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 
 impl<T: Config> historical::SessionManager<T::AccountId, u128> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
-		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
-			Self::validators_with_exposure(validators)
-		})
+		<Self as pallet_session::SessionManager<_>>::new_session(new_index)
+			.map(|validators| Self::validators_with_exposure(validators))
 	}
 	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
-		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
-			|validators| {
-				Self::validators_with_exposure(validators)
-			},
-		)
+		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index)
+			.map(|validators| Self::validators_with_exposure(validators))
 	}
 	fn start_session(start_index: SessionIndex) {
 		<Self as pallet_session::SessionManager<_>>::start_session(start_index)

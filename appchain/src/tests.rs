@@ -1,4 +1,4 @@
-use crate::{mock::*, types::*, Error, *};
+use crate::{mainchain::HttpBody, mock::*, types::*, Error, *};
 use codec::{Decode, Encode};
 use frame_support::{assert_noop, assert_ok};
 use pallet_octopus_support::traits::AppchainInterface;
@@ -193,24 +193,23 @@ fn expected_val_set() -> Observation<AccountId> {
 }
 
 fn validator_set_1_response(state: &mut testing::OffchainState) {
+	let body = HttpBody::default()
+		.with_jsonrpc("2.0")
+		.with_id("dontcare")
+		.with_method("query")
+		.with_request_type("call_function")
+		.with_finality("final")
+		.with_account_id("oct-test.testnet".as_bytes())
+		.with_method_name("get_validator_list_of")
+		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9".as_bytes());
+
+	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),
 		uri: "https://rpc.testnet.near.org".into(),
 		headers: vec![("Content-Type".into(), "application/json".into())],
-		body: br#"
-		{
-			"jsonrpc": "2.0",
-			"id": "dontcare",
-			"method": "query",
-			"params": {
-				"request_type": "call_function",
-				"finality": "final",
-				"account_id": "oct-test.testnet",
-				"method_name": "get_validator_list_of",
-				"args_base64": "eyJlcmFfbnVtYmVyIjoiMSJ9"
-			}
-		}"#
-		.to_vec(),
+		body,
 		response: Some(
 			br#"
 		{
@@ -250,24 +249,23 @@ fn validator_set_1_response(state: &mut testing::OffchainState) {
 }
 
 fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
+	let body = HttpBody::default()
+		.with_jsonrpc("2.0")
+		.with_id("dontcare")
+		.with_method("query")
+		.with_request_type("call_function")
+		.with_finality("final")
+		.with_account_id("oct-test.testnet".as_bytes())
+		.with_method_name("get_validator_list_of")
+		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9".as_bytes());
+
+	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),
 		uri: "https://rpc.testnet.near.org".into(),
 		headers: vec![("Content-Type".into(), "application/json".into())],
-		body: br#"
-		{
-			"jsonrpc": "2.0",
-			"id": "dontcare",
-			"method": "query",
-			"params": {
-				"request_type": "call_function",
-				"finality": "final",
-				"account_id": "oct-test.testnet",
-				"method_name": "get_validator_list_of",
-				"args_base64": "eyJlcmFfbnVtYmVyIjoiMSJ9"
-			}
-		}"#
-		.to_vec(),
+		body,
 		response: Some(
 			br#"
 		{
@@ -303,24 +301,23 @@ fn expected_burn_notify() -> Observation<AccountId> {
 }
 
 fn burn_notify_response(state: &mut testing::OffchainState) {
+	let body = HttpBody::default()
+		.with_jsonrpc("2.0")
+		.with_id("dontcare")
+		.with_method("query")
+		.with_request_type("call_function")
+		.with_finality("final")
+		.with_account_id("oct-test.testnet".as_bytes())
+		.with_method_name("get_appchain_notification_histories")
+		.with_args_base64("eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEwIn0=".as_bytes());
+
+	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),
 		uri: "https://rpc.testnet.near.org".into(),
 		headers: vec![("Content-Type".into(), "application/json".into())],
-		body: br#"
-		{
-			"jsonrpc": "2.0",
-			"id": "dontcare",
-			"method": "query",
-			"params": {
-				"request_type": "call_function",
-				"finality": "final",
-				"account_id": "oct-test.testnet",
-				"method_name": "get_appchain_notification_histories",
-				"args_base64": "eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEwIn0="
-			}
-		}"#
-		.to_vec(),
+		body,
 		response: Some(
 			br#"
 		{
