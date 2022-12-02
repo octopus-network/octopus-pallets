@@ -621,12 +621,18 @@ pub mod pallet {
 			// Make an external HTTP request to fetch the current price.
 			// Note this call will block until response is received.
 			let mut obs = retry::retry(retry::delay::Fixed::from_millis(100), || {
-				match Self::get_validator_list_of(secondary_mainchain_rpc_endpoint, anchor_contract.clone(),next_set_id) {
+				match Self::get_validator_list_of(
+					secondary_mainchain_rpc_endpoint,
+					anchor_contract.clone(),
+					next_set_id,
+				) {
 					Ok(observations) => Ok(observations),
 					Err(_) => Err("Failed to get_validator_list_of"),
 				}
-			}).map_err(|value| value.error)?;
-	
+			})
+			.map_err(|value| value.error)?;
+
+			// todo(davirian) maby can remove because above code
 			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
@@ -708,17 +714,16 @@ pub mod pallet {
 			obs_id: u32,
 		) -> DispatchResultWithPostInfo {
 			match observation_type {
-				ObservationType::UpdateValidatorSet => {
+				ObservationType::UpdateValidatorSet if obs_id != NextSetId::<T>::get() => {
 					let next_set_id = NextSetId::<T>::get();
-					if obs_id != next_set_id {
-						log!(
-							warn,
-							"wrong set id for update validator set: {:?}, expected: {:?}",
-							obs_id,
-							next_set_id
-						);
-						return Err(Error::<T>::WrongSetId.into())
-					}
+
+					log!(
+						warn,
+						"wrong set id for update validator set: {:?}, expected: {:?}",
+						obs_id,
+						next_set_id
+					);
+					return Err(Error::<T>::WrongSetId.into())
 				},
 				_ => {
 					let next_notification_id = NextNotificationId::<T>::get();
