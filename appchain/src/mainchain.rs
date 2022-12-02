@@ -80,10 +80,7 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_validator_args(set_id).ok_or_else(|| {
-			log!(warn, "Encode get_validator_list_of args error");
-			http::Error::Unknown
-		})?;
+		let args = Self::encode_get_validator_args(set_id);
 
 		let body = HttpBody::default()
 			.with_jsonrpc("2.0")
@@ -154,13 +151,13 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_validator_args(era: u32) -> Vec<u8> {
 		let a = String::from("{\"era_number\":\"");
 		let era = era.to_string();
 		let b = String::from("\"}");
-		let json = a + &era + &b;
+		let json = format!("{}{}{}", a, era, b);
 		let res = base64::encode(json).into_bytes();
-		Some(res)
+		res
 	}
 
 	/// Fetch the notifications from anchor contract.
@@ -272,7 +269,7 @@ impl<T: Config> Pallet<T> {
 		let b = String::from("\",\"quantity\":\"");
 		let quantity = limit.to_string();
 		let c = String::from("\"}");
-		let json = a + &start_index + &b + &quantity + &c;
+		let json = format!("{}{}{}{}{}", a, start_index, b, quantity, c);
 		let res = base64::encode(json).into_bytes();
 		res
 	}

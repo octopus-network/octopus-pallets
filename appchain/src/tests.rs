@@ -1,4 +1,5 @@
 use crate::{mock::*, types::*, Error, *};
+use codec::{Decode, Encode};
 use frame_support::{assert_noop, assert_ok};
 use pallet_octopus_support::traits::AppchainInterface;
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
@@ -8,7 +9,6 @@ use sp_runtime::{
 	traits::{BadOrigin, Verify},
 	MultiSigner,
 };
-use codec::{Decode, Encode};
 use std::sync::Arc;
 
 type Public = <Signature as Verify>::Signer;
@@ -141,7 +141,7 @@ fn test_encode_args_works() {
 	];
 
 	for (set_id, expected) in test_get_validators_data {
-		assert_eq!(expected, OctopusAppchain::encode_get_validator_args(set_id));
+		assert_eq!(expected, Some(OctopusAppchain::encode_get_validator_args(set_id)));
 	}
 
 	let test_get_notify_data = vec![

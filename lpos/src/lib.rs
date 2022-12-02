@@ -506,7 +506,7 @@ impl<T: Config> Pallet<T> {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
-					frame_support::print("Error: start_session_index must be set for current_era");
+					log!(error, "Error: start_session_index must be set for current_era");
 					0
 				});
 
@@ -559,7 +559,7 @@ impl<T: Config> Pallet<T> {
 			} else if next_active_era_start_session_index < start_session {
 				// This arm should never happen, but better handle it than to stall the staking
 				// pallet.
-				frame_support::print("Warning: A session appears to have been skipped.");
+				log!(warn, "Warning: A session appears to have been skipped.");
 				Self::start_era(start_session);
 			}
 		}
@@ -822,6 +822,20 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 	}
+
+	fn validators_with_exposure(validators: Vec<T::AccountId>) -> Vec<(T::AccountId, u128)> {
+		let current_era = Self::current_era()
+			// Must be some as a new era has been created.
+			.unwrap_or(0);
+
+		validators
+			.into_iter()
+			.map(|v| {
+				let exposure = Self::eras_stakers(current_era, &v);
+				(v, exposure)
+			})
+			.collect()
+	}
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -853,33 +867,13 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 impl<T: Config> historical::SessionManager<T::AccountId, u128> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
-			let current_era = Self::current_era()
-				// Must be some as a new era has been created.
-				.unwrap_or(0);
-
-			validators
-				.into_iter()
-				.map(|v| {
-					let exposure = Self::eras_stakers(current_era, &v);
-					(v, exposure)
-				})
-				.collect()
+			Self::validators_with_exposure(validators)
 		})
 	}
 	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, u128)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
-				let current_era = Self::current_era()
-					// Must be some as a new era has been created.
-					.unwrap_or(0);
-
-				validators
-					.into_iter()
-					.map(|v| {
-						let exposure = Self::eras_stakers(current_era, &v);
-						(v, exposure)
-					})
-					.collect()
+				Self::validators_with_exposure(validators)
 			},
 		)
 	}
@@ -907,7 +901,7 @@ where
 		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
 			Self::reward_by_ids(vec![(block_author, 1), (uncle_author, 1)])
 		} else {
-			crate::log!(warn, "block author not set, this should never happen");
+			log!(warn, "block author not set, this should never happen");
 		}
 	}
 }
@@ -966,7 +960,7 @@ where
 				// TODO: check max length
 				Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
 			});
-
+			// todo threse not deposit_event
 			Ok(())
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
