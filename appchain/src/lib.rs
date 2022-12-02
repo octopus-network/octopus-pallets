@@ -15,7 +15,7 @@ use pallet_octopus_support::{
 	traits::{AppchainInterface, BridgeInterface, LposInterface, UpwardMessagesInterface},
 };
 use scale_info::prelude::string::{String, ToString};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{
@@ -565,7 +565,7 @@ pub mod pallet {
 				// now.
 				Ok(_) => true,
 				// We are in the grace period, we should not send a transaction this time.
-				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
+				Err(MutateStorageError::ValueFunctionFailed(_)) => false,
 				// We wanted to send a transaction, but failed to write the block number (acquire a
 				// lock). This indicates that another offchain worker that was running concurrently
 				// most likely executed the same logic and succeeded at writing to storage.
@@ -975,7 +975,6 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-
 
 		fn validate_transaction_parameters(
 			block_number: &T::BlockNumber,

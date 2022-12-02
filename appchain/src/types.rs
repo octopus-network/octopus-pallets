@@ -177,7 +177,6 @@ impl<AccountId> Observation<AccountId> {
 	}
 }
 
-
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum ObservationType {
 	UpdateValidatorSet,
