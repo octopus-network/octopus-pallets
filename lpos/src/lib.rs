@@ -619,7 +619,7 @@ impl<T: Config> Pallet<T> {
 			.map(|(k, _)| k)
 			.collect::<Vec<T::AccountId>>();
 
-		log!(debug, "All validators: {:?}", validators.clone());
+		log!(debug, "All validators: {:?}", validators);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(index);
 
@@ -686,7 +686,7 @@ impl<T: Config> Pallet<T> {
 					hex_validator
 				})
 				.collect::<Vec<String>>();
-			log!(debug, "Exclude validators: {:?}", excluded_validators_str.clone());
+			log!(debug, "Exclude validators: {:?}", excluded_validators_str);
 
 			let offenders = <Offenders<T>>::drain()
 				.map(|offender| {

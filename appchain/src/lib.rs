@@ -373,10 +373,10 @@ pub mod pallet {
 						block_number,
 						&mainchain_rpc_endpoint,
 						&secondary_mainchain_rpc_endpoint,
-						anchor_contract,
-						public,
-						key_data,
-						validator_id,
+						&anchor_contract,
+						&public,
+						&key_data,
+						&validator_id,
 					) {
 						log!(warn, "observing_mainchain: Error: {}", e);
 					}
@@ -407,7 +407,7 @@ pub mod pallet {
 				}
 				Self::validate_transaction_parameters(
 					&payload.block_number,
-					payload.public.clone().into_account(),
+					&payload.public.clone().into_account(),
 				)
 			} else {
 				InvalidTransaction::Call.into()
@@ -448,7 +448,7 @@ pub mod pallet {
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
 
 			for observation in payload.observations.iter() {
-				if let Err(e) = Self::submit_observation(&val_id, observation.clone()) {
+				if let Err(e) = Self::submit_observation(&val_id, &observation) {
 					log!(warn, "OCTOPUS-ALERT submit_observation: Error: {:?}", e);
 				}
 			}
@@ -605,10 +605,10 @@ pub mod pallet {
 			block_number: T::BlockNumber,
 			mainchain_rpc_endpoint: &str,
 			secondary_mainchain_rpc_endpoint: &str,
-			anchor_contract: Vec<u8>,
-			public: <T as SigningTypes>::Public,
-			key_data: Vec<u8>,
-			_validator_id: T::AccountId,
+			anchor_contract: &[u8],
+			public: &<T as SigningTypes>::Public,
+			key_data: &[u8],
+			_validator_id: &T::AccountId,
 		) -> Result<(), &'static str> {
 			let next_notification_id = NextNotificationId::<T>::get();
 			log!(debug, "next_notification_id: {}", next_notification_id);
@@ -620,7 +620,7 @@ pub mod pallet {
 			let mut obs = retry::retry(retry::delay::Fixed::from_millis(100), || {
 				match Self::get_validator_list_of(
 					mainchain_rpc_endpoint,
-					anchor_contract.clone(),
+					&anchor_contract,
 					next_set_id,
 				) {
 					Ok(observations) => Ok(observations),
@@ -637,7 +637,7 @@ pub mod pallet {
 				// Note this call will block until response is received.
 				let ret = Self::get_appchain_notification_histories(
 					mainchain_rpc_endpoint,
-					anchor_contract.clone(),
+					&anchor_contract,
 					next_notification_id,
 					T::RequestEventLimit::get(),
 				);
@@ -648,7 +648,7 @@ pub mod pallet {
 						log!(debug, "retry with failsafe endpoint to get notify");
 						Self::get_appchain_notification_histories(
 							secondary_mainchain_rpc_endpoint,
-							anchor_contract,
+							&anchor_contract,
 							next_notification_id,
 							T::RequestEventLimit::get(),
 						)
@@ -663,11 +663,11 @@ pub mod pallet {
 			}
 
 			let result = Signer::<T, T::AppCrypto>::all_accounts()
-				.with_filter(vec![public])
+				.with_filter(vec![public.clone()])
 				.send_unsigned_transaction(
 					|account| ObservationsPayload {
 						public: account.public.clone(),
-						key_data: key_data.clone(),
+						key_data: key_data.to_vec(),
 						block_number,
 						observations: obs.clone(),
 					},
@@ -787,14 +787,14 @@ pub mod pallet {
 		#[transactional]
 		fn submit_observation(
 			validator_id: &T::AccountId,
-			observation: Observation<T::AccountId>,
+			observation: &Observation<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let observation_type = observation.get_observation_type();
 			let obs_id = observation.observation_index();
 			Self::check_observation(observation_type, obs_id)?;
 
 			<Observations<T>>::mutate(observation_type, obs_id, |obs| {
-				let found = obs.iter().any(|o| o == &observation);
+				let found = obs.iter().any(|o| o == observation);
 				if !found {
 					obs.try_push(observation.clone())
 				} else {
@@ -861,8 +861,8 @@ pub mod pallet {
 						) {
 							log!(warn, "️️️failed to unlock native token, sequence: {:?}, send_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
 							event.index,
-							event.sender_id.clone(),
-							event.receiver.clone(),
+							event.sender_id,
+							event.receiver,
 							event.amount,
 							error);
 							Self::deposit_event(Event::UnlockFailed {
@@ -906,8 +906,8 @@ pub mod pallet {
 							log!(warn, "️️️failed to mint asset, sequence: {:?}, asset: {:?}, sender_id: {:?}, receiver: {:?}, amount: {:?}, error: {:?}",
 								event.index,
 								event.token_id,
-								event.sender_id.clone(),
-								event.receiver.clone(),
+								event.sender_id,
+								event.receiver,
 								event.amount,
 								error);
 							Self::deposit_event(Event::MintNep141Failed {
@@ -942,8 +942,8 @@ pub mod pallet {
 						) {
 							log!(warn, "️️️failed to unlock nft, sequence: {:?}, send_id: {:?}, receiver: {:?}, collection: {:?}, item: {:?}, error: {:?}",
 							event.index,
-							event.sender_id.clone(),
-							event.receiver.clone(),
+							event.sender_id,
+							event.receiver,
 							event.collection,
 							event.item,
 							error);
@@ -978,7 +978,7 @@ pub mod pallet {
 
 		fn validate_transaction_parameters(
 			block_number: &T::BlockNumber,
-			account_id: <T as frame_system::Config>::AccountId,
+			account_id: &<T as frame_system::Config>::AccountId,
 		) -> TransactionValidity {
 			// Let's make sure to reject transactions from the future.
 			let current_block = <frame_system::Pallet<T>>::block_number();

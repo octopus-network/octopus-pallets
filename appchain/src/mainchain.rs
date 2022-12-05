@@ -79,7 +79,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns an empty list if the validator set has not been generated.
 	pub(super) fn get_validator_list_of(
 		rpc_endpoint: &str,
-		anchor_contract: Vec<u8>,
+		anchor_contract: &[u8],
 		set_id: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
@@ -175,7 +175,7 @@ impl<T: Config> Pallet<T> {
 	/// Fetch the notifications from anchor contract.
 	pub(super) fn get_appchain_notification_histories(
 		rpc_endpoint: &str,
-		anchor_contract: Vec<u8>,
+		anchor_contract: &[u8],
 		index: u32,
 		limit: u32,
 	) -> Result<Vec<Observation<<T as frame_system::Config>::AccountId>>, http::Error> {
