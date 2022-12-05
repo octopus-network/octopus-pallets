@@ -7,6 +7,7 @@ pub struct Response {
 	id: String,
 }
 
+#[allow(dead_code)]
 impl Response {
 	pub fn with_jsonrpc(mut self, jsonrpc: impl Into<String>) -> Self {
 		self.jsonrpc = jsonrpc.into();
@@ -32,6 +33,7 @@ pub struct ResponseResult {
 	block_hash: String,
 }
 
+#[allow(dead_code)]
 impl ResponseResult {
 	pub fn with_result(mut self, value: impl Into<Vec<u8>>) -> Self {
 		self.result = value.into();
