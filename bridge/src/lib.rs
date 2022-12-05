@@ -243,7 +243,7 @@ pub mod pallet {
 			);
 			let asset = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id);
 			if asset.is_some() {
-				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset.unwrap(),);
+				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset);
 				return Err(Error::<T>::AssetIdInUse.into())
 			}
 
@@ -624,17 +624,16 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
-		let min_fee: BalanceOf<T> =
-			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Fungible) {
-				Ok(Some(fee)) => fee,
-				_ => {
-					// Need Check.
-					log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
-					0u128.checked_into().unwrap()
-				},
-			};
+		let min_fee: Option<BalanceOf<T>> = <CrosschainTransferFee<T>>::try_get(
+			CrossChainTransferType::Fungible,
+		)
+		.unwrap_or_else(|_| {
+			// Need Check.
+			log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
+			0u128.checked_into()
+		});
 
-		if fee < min_fee {
+		if Some(fee) < min_fee {
 			return Err(Error::<T>::InvalidFee.into())
 		}
 
@@ -648,19 +647,17 @@ impl<T: Config> Pallet<T> {
 		fee: BalanceOf<T>,
 		_metadata_length: u32,
 	) -> DispatchResult {
-		let min_fee: BalanceOf<T> =
-			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible) {
-				Ok(Some(fee)) => fee,
-				_ => {
+		let min_fee: Option<BalanceOf<T>> =
+			<CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible)
+				.unwrap_or_else(|_| {
 					// Need Check.
-					log!(warn, "Storage CrosschainTransferFee is empty, default nft fee is zero.");
-					0u128.checked_into().unwrap()
-				},
-			};
+					log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
+					0u128.checked_into()
+				});
 
 		// The min_fee will be related to metadata_length in future.
 
-		if fee < min_fee {
+		if Some(fee) < min_fee {
 			return Err(Error::<T>::InvalidFee.into())
 		}
 

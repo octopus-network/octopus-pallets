@@ -707,7 +707,7 @@ impl<T: Config> Pallet<T> {
 				offenders,
 			};
 
-			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			let amount = validator_payout.checked_into().expect("Amount over flow");
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 			log!(debug, "Will send EraPayout message, era_payout is {:?}", <EraPayout<T>>::get());
 

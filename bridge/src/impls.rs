@@ -141,14 +141,7 @@ where
 			description: Some("example nft description".to_string()),
 			media: Some("example nft media".to_string()),
 			media_hash: Some(data),
-			copies: None,
-			issued_at: None,
-			expires_at: None,
-			starts_at: None,
-			updated_at: None,
-			extra: None,
-			reference: None,
-			reference_hash: None,
+			..Default::default()
 		};
 
 		Some(metadata)
@@ -251,15 +244,8 @@ where
 			title,
 			description,
 			media: media_uri,
-			media_hash: None,
-			copies: None,
-			issued_at: None,
-			expires_at: None,
-			starts_at: None,
-			updated_at: None,
 			extra: Some(extra.to_string()),
-			reference: None,
-			reference_hash: None,
+			..Default::default()
 		};
 		log!(debug, "After, the Nep171 media data is {:?} ", metadata.clone());
 
