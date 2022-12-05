@@ -345,10 +345,8 @@ pub mod pallet {
 			ensure!(near_price != 0, Error::<T>::NearPriceSetedIsZero);
 			ensure!(native_token_price != 0, Error::<T>::NativeTokenPriceSetedIsZero);
 
-			let oracle_account = match <OracleAccount<T>>::try_get() {
-				Ok(account) => account,
-				Err(_) => return Err(Error::<T>::NoOracleAccount.into()),
-			};
+			let oracle_account =
+				<OracleAccount<T>>::try_get().map_err(|_| Error::<T>::NoOracleAccount)?;
 
 			ensure!(who == oracle_account, Error::<T>::UpdatePriceWithNoPermissionAccount);
 

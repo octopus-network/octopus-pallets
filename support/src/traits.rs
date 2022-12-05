@@ -64,6 +64,7 @@ pub trait TokenIdAndAssetIdProvider<AssetId> {
 pub trait ConvertIntoNep171 {
 	type CollectionId;
 	type ItemId;
+
 	fn convert_into_nep171_metadata(
 		collection: Self::CollectionId,
 		item: Self::ItemId,
@@ -73,6 +74,7 @@ pub trait ConvertIntoNep171 {
 impl ConvertIntoNep171 for () {
 	type CollectionId = u128;
 	type ItemId = u128;
+
 	fn convert_into_nep171_metadata(
 		_collection: Self::CollectionId,
 		_item: Self::ItemId,
