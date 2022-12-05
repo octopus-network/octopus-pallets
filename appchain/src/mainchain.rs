@@ -1,18 +1,57 @@
 use super::*;
 
-#[derive(Deserialize, RuntimeDebug)]
-struct Response {
+#[derive(Serialize, Deserialize, RuntimeDebug, Default)]
+pub struct Response {
 	jsonrpc: String,
 	result: ResponseResult,
 	id: String,
 }
 
-#[derive(Deserialize, RuntimeDebug)]
-struct ResponseResult {
+impl Response {
+	pub fn with_jsonrpc(mut self, jsonrpc: impl Into<String>) -> Self {
+		self.jsonrpc = jsonrpc.into();
+		self
+	}
+
+	pub fn with_response_result(mut self, result: ResponseResult) -> Self {
+		self.result = result;
+		self
+	}
+
+	pub fn with_id(mut self, id: impl Into<String>) -> Self {
+		self.id = id.into();
+		self
+	}
+}
+
+#[derive(Serialize, Deserialize, RuntimeDebug, Default)]
+pub struct ResponseResult {
 	result: Vec<u8>,
 	logs: Vec<String>,
 	block_height: u64,
 	block_hash: String,
+}
+
+impl ResponseResult {
+	pub fn with_result(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.result = value.into();
+		self
+	}
+
+	pub fn with_logs(mut self, logs: impl Into<Vec<String>>) -> Self {
+		self.logs = logs.into();
+		self
+	}
+
+	pub fn with_block_height(mut self, block_height: u64) -> Self {
+		self.block_height = block_height;
+		self
+	}
+
+	pub fn with_block_hash(mut self, block_hash: impl Into<String>) -> Self {
+		self.block_hash = block_hash.into();
+		self
+	}
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -21,15 +60,6 @@ pub struct HttpBody {
 	id: String,
 	method: String,
 	params: Params,
-}
-
-#[derive(Serialize, Deserialize, Default, Debug)]
-struct Params {
-	request_type: String,
-	finality: String,
-	account_id: Vec<u8>,
-	method_name: String,
-	args_base64: Vec<u8>,
 }
 
 impl HttpBody {
@@ -48,28 +78,44 @@ impl HttpBody {
 		self
 	}
 
+	pub fn with_params(mut self, value: Params) -> Self {
+		self.params = value;
+		self
+	}
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct Params {
+	request_type: String,
+	finality: String,
+	account_id: Vec<u8>,
+	method_name: String,
+	args_base64: Vec<u8>,
+}
+
+impl Params {
 	pub fn with_request_type(mut self, value: impl Into<String>) -> Self {
-		self.params.request_type = value.into();
+		self.request_type = value.into();
 		self
 	}
 
 	pub fn with_finality(mut self, value: impl Into<String>) -> Self {
-		self.params.finality = value.into();
+		self.finality = value.into();
 		self
 	}
 
 	pub fn with_account_id(mut self, value: impl Into<Vec<u8>>) -> Self {
-		self.params.account_id = value.into();
+		self.account_id = value.into();
 		self
 	}
 
 	pub fn with_method_name(mut self, value: impl Into<String>) -> Self {
-		self.params.method_name = value.into();
+		self.method_name = value.into();
 		self
 	}
 
 	pub fn with_args_base64(mut self, value: impl Into<Vec<u8>>) -> Self {
-		self.params.args_base64 = value.into();
+		self.args_base64 = value.into();
 		self
 	}
 }
@@ -94,15 +140,18 @@ impl<T: Config> Pallet<T> {
 		// import the library here.
 		let args = Self::encode_get_validator_args(set_id);
 
-		let body = HttpBody::default()
-			.with_jsonrpc("2.0")
-			.with_id("dontcare")
-			.with_method("query")
+		let params = Params::default()
 			.with_request_type("call_function")
 			.with_finality("final")
 			.with_account_id(anchor_contract)
 			.with_method_name("get_validator_list_of")
 			.with_args_base64(args);
+
+		let body = HttpBody::default()
+			.with_jsonrpc("2.0")
+			.with_id("dontcare")
+			.with_method("query")
+			.with_params(params);
 
 		let body = serde_json::to_string(&body)
 			.map_err(|_| {
@@ -191,15 +240,18 @@ impl<T: Config> Pallet<T> {
 		// import the library here.
 		let args = Self::encode_get_notification_args(index, limit);
 
-		let body = HttpBody::default()
-			.with_jsonrpc("2.0")
-			.with_id("dontcare")
-			.with_method("query")
+		let params = Params::default()
 			.with_request_type("call_function")
 			.with_finality("final")
 			.with_account_id(anchor_contract)
 			.with_method_name("get_appchain_notification_histories")
 			.with_args_base64(args);
+
+		let body = HttpBody::default()
+			.with_jsonrpc("2.0")
+			.with_id("dontcare")
+			.with_method("query")
+			.with_params(params);
 
 		let body = serde_json::to_string(&body)
 			.map_err(|_| {
