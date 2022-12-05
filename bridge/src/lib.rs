@@ -58,6 +58,7 @@ mod nep141;
 mod nep171;
 mod nonfungible;
 mod token;
+mod utils;
 pub mod weights;
 
 #[cfg(test)]
@@ -541,8 +542,7 @@ pub mod pallet {
 			let account_id = <Pallet<T>>::account_id();
 
 			let min = T::Currency::minimum_balance();
-			let amount =
-				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			let amount = self.premined_amount.checked_into().expect("Amount overflow");
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
@@ -561,11 +561,10 @@ impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
 	}
 
 	fn try_get_token_id(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
-		let token_id = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
-		match token_id {
-			Some(id) => Ok(id),
-			_ => Err(Error::<T>::NoAssetId),
-		}
+		<AssetIdByTokenId<T>>::iter()
+			.find(|p| p.1 == asset_id)
+			.map(|p| p.0)
+			.ok_or::<Error<T>>(Error::<T>::NoAssetId)
 	}
 }
 
@@ -615,7 +614,8 @@ impl<T: Config> Pallet<T> {
 		let fee_integer = T::NativeTokenDecimals::get() * (integer as u128);
 		let fee_fraction =
 			T::NativeTokenDecimals::get() * (fraction.deconstruct() as u128) / 1_000_000_000;
-		let ft_fee: BalanceOf<T> = (fee_integer + fee_fraction).checked_into().unwrap();
+		let ft_fee: BalanceOf<T> =
+			(fee_integer + fee_fraction).checked_into().expect("Fee overflow");
 		// Notes: should modify later.
 		let nft_fee = ft_fee;
 
