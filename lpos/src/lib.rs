@@ -707,7 +707,7 @@ impl<T: Config> Pallet<T> {
 				offenders,
 			};
 
-			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			let amount = validator_payout.checked_into().expect("Amount Overflow");
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 			log!(debug, "Will send EraPayout message, era_payout is {:?}", <EraPayout<T>>::get());
 
@@ -743,7 +743,7 @@ impl<T: Config> Pallet<T> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
-			s.unwrap()
+			s.unwrap_or(0)
 		});
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
@@ -959,14 +959,14 @@ where
 				time_slot.encode(),
 				offenders
 			);
-			let result = R::report_offence(reporters.clone(), offence);
-			if result.is_ok() {
-				offenders.iter().for_each(|offender| {
-					// TODO: check max length
-					Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
-				});
-			}
-			result
+			let _ = R::report_offence(reporters.clone(), offence)?;
+
+			offenders.iter().for_each(|offender| {
+				// TODO: check max length
+				Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
+			});
+
+			Ok(())
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
 			Ok(())

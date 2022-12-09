@@ -14,10 +14,8 @@ impl<T: Config> Pallet<T> {
 		let receiver_id =
 			String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
 
-		let metadata = match T::Convertor::convert_into_nep171_metadata(collection, item) {
-			Some(data) => data,
-			None => return Err(Error::<T>::ConvertorNotImplement.into()),
-		};
+		let metadata = T::Convertor::convert_into_nep171_metadata(collection, item)
+			.ok_or::<Error<T>>(Error::<T>::ConvertorNotImplement.into())?;
 
 		let fee_wrapped: u128 = fee.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 

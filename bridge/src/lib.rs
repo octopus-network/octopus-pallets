@@ -243,7 +243,7 @@ pub mod pallet {
 			);
 			let asset = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id);
 			if asset.is_some() {
-				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset.unwrap(),);
+				log!(debug, "asset_id: {:?} exists in {:?}", asset_id, asset);
 				return Err(Error::<T>::AssetIdInUse.into())
 			}
 
@@ -344,10 +344,8 @@ pub mod pallet {
 			ensure!(near_price != 0, Error::<T>::NearPriceSetedIsZero);
 			ensure!(native_token_price != 0, Error::<T>::NativeTokenPriceSetedIsZero);
 
-			let oracle_account = match <OracleAccount<T>>::try_get() {
-				Ok(account) => account,
-				Err(_) => return Err(Error::<T>::NoOracleAccount.into()),
-			};
+			let oracle_account =
+				<OracleAccount<T>>::try_get().map_err(|_| Error::<T>::NoOracleAccount)?;
 
 			ensure!(who == oracle_account, Error::<T>::UpdatePriceWithNoPermissionAccount);
 
@@ -541,8 +539,7 @@ pub mod pallet {
 			let account_id = <Pallet<T>>::account_id();
 
 			let min = T::Currency::minimum_balance();
-			let amount =
-				self.premined_amount.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			let amount = self.premined_amount.checked_into().expect("Premined Amount Overflow");
 			if amount >= min {
 				T::Currency::make_free_balance_be(&account_id, amount);
 			}
@@ -561,11 +558,10 @@ impl<T: Config> TokenIdAndAssetIdProvider<T::AssetId> for Pallet<T> {
 	}
 
 	fn try_get_token_id(asset_id: T::AssetId) -> Result<Vec<u8>, Self::Err> {
-		let token_id = <AssetIdByTokenId<T>>::iter().find(|p| p.1 == asset_id).map(|p| p.0);
-		match token_id {
-			Some(id) => Ok(id),
-			_ => Err(Error::<T>::NoAssetId),
-		}
+		<AssetIdByTokenId<T>>::iter()
+			.find(|p| p.1 == asset_id)
+			.map(|p| p.0)
+			.ok_or::<Error<T>>(Error::<T>::NoAssetId)
 	}
 }
 
@@ -615,7 +611,8 @@ impl<T: Config> Pallet<T> {
 		let fee_integer = T::NativeTokenDecimals::get() * (integer as u128);
 		let fee_fraction =
 			T::NativeTokenDecimals::get() * (fraction.deconstruct() as u128) / 1_000_000_000;
-		let ft_fee: BalanceOf<T> = (fee_integer + fee_fraction).checked_into().unwrap();
+		let ft_fee: BalanceOf<T> =
+			(fee_integer + fee_fraction).checked_into().expect("Fee overflow");
 		// Notes: should modify later.
 		let nft_fee = ft_fee;
 
@@ -624,17 +621,16 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
-		let min_fee: BalanceOf<T> =
-			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Fungible) {
-				Ok(Some(fee)) => fee,
-				_ => {
-					// Need Check.
-					log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
-					0u128.checked_into().unwrap()
-				},
-			};
+		let min_fee: Option<BalanceOf<T>> = <CrosschainTransferFee<T>>::try_get(
+			CrossChainTransferType::Fungible,
+		)
+		.unwrap_or_else(|_| {
+			// Need Check.
+			log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
+			0u128.checked_into()
+		});
 
-		if fee < min_fee {
+		if Some(fee) < min_fee {
 			return Err(Error::<T>::InvalidFee.into())
 		}
 
@@ -648,19 +644,17 @@ impl<T: Config> Pallet<T> {
 		fee: BalanceOf<T>,
 		_metadata_length: u32,
 	) -> DispatchResult {
-		let min_fee: BalanceOf<T> =
-			match <CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible) {
-				Ok(Some(fee)) => fee,
-				_ => {
+		let min_fee: Option<BalanceOf<T>> =
+			<CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible)
+				.unwrap_or_else(|_| {
 					// Need Check.
 					log!(warn, "Storage CrosschainTransferFee is empty, default nft fee is zero.");
-					0u128.checked_into().unwrap()
-				},
-			};
+					0u128.checked_into()
+				});
 
 		// The min_fee will be related to metadata_length in future.
 
-		if fee < min_fee {
+		if Some(fee) < min_fee {
 			return Err(Error::<T>::InvalidFee.into())
 		}
 

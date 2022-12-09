@@ -437,16 +437,15 @@ pub mod pallet {
 			ensure_none(origin)?;
 			let who = payload.public.clone().into_account();
 
-			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data);
-			if val_id.is_none() {
-				log!(
-					warn,
-					"Not a validator in current validator set, key_data: {:?}",
-					payload.key_data
-				);
-				return Err(Error::<T>::NotValidator.into())
-			}
-			let val_id = val_id.expect("Validator is valid; qed").clone();
+			let val_id = T::LposInterface::is_active_validator(KEY_TYPE, &payload.key_data)
+				.ok_or_else(|| {
+					log!(
+						warn,
+						"Not a validator in current validator set, key_data: {:?}",
+						payload.key_data
+					);
+					Error::<T>::NotValidator
+				})?;
 
 			//
 			log!(debug, "️️️observations: {:#?},\nwho: {:?}", payload.observations, who);
@@ -506,37 +505,38 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://rpc.testnet.near.org".to_string()
+				"https://rpc.testnet.near.org".into()
 			} else {
-				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
+				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
 			}
 		}
 
 		fn primary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".to_string()
+				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
 			} else {
-				"https://rpc.mainnet.near.org".to_string()
+				"https://rpc.mainnet.near.org".into()
 			}
 		}
 
 		fn get_mainchain_rpc_endpoint(is_testnet: bool) -> String {
 			let kind = sp_core::offchain::StorageKind::PERSISTENT;
-			if let Some(data) = sp_io::offchain::local_storage_get(
+			let data = sp_io::offchain::local_storage_get(
 				kind,
 				b"octopus_appchain::mainchain_rpc_endpoint",
-			) {
-				if let Ok(rpc_url) = String::from_utf8(data) {
-					log!(debug, "The configure url is {:?} ", rpc_url.clone());
-					return rpc_url
-				} else {
-					log!(warn, "Parse configure url error, return default rpc url");
-					return Self::primary_rpc_endpoint(is_testnet)
-				}
-			} else {
+			)
+			.unwrap_or_else(|| {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				return Self::primary_rpc_endpoint(is_testnet)
-			}
+				Self::primary_rpc_endpoint(is_testnet).into()
+			});
+
+			let rpc_url = String::from_utf8(data).unwrap_or_else(|_| {
+				log!(warn, "Parse configure url error, return default rpc url");
+				Self::primary_rpc_endpoint(is_testnet)
+			});
+
+			log!(debug, "The configure url is {:?} ", rpc_url);
+			rpc_url
 		}
 
 		fn should_send(block_number: T::BlockNumber) -> bool {
@@ -624,50 +624,42 @@ pub mod pallet {
 
 			// Make an external HTTP request to fetch the current price.
 			// Note this call will block until response is received.
-			let ret = Self::get_validator_list_of(
+			let mut obs = Self::get_validator_list_of(
 				mainchain_rpc_endpoint,
 				anchor_contract.clone(),
 				next_set_id,
-			);
-
-			let mut obs = match ret {
-				Ok(observations) => observations,
-				Err(_) => {
-					log!(debug, "retry with failsafe endpoint to get validators");
-					Self::get_validator_list_of(
-						secondary_mainchain_rpc_endpoint,
-						anchor_contract.clone(),
-						next_set_id,
-					)
-					.map_err(|_| "Failed to get_validator_list_of")?
-				},
-			};
+			)
+			.map_err(|_| {
+				log!(debug, "retry with failsafe endpoint to get validators");
+				Self::get_validator_list_of(
+					secondary_mainchain_rpc_endpoint,
+					anchor_contract.clone(),
+					next_set_id,
+				)
+			})
+			.map_err(|_| "Failed to get_validator_list_of")?;
 
 			// check cross-chain transfers only if there isn't a validator_set update.
 			if obs.len() == 0 {
 				log!(debug, "No validat_set updates, try to get appchain notifications.");
 				// Make an external HTTP request to fetch the current price.
 				// Note this call will block until response is received.
-				let ret = Self::get_appchain_notification_histories(
+				obs = Self::get_appchain_notification_histories(
 					mainchain_rpc_endpoint,
 					anchor_contract.clone(),
 					next_notification_id,
 					T::RequestEventLimit::get(),
-				);
-
-				obs = match ret {
-					Ok(observations) => observations,
-					Err(_) => {
-						log!(debug, "retry with failsafe endpoint to get notify");
-						Self::get_appchain_notification_histories(
-							secondary_mainchain_rpc_endpoint,
-							anchor_contract,
-							next_notification_id,
-							T::RequestEventLimit::get(),
-						)
-						.map_err(|_| "Failed to get_appchain_notification_histories")?
-					},
-				};
+				)
+				.map_err(|_| {
+					log!(debug, "retry with failsafe endpoint to get notify");
+					Self::get_appchain_notification_histories(
+						secondary_mainchain_rpc_endpoint,
+						anchor_contract,
+						next_notification_id,
+						T::RequestEventLimit::get(),
+					)
+				})
+				.map_err(|_| "Failed to get_appchain_notification_histories")?;
 			}
 
 			if obs.len() == 0 {
@@ -700,24 +692,21 @@ pub mod pallet {
 
 		fn increase_next_notification_id() -> DispatchResultWithPostInfo {
 			NextNotificationId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_id.checked_add(1) {
-					*next_id = v;
-					log!(debug, "️️️increase next_notification_id: {:?} ", v);
-				} else {
-					return Err(Error::<T>::NextNotificationIdOverflow.into())
-				}
+				*next_id = next_id
+					.checked_add(1)
+					.ok_or::<Error<T>>(Error::<T>::NextNotificationIdOverflow.into())?;
+
+				log!(debug, "️️️increase next_notification_id: {:?} ", next_id);
 				Ok(().into())
 			})
 		}
 
 		fn increase_next_set_id() -> DispatchResultWithPostInfo {
 			NextSetId::<T>::try_mutate(|next_id| -> DispatchResultWithPostInfo {
-				if let Some(v) = next_id.checked_add(1) {
-					*next_id = v;
-					log!(debug, "️️️increase next_set_id: {:?} ", v);
-				} else {
-					return Err(Error::<T>::NextSetIdOverflow.into())
-				}
+				*next_id = next_id
+					.checked_add(1)
+					.ok_or::<Error<T>>(Error::<T>::NextSetIdOverflow.into())?;
+				log!(debug, "️️️increase next_set_id: {:?} ", next_id);
 				Ok(().into())
 			})
 		}
