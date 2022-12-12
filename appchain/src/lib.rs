@@ -19,7 +19,7 @@ use scale_info::{
 	prelude::string::{String, ToString},
 	TypeInfo,
 };
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{
