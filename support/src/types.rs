@@ -57,7 +57,7 @@ pub struct LockNftPayload {
 	pub fee: u128,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct Nep171TokenMetadata {
 	// ex. "Arch Nemesis: Mail Carrier" or "Parcel #5055"
 	pub title: Option<String>,

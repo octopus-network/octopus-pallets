@@ -1,3 +1,5 @@
+use crate::utils::hex_format;
+
 use super::*;
 
 impl<T: Config> Pallet<T> {
@@ -16,8 +18,7 @@ impl<T: Config> Pallet<T> {
 
 		T::Currency::transfer(&sender, &Self::account_id(), amount, AllowDeath)?;
 
-		let prefix = String::from("0x");
-		let hex_sender = prefix + &hex::encode(sender.encode());
+		let hex_sender = hex_format(&sender.encode());
 		let message = LockPayload {
 			sender: hex_sender.clone(),
 			receiver_id: receiver_id.clone(),

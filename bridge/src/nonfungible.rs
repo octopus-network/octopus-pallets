@@ -1,3 +1,5 @@
+use crate::utils::hex_format;
+
 use super::*;
 
 impl<T: Config> Pallet<T> {
@@ -25,8 +27,7 @@ impl<T: Config> Pallet<T> {
 			&Self::account_id(),
 		)?;
 
-		let prefix = String::from("0x");
-		let hex_sender = prefix + &hex::encode(sender.encode());
+		let hex_sender = hex_format(&sender.encode());
 
 		let message = LockNftPayload {
 			sender: hex_sender.clone(),

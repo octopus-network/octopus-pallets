@@ -58,6 +58,7 @@ mod nep141;
 mod nep171;
 mod nonfungible;
 mod token;
+mod utils;
 pub mod weights;
 
 #[cfg(test)]
