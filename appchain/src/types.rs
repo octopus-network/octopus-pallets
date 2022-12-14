@@ -162,6 +162,17 @@ pub enum Observation<AccountId> {
 	BurnNft(BurnNftEvent<AccountId>),
 }
 
+impl<AccountId> Observation<AccountId> {
+	pub fn get_observation_type(&self) -> ObservationType {
+		match self {
+			Observation::UpdateValidatorSet(_) => ObservationType::UpdateValidatorSet,
+			Observation::Burn(_) => ObservationType::Burn,
+			Observation::LockAsset(_) => ObservationType::LockAsset,
+			Observation::BurnNft(_) => ObservationType::BurnNft,
+		}
+	}
+}
+
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum ObservationType {
 	UpdateValidatorSet,
@@ -173,10 +184,10 @@ pub enum ObservationType {
 impl<AccountId> Observation<AccountId> {
 	pub fn observation_index(&self) -> u32 {
 		match self {
-			Observation::UpdateValidatorSet(set) => set.set_id,
-			Observation::LockAsset(event) => event.index,
-			Observation::Burn(event) => event.index,
-			Observation::BurnNft(event) => event.index,
+			Observation::UpdateValidatorSet(ValidatorSet { set_id: index, .. }) |
+			Observation::LockAsset(LockAssetEvent { index, .. }) |
+			Observation::Burn(BurnEvent { index, .. }) |
+			Observation::BurnNft(BurnNftEvent { index, .. }) => *index,
 		}
 	}
 }

@@ -387,7 +387,7 @@ fn test_make_http_call_and_parse_result() {
 	t.execute_with(|| {
 		let val_set = OctopusAppchain::get_validator_list_of(
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
+			b"oct-test.testnet",
 			1,
 		)
 		.ok();
@@ -395,7 +395,7 @@ fn test_make_http_call_and_parse_result() {
 
 		let burn_notify = OctopusAppchain::get_appchain_notification_histories(
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
+			b"oct-test.testnet",
 			0,
 			10,
 		)
@@ -404,7 +404,7 @@ fn test_make_http_call_and_parse_result() {
 
 		let val_set = OctopusAppchain::get_validator_list_of(
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
+			b"oct-test.testnet",
 			1,
 		)
 		.ok();
@@ -412,7 +412,7 @@ fn test_make_http_call_and_parse_result() {
 
 		let burn_notify = OctopusAppchain::get_appchain_notification_histories(
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
+			b"oct-test.testnet",
 			0,
 			10,
 		)
@@ -464,10 +464,10 @@ fn test_submit_validator_sets_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
-			public.clone(),
-			public.into_account().encode(), // default value.
-			account,
+			b"oct-test.testnet",
+			&public.clone(),
+			&public.into_account().encode(), // default value.
+			&account,
 		)
 		.unwrap();
 
@@ -538,10 +538,10 @@ fn test_submit_notifies_on_chain() {
 			2,
 			"https://rpc.testnet.near.org",
 			"https://rpc.testnet.near.org",
-			b"oct-test.testnet".to_vec(),
-			public.clone(),
-			public.into_account().encode(),
-			account,
+			b"oct-test.testnet",
+			&public.clone(),
+			&public.into_account().encode(),
+			&account,
 		)
 		.unwrap();
 
