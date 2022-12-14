@@ -352,7 +352,7 @@ pub mod pallet {
 			<TokenPrice<T>>::put(Some(native_token_price));
 			<NearPrice<T>>::put(Some(near_price));
 
-			Self::calculate_and_update_fee(near_price, native_token_price);
+			Self::calculate_and_update_fee(near_price, native_token_price)?;
 
 			Self::deposit_event(Event::PriceUpdated { who, near_price, native_token_price });
 
@@ -485,6 +485,8 @@ pub mod pallet {
 		InvalidFee,
 		/// Invalid coef.
 		InvalidCoef,
+		/// Invalid fee make overflow
+		InvalidFeeMakeOverflow,
 	}
 
 	/// A map from NEAR token account ID to appchain asset ID.
@@ -604,20 +606,23 @@ impl<T: Config> Pallet<T> {
 		(integer1, fraction1 + fraction2)
 	}
 
-	fn calculate_and_update_fee(near_price: u64, native_token_price: u64) {
+	fn calculate_and_update_fee(near_price: u64, native_token_price: u64) -> DispatchResult {
 		let (integer, fraction) =
 			Self::calculate_quantity_of_native_tokens(near_price, native_token_price);
 
 		let fee_integer = T::NativeTokenDecimals::get() * (integer as u128);
 		let fee_fraction =
 			T::NativeTokenDecimals::get() * (fraction.deconstruct() as u128) / 1_000_000_000;
-		let ft_fee: BalanceOf<T> =
-			(fee_integer + fee_fraction).checked_into().expect("Fee overflow");
+		let ft_fee: BalanceOf<T> = (fee_integer + fee_fraction)
+			.checked_into()
+			.ok_or::<Error<T>>(Error::<T>::InvalidFeeMakeOverflow)?;
 		// Notes: should modify later.
 		let nft_fee = ft_fee;
 
 		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Fungible, Some(ft_fee));
 		<CrosschainTransferFee<T>>::insert(CrossChainTransferType::Nonfungible, Some(nft_fee));
+
+		Ok(())
 	}
 
 	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
