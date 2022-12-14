@@ -1,18 +1,125 @@
 use super::*;
 
-#[derive(Deserialize, RuntimeDebug)]
-struct Response {
+#[derive(Serialize, Deserialize, RuntimeDebug, Default)]
+pub struct Response {
 	jsonrpc: String,
 	result: ResponseResult,
 	id: String,
 }
 
-#[derive(Deserialize, RuntimeDebug)]
-struct ResponseResult {
+#[allow(dead_code)]
+impl Response {
+	pub fn with_jsonrpc(mut self, jsonrpc: impl Into<String>) -> Self {
+		self.jsonrpc = jsonrpc.into();
+		self
+	}
+
+	pub fn with_response_result(mut self, result: ResponseResult) -> Self {
+		self.result = result;
+		self
+	}
+
+	pub fn with_id(mut self, id: impl Into<String>) -> Self {
+		self.id = id.into();
+		self
+	}
+}
+
+#[derive(Serialize, Deserialize, RuntimeDebug, Default)]
+pub struct ResponseResult {
 	result: Vec<u8>,
 	logs: Vec<String>,
 	block_height: u64,
 	block_hash: String,
+}
+
+#[allow(dead_code)]
+impl ResponseResult {
+	pub fn with_result(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.result = value.into();
+		self
+	}
+
+	pub fn with_logs(mut self, logs: impl Into<Vec<String>>) -> Self {
+		self.logs = logs.into();
+		self
+	}
+
+	pub fn with_block_height(mut self, block_height: u64) -> Self {
+		self.block_height = block_height;
+		self
+	}
+
+	pub fn with_block_hash(mut self, block_hash: impl Into<String>) -> Self {
+		self.block_hash = block_hash.into();
+		self
+	}
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct HttpBody {
+	jsonrpc: String,
+	id: String,
+	method: String,
+	params: Params,
+}
+
+impl HttpBody {
+	pub fn with_jsonrpc(mut self, value: impl Into<String>) -> Self {
+		self.jsonrpc = value.into();
+		self
+	}
+
+	pub fn with_id(mut self, value: impl Into<String>) -> Self {
+		self.id = value.into();
+		self
+	}
+
+	pub fn with_method(mut self, value: impl Into<String>) -> Self {
+		self.method = value.into();
+		self
+	}
+
+	pub fn with_params(mut self, value: Params) -> Self {
+		self.params = value;
+		self
+	}
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct Params {
+	request_type: String,
+	finality: String,
+	account_id: Vec<u8>,
+	method_name: String,
+	args_base64: Vec<u8>,
+}
+
+impl Params {
+	pub fn with_request_type(mut self, value: impl Into<String>) -> Self {
+		self.request_type = value.into();
+		self
+	}
+
+	pub fn with_finality(mut self, value: impl Into<String>) -> Self {
+		self.finality = value.into();
+		self
+	}
+
+	pub fn with_account_id(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.account_id = value.into();
+		self
+	}
+
+	pub fn with_method_name(mut self, value: impl Into<String>) -> Self {
+		self.method_name = value.into();
+		self
+	}
+
+	pub fn with_args_base64(mut self, value: impl Into<Vec<u8>>) -> Self {
+		self.args_base64 = value.into();
+		self
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -33,33 +140,29 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_validator_args(set_id).ok_or_else(|| {
-			log!(warn, "Encode get_validator_list_of args error");
-			http::Error::Unknown
-		})?;
+		let args = Self::encode_get_validator_args(set_id);
 
-		let mut body = br#"
-		{
-			"jsonrpc": "2.0",
-			"id": "dontcare",
-			"method": "query",
-			"params": {
-				"request_type": "call_function",
-				"finality": "final",
-				"account_id": ""#
+		let params = Params::default()
+			.with_request_type("call_function")
+			.with_finality("final")
+			.with_account_id(anchor_contract)
+			.with_method_name("get_validator_list_of")
+			.with_args_base64(args);
+
+		let body = HttpBody::default()
+			.with_jsonrpc("2.0")
+			.with_id("dontcare")
+			.with_method("query")
+			.with_params(params);
+
+		let body = serde_json::to_string(&body)
+			.map_err(|_| {
+				log!(warn, "serde http body error");
+				http::Error::Unknown
+			})?
+			.as_bytes()
 			.to_vec();
-		body.extend(&anchor_contract);
-		body.extend(
-			br#"",
-				"method_name": "get_validator_list_of",
-				"args_base64": ""#,
-		);
-		body.extend(&args);
-		body.extend(
-			br#""
-			}
-		}"#,
-		);
+
 		let request = http::Request::default()
 			.method(http::Method::Post)
 			.url(rpc_endpoint)
@@ -111,13 +214,13 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_validator_args(era: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_validator_args(era: u32) -> Vec<u8> {
 		let a = String::from("{\"era_number\":\"");
 		let era = era.to_string();
 		let b = String::from("\"}");
 		let json = a + &era + &b;
 		let res = base64::encode(json).into_bytes();
-		Some(res)
+		res
 	}
 
 	/// Fetch the notifications from anchor contract.
@@ -137,33 +240,29 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let args = Self::encode_get_notification_args(index, limit).ok_or_else(|| {
-			log!(info, "Encode get_appchain_notification_histories args error");
-			http::Error::Unknown
-		})?;
+		let args = Self::encode_get_notification_args(index, limit);
 
-		let mut body = br#"
-		{
-			"jsonrpc": "2.0",
-			"id": "dontcare",
-			"method": "query",
-			"params": {
-				"request_type": "call_function",
-				"finality": "final",
-				"account_id": ""#
+		let params = Params::default()
+			.with_request_type("call_function")
+			.with_finality("final")
+			.with_account_id(anchor_contract)
+			.with_method_name("get_appchain_notification_histories")
+			.with_args_base64(args);
+
+		let body = HttpBody::default()
+			.with_jsonrpc("2.0")
+			.with_id("dontcare")
+			.with_method("query")
+			.with_params(params);
+
+		let body = serde_json::to_string(&body)
+			.map_err(|_| {
+				log!(warn, "serde http body error");
+				http::Error::Unknown
+			})?
+			.as_bytes()
 			.to_vec();
-		body.extend(&anchor_contract);
-		body.extend(
-			br#"",
-				"method_name": "get_appchain_notification_histories",
-				"args_base64": ""#,
-		);
-		body.extend(&args);
-		body.extend(
-			br#""
-			}
-		}"#,
-		);
+
 		let request = http::Request::default()
 			.method(http::Method::Post)
 			.url(rpc_endpoint)
@@ -230,7 +329,7 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Option<Vec<u8>> {
+	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Vec<u8> {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");
@@ -238,6 +337,6 @@ impl<T: Config> Pallet<T> {
 		let c = String::from("\"}");
 		let json = a + &start_index + &b + &quantity + &c;
 		let res = base64::encode(json).into_bytes();
-		Some(res)
+		res
 	}
 }
