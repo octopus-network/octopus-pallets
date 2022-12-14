@@ -566,16 +566,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// End a session potentially ending an era.
-	fn end_session(session_index: SessionIndex) {
+	fn end_session(session_index: SessionIndex) -> DispatchResult {
 		if let Some(active_era) = Self::active_era() {
 			if let Some(next_active_era_start_session_index) =
 				Self::eras_start_session_index(active_era.index + 1)
 			{
 				if next_active_era_start_session_index == session_index + 1 {
-					Self::end_era(active_era, session_index);
+					Self::end_era(active_era, session_index)?;
 				}
 			}
 		}
+
+		Ok(())
 	}
 
 	/// * Increment `active_era.index`,
@@ -657,16 +659,16 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Compute payout for era.
-	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
+	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) -> DispatchResult {
 		if !T::AppchainInterface::is_activated() || <EraPayout<T>>::get() == 0 {
-			return
+			return Ok(())
 		}
 
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
 			if <ErasValidatorReward<T>>::get(&active_era.index).is_some() {
 				log!(warn, "era reward {:?} has already been paid", active_era.index);
-				return
+				return Ok(())
 			}
 
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -707,7 +709,8 @@ impl<T: Config> Pallet<T> {
 				offenders,
 			};
 
-			let amount = validator_payout.checked_into().ok_or(Error::<T>::AmountOverflow).unwrap();
+			let amount =
+				validator_payout.checked_into().ok_or::<Error<T>>(Error::<T>::AmountOverflow)?;
 			T::Currency::deposit_creating(&Self::account_id(), amount);
 			log!(debug, "Will send EraPayout message, era_payout is {:?}", <EraPayout<T>>::get());
 
@@ -726,6 +729,8 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::<T>::EraPayoutFailed { era_index: active_era.set_id });
 			}
 		}
+
+		Ok(())
 	}
 
 	/// Plan a new era.
@@ -743,7 +748,7 @@ impl<T: Config> Pallet<T> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
-			s.unwrap()
+			s.unwrap_or(0)
 		});
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
@@ -846,7 +851,12 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 	fn end_session(end_index: SessionIndex) {
 		log!(trace, "ending session {}", end_index);
-		Self::end_session(end_index)
+		match Self::end_session(end_index) {
+			Ok(_) => {},
+			Err(e) => {
+				log!(error, "ending session failed error({:?})", e);
+			},
+		}
 	}
 }
 
@@ -959,14 +969,14 @@ where
 				time_slot.encode(),
 				offenders
 			);
-			let result = R::report_offence(reporters.clone(), offence);
-			if result.is_ok() {
-				offenders.iter().for_each(|offender| {
-					// TODO: check max length
-					Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
-				});
-			}
-			result
+			let _ = R::report_offence(reporters.clone(), offence)?;
+
+			offenders.iter().for_each(|offender| {
+				// TODO: check max length
+				Offenders::<T>::mutate(O::ID, offender, |offences| *offences += 1);
+			});
+
+			Ok(())
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
 			Ok(())

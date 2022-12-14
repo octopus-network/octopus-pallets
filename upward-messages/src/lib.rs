@@ -212,11 +212,7 @@ impl<T: Config> UpwardMessagesInterface<<T as frame_system::Config>::AccountId> 
 		}
 
 		Nonce::<T>::try_mutate(|nonce| -> Result<u64, DispatchError> {
-			if let Some(v) = nonce.checked_add(1) {
-				*nonce = v;
-			} else {
-				return Err(Error::<T>::NonceOverflow.into())
-			}
+			*nonce = nonce.checked_add(1).ok_or::<Error<T>>(Error::<T>::NonceOverflow.into())?;
 
 			<MessageQueue<T>>::try_append(Message {
 				nonce: *nonce,
