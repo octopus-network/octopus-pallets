@@ -415,6 +415,8 @@ pub mod pallet {
 		NoClaimedRewards,
 		/// Amount overflow.
 		AmountOverflow,
+		// Borsh Serialize failed
+		BorshSerializeFailed,
 	}
 
 	#[pallet::hooks]
@@ -524,7 +526,7 @@ impl<T: Config> Pallet<T> {
 					let res = T::UpwardMessagesInterface::submit(
 						None,
 						PayloadType::PlanNewEra,
-						&message.try_to_vec().unwrap(),
+						&message.try_to_vec().expect("Borsh Serialize failed"),
 					);
 					log!(info, "UpwardMessage::PlanNewEra: {:?}", res);
 					if res.is_ok() {
@@ -717,7 +719,7 @@ impl<T: Config> Pallet<T> {
 			let res = T::UpwardMessagesInterface::submit(
 				None,
 				PayloadType::EraPayout,
-				&message.try_to_vec().unwrap(),
+				&message.try_to_vec().map_err(|_| Error::<T>::BorshSerializeFailed)?,
 			);
 			log!(info, "UpwardMessage::EraPayout: {:?}", res);
 			if res.is_ok() {

@@ -41,7 +41,7 @@ impl<T: Config> Pallet<T> {
 		let sequence = T::UpwardMessagesInterface::submit(
 			Some(sender.clone()),
 			PayloadType::LockNft,
-			&message.try_to_vec().unwrap(),
+			&message.try_to_vec().map_err(|_| Error::<T>::BorshSerializeFailed)?,
 		)?;
 		Self::deposit_event(Event::NonfungibleLocked {
 			collection,
