@@ -488,6 +488,8 @@ pub mod pallet {
 		InvalidCoef,
 		/// Invalid fee make overflow
 		InvalidFeeMakeOverflow,
+		// Borsh Serialize failed
+		BorshSerializeFailed,
 	}
 
 	/// A map from NEAR token account ID to appchain asset ID.
