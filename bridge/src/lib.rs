@@ -181,13 +181,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			receiver_id: Vec<u8>,
 			amount: BalanceOf<T>,
-			fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock_fungible_transfer_fee(sender.clone(), fee)?;
-			Self::do_lock(sender, receiver_id, amount, fee)?;
+			Self::do_lock(sender, receiver_id, amount)?;
 
 			Ok(())
 		}
@@ -199,13 +197,11 @@ pub mod pallet {
 			asset_id: T::AssetId,
 			receiver_id: Vec<u8>,
 			amount: T::AssetBalance,
-			fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock_fungible_transfer_fee(sender.clone(), fee)?;
-			Self::do_burn_nep141(asset_id, sender, receiver_id, amount, fee)?;
+			Self::do_burn_nep141(asset_id, sender, receiver_id, amount)?;
 
 			Ok(())
 		}
@@ -217,14 +213,11 @@ pub mod pallet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 			receiver_id: Vec<u8>,
-			fee: BalanceOf<T>,
-			metadata_length: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(T::AppchainInterface::is_activated(), Error::<T>::NotActivated);
 
-			Self::do_lock_nonfungible_transfer_fee(sender.clone(), fee, metadata_length)?;
-			Self::do_lock_nonfungible(collection_id, item_id, sender, receiver_id, fee)?;
+			Self::do_lock_nonfungible(collection_id, item_id, sender, receiver_id)?;
 
 			Ok(())
 		}
@@ -482,8 +475,8 @@ pub mod pallet {
 		NativeTokenPriceSetedIsZero,
 		/// Update token price must use oracle account.
 		UpdatePriceWithNoPermissionAccount,
-		/// Invalid fee.
-		InvalidFee,
+		/// Not enough balance for deduction fee.
+		NotEnoughBalanceForDeductionFee,
 		/// Invalid coef.
 		InvalidCoef,
 		/// Invalid fee make overflow
@@ -628,8 +621,10 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn do_lock_fungible_transfer_fee(sender: T::AccountId, fee: BalanceOf<T>) -> DispatchResult {
-		let min_fee: Option<BalanceOf<T>> = <CrosschainTransferFee<T>>::try_get(
+	pub(crate) fn do_lock_fungible_transfer_fee(
+		sender: &T::AccountId,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		let fee: Option<BalanceOf<T>> = <CrosschainTransferFee<T>>::try_get(
 			CrossChainTransferType::Fungible,
 		)
 		.unwrap_or_else(|_| {
@@ -637,37 +632,32 @@ impl<T: Config> Pallet<T> {
 			log!(warn, "Storage CrosschainTransferFee is empty, default ft fee is zero.");
 			0u128.checked_into()
 		});
+		let fee = fee.unwrap();
 
-		if Some(fee) < min_fee {
-			return Err(Error::<T>::InvalidFee.into())
-		}
+		T::Currency::transfer(sender, &Self::account_id(), fee, AllowDeath)
+			.map_err(|_| Error::<T>::NotEnoughBalanceForDeductionFee)?;
 
-		T::Currency::transfer(&sender, &Self::account_id(), fee, AllowDeath)?;
-
-		Ok(())
+		Ok(fee)
 	}
 
-	fn do_lock_nonfungible_transfer_fee(
-		sender: T::AccountId,
-		fee: BalanceOf<T>,
+	pub(crate) fn do_lock_nonfungible_transfer_fee(
+		sender: &T::AccountId,
 		_metadata_length: u32,
-	) -> DispatchResult {
-		let min_fee: Option<BalanceOf<T>> =
+	) -> Result<BalanceOf<T>, DispatchError> {
+		log!(debug, "Metadata length is {:?} .", _metadata_length);
+
+		let fee: Option<BalanceOf<T>> =
 			<CrosschainTransferFee<T>>::try_get(CrossChainTransferType::Nonfungible)
 				.unwrap_or_else(|_| {
 					// Need Check.
 					log!(warn, "Storage CrosschainTransferFee is empty, default nft fee is zero.");
 					0u128.checked_into()
 				});
+		let fee = fee.unwrap();
 
-		// The min_fee will be related to metadata_length in future.
+		T::Currency::transfer(sender, &Self::account_id(), fee, AllowDeath)
+			.map_err(|_| Error::<T>::NotEnoughBalanceForDeductionFee)?;
 
-		if Some(fee) < min_fee {
-			return Err(Error::<T>::InvalidFee.into())
-		}
-
-		T::Currency::transfer(&sender, &Self::account_id(), fee, AllowDeath)?;
-
-		Ok(())
+		Ok(fee)
 	}
 }

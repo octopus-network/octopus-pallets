@@ -8,7 +8,6 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		receiver_id: Vec<u8>,
 		amount: T::AssetBalance,
-		fee: BalanceOf<T>,
 	) -> DispatchResult {
 		let receiver_id =
 			String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
@@ -18,6 +17,8 @@ impl<T: Config> Pallet<T> {
 
 		let token_id = String::from_utf8(token_id).map_err(|_| Error::<T>::InvalidTokenId)?;
 
+		//deduction fee
+		let fee: BalanceOf<T> = Self::do_lock_fungible_transfer_fee(&sender)?;
 		let fee_wrapped: u128 = fee.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 
 		<T::Fungibles as fungibles::Mutate<T::AccountId>>::burn_from(asset_id, &sender, amount)?;

@@ -101,20 +101,18 @@ fn test_lock() {
 			100000
 		));
 		let minimum_amount = Balances::minimum_balance();
-		let fee = Balances::minimum_balance();
 		assert_noop!(
 			OctopusBridge::lock(
 				origin.clone(),
 				"test-account.testnet".to_string().as_bytes().to_vec(),
 				minimum_amount,
-				fee,
 			),
 			Error::<Test>::NotActivated
 		);
 
 		assert_ok!(OctopusAppchain::force_set_is_activated(RuntimeOrigin::root(), true));
 		assert_noop!(
-			OctopusBridge::lock(origin.clone(), vec![0, 159], minimum_amount, fee),
+			OctopusBridge::lock(origin.clone(), vec![0, 159], minimum_amount),
 			Error::<Test>::InvalidReceiverId
 		);
 
@@ -122,7 +120,6 @@ fn test_lock() {
 			origin,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			minimum_amount,
-			fee,
 		));
 	});
 }
@@ -133,7 +130,6 @@ fn test_burn_nep141() {
 	let origin = RuntimeOrigin::signed(alice.clone());
 	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
-		let fee = Balances::minimum_balance();
 		assert_ok!(Balances::set_balance(
 			RuntimeOrigin::root(),
 			source.clone(),
@@ -148,7 +144,6 @@ fn test_burn_nep141() {
 				0,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
 				10000000000,
-				fee,
 			),
 			Error::<Test>::NotActivated
 		);
@@ -163,7 +158,6 @@ fn test_burn_nep141() {
 			0,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			100000000,
-			fee,
 		));
 	});
 }
@@ -174,7 +168,6 @@ pub fn test_lock_nonfungible() {
 	let origin = RuntimeOrigin::signed(alice.clone());
 	let source = sp_runtime::MultiAddress::Id(alice);
 	new_tester().execute_with(|| {
-		let fee = Balances::minimum_balance();
 		assert_ok!(Balances::set_balance(
 			RuntimeOrigin::root(),
 			source.clone(),
@@ -189,8 +182,6 @@ pub fn test_lock_nonfungible() {
 				0,
 				42,
 				"test-account.testnet".to_string().as_bytes().to_vec(),
-				fee,
-				1,
 			),
 			Error::<Test>::NotActivated
 		);
@@ -200,8 +191,6 @@ pub fn test_lock_nonfungible() {
 			0,
 			42,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			fee,
-			1,
 		));
 	});
 }
@@ -266,7 +255,6 @@ pub fn test_force_unlock_nft() {
 		assert_ok!(Uniques::force_create(RuntimeOrigin::root(), 0, source.clone(), true));
 		assert_ok!(Uniques::mint(origin.clone(), 0, 42, source.clone(),));
 		assert_ok!(OctopusAppchain::force_set_is_activated(RuntimeOrigin::root(), true));
-		let fee = Balances::minimum_balance();
 		assert_ok!(Balances::set_balance(
 			RuntimeOrigin::root(),
 			source.clone(),
@@ -278,8 +266,6 @@ pub fn test_force_unlock_nft() {
 			0,
 			42,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			fee,
-			1,
 		));
 
 		assert_ok!(OctopusBridge::force_unlock_nonfungible(

@@ -111,7 +111,6 @@ benchmarks! {
 			origin.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			min,
-			min,
 		);
 		assert!(ret.is_ok());
 	}
@@ -120,7 +119,7 @@ benchmarks! {
 			sender: caller,
 			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
 			amount: min.into(),
-			fee: min.checked_into().unwrap(),
+			fee: 0u128.checked_into().unwrap(),
 			sequence: 1u64,
 		}
 		.into());
@@ -152,7 +151,6 @@ benchmarks! {
 			asset_id,
 			"test-account.testnet".to_string().as_bytes().to_vec(),
 			10_000u32.into(),
-			fee,
 		);
 	}
 	verify {
@@ -162,7 +160,7 @@ benchmarks! {
 			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
 			amount: 10_000u32.into(),
 			sequence: 1u64,
-			fee,
+			fee: 0u128.checked_into().unwrap(),
 		}
 		.into());
 	}
@@ -182,8 +180,6 @@ benchmarks! {
 			0u128.into(),
 			0u128.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			fee,
-			100u32,
 		);
 
 		assert!(ret.is_ok());
@@ -195,7 +191,7 @@ benchmarks! {
 			item: 0u128.into(),
 			sender: caller,
 			receiver: "test-account.testnet".to_string().as_bytes().to_vec(),
-			fee,
+			fee: 0u128.checked_into().unwrap(),
 			sequence: 1u64,
 		}
 		.into());
@@ -314,8 +310,6 @@ benchmarks! {
 			0u128.into(),
 			0u128.into(),
 			"test-account.testnet".to_string().as_bytes().to_vec(),
-			fee,
-			100u32,
 		);
 		let fee = <T as BridgeConfig>::Currency::minimum_balance();
 	}: {

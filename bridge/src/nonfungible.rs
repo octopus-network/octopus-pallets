@@ -11,7 +11,6 @@ impl<T: Config> Pallet<T> {
 		item: T::ItemId,
 		sender: T::AccountId,
 		receiver_id: Vec<u8>,
-		fee: BalanceOf<T>,
 	) -> DispatchResult {
 		let receiver_id =
 			String::from_utf8(receiver_id).map_err(|_| Error::<T>::InvalidReceiverId)?;
@@ -19,6 +18,13 @@ impl<T: Config> Pallet<T> {
 		let metadata = T::Convertor::convert_into_nep171_metadata(collection, item)
 			.ok_or::<Error<T>>(Error::<T>::ConvertorNotImplement.into())?;
 
+		// Deduction fee:
+		// 		This is a temporary scheme for calculating fees.
+		// 		It may be changed to be related to the length of messages later.
+		let data_in_vec =
+			metadata.clone().try_to_vec().map_err(|_| Error::<T>::BorshSerializeFailed)?;
+		let fee: BalanceOf<T> =
+			Self::do_lock_nonfungible_transfer_fee(&sender, data_in_vec.len() as u32)?;
 		let fee_wrapped: u128 = fee.checked_into().ok_or(Error::<T>::AmountOverflow)?;
 
 		<T::Nonfungibles as nonfungibles::Transfer<T::AccountId>>::transfer(
