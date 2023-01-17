@@ -140,8 +140,8 @@ fn test_submit_observations() {
 #[test]
 fn test_encode_args_works() {
 	let test_get_validators_data = vec![
-		(0u32, Some(b"eyJlcmFfbnVtYmVyIjoiMCJ9".to_vec())),
-		(4294967295u32, Some(b"eyJlcmFfbnVtYmVyIjoiNDI5NDk2NzI5NSJ9".to_vec())),
+		(0u32, Some("eyJlcmFfbnVtYmVyIjoiMCJ9".to_string())),
+		(4294967295u32, Some("eyJlcmFfbnVtYmVyIjoiNDI5NDk2NzI5NSJ9".to_string())),
 	];
 
 	for (set_id, expected) in test_get_validators_data {
@@ -149,13 +149,13 @@ fn test_encode_args_works() {
 	}
 
 	let test_get_notify_data = vec![
-		(0u32, 0u32, Some(b"eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjAifQ==".to_vec())),
+		(0u32, 0u32, Some("eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjAifQ==".to_string())),
 		(
 			4294967295u32,
 			4294967295u32,
 			Some(
-				b"eyJzdGFydF9pbmRleCI6IjQyOTQ5NjcyOTUiLCJxdWFudGl0eSI6IjQyOTQ5NjcyOTUifQ=="
-					.to_vec(),
+				"eyJzdGFydF9pbmRleCI6IjQyOTQ5NjcyOTUiLCJxdWFudGl0eSI6IjQyOTQ5NjcyOTUifQ=="
+					.to_string(),
 			),
 		),
 	];
@@ -200,9 +200,9 @@ fn validator_set_1_response(state: &mut testing::OffchainState) {
 	let params = Params::default()
 		.with_request_type("call_function")
 		.with_finality("final")
-		.with_account_id("oct-test.testnet".as_bytes())
+		.with_account_id("oct-test.testnet")
 		.with_method_name("get_validator_list_of")
-		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9".as_bytes());
+		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9");
 
 	let body = HttpBody::default()
 		.with_jsonrpc("2.0")
@@ -267,9 +267,9 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 	let params = Params::default()
 		.with_request_type("call_function")
 		.with_finality("final")
-		.with_account_id("oct-test.testnet".as_bytes())
+		.with_account_id("oct-test.testnet")
 		.with_method_name("get_validator_list_of")
-		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9".as_bytes());
+		.with_args_base64("eyJlcmFfbnVtYmVyIjoiMSJ9");
 
 	let body = HttpBody::default()
 		.with_jsonrpc("2.0")
@@ -321,9 +321,9 @@ fn burn_notify_response(state: &mut testing::OffchainState) {
 	let params = Params::default()
 		.with_request_type("call_function")
 		.with_finality("final")
-		.with_account_id("oct-test.testnet".as_bytes())
+		.with_account_id("oct-test.testnet")
 		.with_method_name("get_appchain_notification_histories")
-		.with_args_base64("eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEwIn0=".as_bytes());
+		.with_args_base64("eyJzdGFydF9pbmRleCI6IjAiLCJxdWFudGl0eSI6IjEwIn0=");
 
 	let body = HttpBody::default()
 		.with_jsonrpc("2.0")
