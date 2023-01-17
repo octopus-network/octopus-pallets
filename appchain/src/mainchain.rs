@@ -1,4 +1,5 @@
 use super::*;
+use scale_info::prelude::format;
 
 #[derive(Serialize, Deserialize, RuntimeDebug, Default)]
 pub struct Response {
@@ -90,9 +91,9 @@ impl HttpBody {
 pub struct Params {
 	request_type: String,
 	finality: String,
-	account_id: Vec<u8>,
+	account_id: String,
 	method_name: String,
-	args_base64: Vec<u8>,
+	args_base64: String,
 }
 
 impl Params {
@@ -106,7 +107,7 @@ impl Params {
 		self
 	}
 
-	pub fn with_account_id(mut self, value: impl Into<Vec<u8>>) -> Self {
+	pub fn with_account_id(mut self, value: impl Into<String>) -> Self {
 		self.account_id = value.into();
 		self
 	}
@@ -116,7 +117,7 @@ impl Params {
 		self
 	}
 
-	pub fn with_args_base64(mut self, value: impl Into<Vec<u8>>) -> Self {
+	pub fn with_args_base64(mut self, value: impl Into<String>) -> Self {
 		self.args_base64 = value.into();
 		self
 	}
@@ -145,7 +146,10 @@ impl<T: Config> Pallet<T> {
 		let params = Params::default()
 			.with_request_type("call_function")
 			.with_finality("final")
-			.with_account_id(anchor_contract)
+			.with_account_id(String::from_utf8(anchor_contract.to_vec()).map_err(|e| {
+				log!(warn, "decode anchor_contract erorr: {:?}", e);
+				http::Error::Unknown
+			})?)
 			.with_method_name("get_validator_list_of")
 			.with_args_base64(args);
 
@@ -155,7 +159,7 @@ impl<T: Config> Pallet<T> {
 			.with_method("query")
 			.with_params(params);
 
-		let body = serde_json::to_string(&body)
+		let body = serde_json::to_string_pretty(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown
@@ -214,12 +218,12 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_validator_args(era: u32) -> Vec<u8> {
+	pub(crate) fn encode_get_validator_args(era: u32) -> String {
 		let a = String::from("{\"era_number\":\"");
 		let era = era.to_string();
 		let b = String::from("\"}");
-		let json = a + &era + &b;
-		let res = base64::encode(json).into_bytes();
+		let json = format!("{}{}{}", a, era, b);
+		let res = base64::encode(json);
 		res
 	}
 
@@ -245,7 +249,10 @@ impl<T: Config> Pallet<T> {
 		let params = Params::default()
 			.with_request_type("call_function")
 			.with_finality("final")
-			.with_account_id(anchor_contract)
+			.with_account_id(String::from_utf8(anchor_contract.to_vec()).map_err(|e| {
+				log!(warn, "decode anchor_contract erorr: {:?}", e);
+				http::Error::Unknown
+			})?)
 			.with_method_name("get_appchain_notification_histories")
 			.with_args_base64(args);
 
@@ -255,7 +262,7 @@ impl<T: Config> Pallet<T> {
 			.with_method("query")
 			.with_params(params);
 
-		let body = serde_json::to_string(&body)
+		let body = serde_json::to_string_pretty(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown
@@ -329,14 +336,14 @@ impl<T: Config> Pallet<T> {
 		Ok(obs)
 	}
 
-	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> Vec<u8> {
+	pub(crate) fn encode_get_notification_args(start: u32, limit: u32) -> String {
 		let a = String::from("{\"start_index\":\"");
 		let start_index = start.to_string();
 		let b = String::from("\",\"quantity\":\"");
 		let quantity = limit.to_string();
 		let c = String::from("\"}");
-		let json = a + &start_index + &b + &quantity + &c;
-		let res = base64::encode(json).into_bytes();
+		let json = format!("{}{}{}{}{}", a, start_index, b, quantity, c);
+		let res = base64::encode(json);
 		res
 	}
 }
