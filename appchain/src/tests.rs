@@ -210,7 +210,7 @@ fn validator_set_1_response(state: &mut testing::OffchainState) {
 		.with_method("query")
 		.with_params(params);
 
-	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+	let body = serde_json::to_string_pretty(&body).unwrap().as_bytes().to_vec();
 
 	let response_result = ResponseResult::default()
 		.with_result(vec![
@@ -250,7 +250,7 @@ fn validator_set_1_response(state: &mut testing::OffchainState) {
 		.with_id("dontcare")
 		.with_response_result(response_result);
 
-	let response = serde_json::to_string(&response).unwrap().as_bytes().to_vec();
+	let response = serde_json::to_string_pretty(&response).unwrap().as_bytes().to_vec();
 
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),
@@ -277,7 +277,7 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 		.with_method("query")
 		.with_params(params);
 
-	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+	let body = serde_json::to_string_pretty(&body).unwrap().as_bytes().to_vec();
 
 	let response_result = ResponseResult::default()
 		.with_result(vec![91, 93])
@@ -290,7 +290,7 @@ fn empty_validator_set_1_response(state: &mut testing::OffchainState) {
 		.with_id("dontcare")
 		.with_response_result(response_result);
 
-	let response = serde_json::to_string(&response).unwrap().as_bytes().to_vec();
+	let response = serde_json::to_string_pretty(&response).unwrap().as_bytes().to_vec();
 
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),
@@ -331,7 +331,7 @@ fn burn_notify_response(state: &mut testing::OffchainState) {
 		.with_method("query")
 		.with_params(params);
 
-	let body = serde_json::to_string(&body).unwrap().as_bytes().to_vec();
+	let body = serde_json::to_string_pretty(&body).unwrap().as_bytes().to_vec();
 
 	let response_result = ResponseResult::default()
 		.with_result(vec![
@@ -360,7 +360,7 @@ fn burn_notify_response(state: &mut testing::OffchainState) {
 		.with_id("dontcare")
 		.with_response_result(response_result);
 
-	let response = serde_json::to_string(&response).unwrap().as_bytes().to_vec();
+	let response = serde_json::to_string_pretty(&response).unwrap().as_bytes().to_vec();
 
 	state.expect_request(testing::PendingRequest {
 		method: "POST".into(),

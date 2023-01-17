@@ -159,7 +159,7 @@ impl<T: Config> Pallet<T> {
 			.with_method("query")
 			.with_params(params);
 
-		let body = serde_json::to_string(&body)
+		let body = serde_json::to_string_pretty(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown
@@ -262,7 +262,7 @@ impl<T: Config> Pallet<T> {
 			.with_method("query")
 			.with_params(params);
 
-		let body = serde_json::to_string(&body)
+		let body = serde_json::to_string_pretty(&body)
 			.map_err(|_| {
 				log!(warn, "serde http body error");
 				http::Error::Unknown
