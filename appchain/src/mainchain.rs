@@ -142,26 +142,49 @@ impl<T: Config> Pallet<T> {
 		// import the library here.
 		let args = Self::encode_get_validator_args(set_id);
 
-		let params = Params::default()
-			.with_request_type("call_function")
-			.with_finality("final")
-			.with_account_id(anchor_contract)
-			.with_method_name("get_validator_list_of")
-			.with_args_base64(args);
+		// let params = Params::default()
+		// 	.with_request_type("call_function")
+		// 	.with_finality("final")
+		// 	.with_account_id(anchor_contract)
+		// 	.with_method_name("get_validator_list_of")
+		// 	.with_args_base64(args);
 
-		let body = HttpBody::default()
-			.with_jsonrpc("2.0")
-			.with_id("dontcare")
-			.with_method("query")
-			.with_params(params);
+		// let body = HttpBody::default()
+		// 	.with_jsonrpc("2.0")
+		// 	.with_id("dontcare")
+		// 	.with_method("query")
+		// 	.with_params(params);
 
-		let body = serde_json::to_string(&body)
-			.map_err(|_| {
-				log!(warn, "serde http body error");
-				http::Error::Unknown
-			})?
-			.as_bytes()
+		// let body = serde_json::to_string(&body)
+		// 	.map_err(|_| {
+		// 		log!(warn, "serde http body error");
+		// 		http::Error::Unknown
+		// 	})?
+		// 	.as_bytes()
+		// 	.to_vec();
+
+		let mut body = br#"
+		{
+			"jsonrpc": "2.0",
+			"id": "dontcare",
+			"method": "query",
+			"params": {
+				"request_type": "call_function",
+				"finality": "final",
+				"account_id": ""#
 			.to_vec();
+		body.extend(anchor_contract);
+		body.extend(
+			br#"",
+				"method_name": "get_validator_list_of",
+				"args_base64": ""#,
+		);
+		body.extend(&args);
+		body.extend(
+			br#""
+			}
+		}"#,
+		);
 
 		let request = http::Request::default()
 			.method(http::Method::Post)
