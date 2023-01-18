@@ -653,7 +653,7 @@ impl<T: Config> Pallet<T> {
 					log!(warn, "Storage CrosschainTransferFee is empty, default nft fee is zero.");
 					0u128.checked_into()
 				});
-		let fee = fee.unwrap();
+		let fee = fee.expect("Never failed, because fee have default value");
 
 		T::Currency::transfer(sender, &Self::account_id(), fee, AllowDeath)
 			.map_err(|_| Error::<T>::NotEnoughBalanceForDeductionFee)?;
