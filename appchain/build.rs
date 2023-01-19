@@ -1,28 +1,30 @@
-use std::{env, fs::File, io::Write, path::Path, process::Command};
+use std::{borrow::Cow, process::Command};
 
 fn main() {
-	write_git_version();
+	// Make git hash available via GIT_HASH build-time env var:
+	output_git_short_hash();
 }
 
-fn write_git_version() {
-	let maybe_hash = get_git_hash();
-	let git_hash = maybe_hash.as_deref().unwrap_or("baaaaaad");
+fn output_git_short_hash() {
+	let output = Command::new("git").args(["rev-parse", "--short=11", "HEAD"]).output();
 
-	let dest_path = Path::new(&env::var("OUT_DIR").unwrap()).join("git_version");
+	let git_hash = match output {
+		Ok(o) if o.status.success() => {
+			let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
+			Cow::from(sha)
+		},
+		Ok(o) => {
+			println!("cargo:warning=Git command failed with status: {}", o.status);
+			Cow::from("unknown")
+		},
+		Err(err) => {
+			println!("cargo:warning=Failed to execute git command: {}", err);
+			Cow::from("unknown")
+		},
+	};
 
-	let mut file = File::create(&dest_path).unwrap();
-	write!(file, "{}", git_hash).unwrap();
-
-	// TODO: are these right?
-	println!("cargo:rerun-if-changed=.git/HEAD");
-	println!("cargo:rerun-if-changed=.git/index");
-}
-
-fn get_git_hash() -> Option<String> {
-	let head = Command::new("git").arg("rev-parse").arg("HEAD").output();
-	if let Ok(h) = head {
-		let h = String::from_utf8_lossy(&h.stdout).trim().to_string();
-		return Some(h)
-	}
-	None
+	println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+	println!("cargo:rerun-if-changed=../.git/HEAD");
+	println!("cargo:rerun-if-changed=../.git/refs");
+	println!("cargo:rerun-if-changed=build.rs");
 }
