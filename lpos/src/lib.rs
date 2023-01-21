@@ -300,6 +300,7 @@ pub mod pallet {
 	/// Must contains information for eras for the range:
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
+	#[pallet::getter(fn bonded_eras)]
 	pub(crate) type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
 
@@ -948,7 +949,7 @@ where
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
-		let bonded_eras = BondedEras::<T>::get();
+		let bonded_eras = Pallet::<T>::bonded_eras();
 
 		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
 			let time_slot = offence.time_slot();

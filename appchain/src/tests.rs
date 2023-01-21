@@ -5,7 +5,6 @@ use crate::{
 	Error, *,
 };
 use frame_support::{assert_noop, assert_ok};
-use pallet_octopus_support::traits::AppchainInterface;
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keyring::{sr25519::Keyring, AccountKeyring};
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};

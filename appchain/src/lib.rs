@@ -105,15 +105,15 @@ pub mod ecdsa {
 
 impl<T: Config> AppchainInterface<T::AccountId> for Pallet<T> {
 	fn is_activated() -> bool {
-		IsActivated::<T>::get()
+		Self::is_activated()
 	}
 
 	fn next_set_id() -> u32 {
-		NextSetId::<T>::get()
+		Self::next_set_id()
 	}
 
 	fn planned_validators() -> Vec<(T::AccountId, u128)> {
-		<PlannedValidators<T>>::get()
+		Self::planned_validators()
 	}
 }
 
@@ -205,19 +205,24 @@ pub mod pallet {
 	///
 	/// Only an active appchain will communicate with the mainchain and pay block rewards.
 	#[pallet::storage]
+	#[pallet::getter(fn is_activated)]
 	pub(crate) type IsActivated<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn next_set_id)]
 	pub(crate) type NextSetId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn planned_validators)]
 	pub(crate) type PlannedValidators<T: Config> =
 		StorageValue<_, Vec<(T::AccountId, u128)>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn next_notification_id)]
 	pub(crate) type NextNotificationId<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn observations)]
 	pub(crate) type Observations<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -229,6 +234,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn observing)]
 	pub(crate) type Observing<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -333,7 +339,7 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let anchor_contract = Self::anchor_contract();
 			if !sp_io::offchain::is_validator() ||
-				!IsActivated::<T>::get() ||
+				!Self::is_activated() ||
 				anchor_contract.is_empty()
 			{
 				return
@@ -471,7 +477,7 @@ pub mod pallet {
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			<NextSetId<T>>::put(next_set_id);
-			log!(info, "️️️force set next_set_id, next_set_id is : {:?} ", NextSetId::<T>::get());
+			log!(info, "️️️force set next_set_id, next_set_id is : {:?} ", Self::next_set_id());
 			Ok(())
 		}
 
@@ -496,7 +502,7 @@ pub mod pallet {
 			log!(
 				info,
 				"️️️force set next_notification_id, next_notification_id is : {:?} ",
-				NextNotificationId::<T>::get()
+				Self::next_notification_id()
 			);
 			Ok(())
 		}
@@ -617,9 +623,9 @@ pub mod pallet {
 			key_data: &[u8],
 			_validator_id: &T::AccountId,
 		) -> Result<(), &'static str> {
-			let next_notification_id = NextNotificationId::<T>::get();
+			let next_notification_id = Self::next_notification_id();
 			log!(debug, "next_notification_id: {}", next_notification_id);
-			let next_set_id = NextSetId::<T>::get();
+			let next_set_id = Self::next_set_id();
 			log!(debug, "next_set_id: {}", next_set_id);
 
 			// Make an external HTTP request to fetch the current price.
@@ -717,7 +723,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			match observation_type {
 				ObservationType::UpdateValidatorSet => {
-					let next_set_id = NextSetId::<T>::get();
+					let next_set_id = Self::next_set_id();
 					if obs_id != next_set_id {
 						log!(
 							warn,
@@ -729,7 +735,7 @@ pub mod pallet {
 					}
 				},
 				_ => {
-					let next_notification_id = NextNotificationId::<T>::get();
+					let next_notification_id = Self::next_notification_id();
 					let limit = T::RequestEventLimit::get();
 					if (obs_id < next_notification_id) || (obs_id >= next_notification_id + limit) {
 						log!(
@@ -748,7 +754,7 @@ pub mod pallet {
 		}
 
 		fn prune_old_histories() {
-			// let next_notification_id = NextNotificationId::<T>::get();
+			// let next_notification_id = Self::next_notification_id();
 			// if next_notification_id <= T::NotificationHistoryDepth::get() {
 			// 	return;
 			// }
@@ -819,7 +825,7 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::ObservationsExceededLimit)?;
 			let total_stake: u128 = T::LposInterface::active_total_stake()
 				.ok_or(Error::<T>::InvalidActiveTotalStake)?;
-			let stake: u128 = <Observing<T>>::get(&observation)
+			let stake: u128 = Self::observing(&observation)
 				.iter()
 				.map(|v| T::LposInterface::active_stake_of(v))
 				.sum();
@@ -829,9 +835,9 @@ pub mod pallet {
 			log!(
 				debug,
 				"️️️observations content: {:#?}",
-				<Observations<T>>::get(observation_type, obs_id)
+				Self::observations(observation_type, obs_id)
 			);
-			log!(debug, "️️️observer: {:#?}", <Observing<T>>::get(&observation));
+			log!(debug, "️️️observer: {:#?}", Self::observing(&observation));
 			log!(debug, "️️️total_stake: {:?}, stake: {:?}", total_stake, stake);
 			//
 
@@ -845,13 +851,13 @@ pub mod pallet {
 							.collect();
 						<PlannedValidators<T>>::put(validators.clone());
 						log!(debug, "new PlannedValidators: {:?}", validators);
-						let set_id = NextSetId::<T>::get();
+						let set_id = Self::next_set_id();
 						Self::deposit_event(Event::NewPlannedValidators { set_id, validators });
 						Self::increase_next_set_id()?;
 						log!(
 							info,
 							"️️️processed updata validator set, next_set_id is : {:?} ",
-							NextSetId::<T>::get()
+							Self::next_set_id()
 						);
 					},
 					Observation::Burn(event) => {
@@ -883,7 +889,7 @@ pub mod pallet {
 							"️️️processed burn observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?} ",
 							obs_id,
 							result,
-							NextNotificationId::<T>::get()
+							Self::next_notification_id()
 						);
 					},
 					Observation::LockAsset(event) => {
@@ -930,7 +936,7 @@ pub mod pallet {
 							"️️️processed lock observation, obs_id is: {:?}, result is: {:?}, next_notification_id is : {:?} ",
 							obs_id,
 							result,
-							NextNotificationId::<T>::get()
+							Self::next_notification_id()
 						);
 					},
 					Observation::BurnNft(event) => {
@@ -969,7 +975,7 @@ pub mod pallet {
 							"️️️processed burn_nft observation, obs_id is: {:?}, result is: {:?}, next_notification_id is: {:?}",
 							obs_id,
 							result,
-							NextNotificationId::<T>::get(),
+							Self::next_notification_id()
 						);
 					},
 				}
