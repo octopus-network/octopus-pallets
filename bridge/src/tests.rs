@@ -361,3 +361,19 @@ pub fn test_set_token_price() {
 		);
 	});
 }
+
+#[test]
+fn test_set_coef_for_calculate_fee() {
+	let alice: AccountId = AccountKeyring::Alice.into();
+	let alice = RuntimeOrigin::signed(alice);
+	new_tester().execute_with(|| {
+		assert_noop!(
+			OctopusBridge::set_coef_for_calculate_fee(RuntimeOrigin::root(), 0u32),
+			Error::<Test>::InvalidCoef,
+		);
+		assert_noop!(OctopusBridge::set_coef_for_calculate_fee(alice, 3), BadOrigin);
+		assert_eq!(Coef::<Test>::get(), 3);
+		assert_ok!(OctopusBridge::set_coef_for_calculate_fee(RuntimeOrigin::root(), 5));
+		assert_eq!(Coef::<Test>::get(), 5);
+	});
+}

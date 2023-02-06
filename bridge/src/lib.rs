@@ -130,13 +130,18 @@ pub mod pallet {
 
 		type Convertor: ConvertIntoNep171<CollectionId = Self::CollectionId, ItemId = Self::ItemId>;
 
+		/// One native token in smallest unit which is used to calulate relayer fee.
+		/// That means if a token has 18 decimals, this value should be 1_000_000_000_000_000_000.
 		#[pallet::constant]
 		type NativeTokenDecimals: Get<u128>;
 
+		/// This is the upper limit of the number of native tokens paid by the relay fee.
+		/// If the calculated value of relay fee is greater than this value, use this value,
+		/// otherwise, use the calculated value.
 		#[pallet::constant]
 		type Threshold: Get<u64>;
 
-		/// Type representing the weight of this pallet
+		/// Type representing the weight of this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
@@ -479,9 +484,9 @@ pub mod pallet {
 		NotEnoughBalanceForDeductionFee,
 		/// Invalid coef.
 		InvalidCoef,
-		/// Invalid fee make overflow
+		/// Invalid fee make overflow.
 		InvalidFeeMakeOverflow,
-		// Borsh Serialize failed
+		// Borsh Serialize failed.
 		BorshSerializeFailed,
 	}
 
