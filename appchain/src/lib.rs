@@ -247,7 +247,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub(crate) fn DefaultForGitVersion() -> Vec<u8> {
-		core::env!("GIT_HASH").as_bytes().to_vec()
+		hex::decode(core::env!("GIT_HASH")).unwrap_or_default()
 	}
 
 	#[pallet::storage]
