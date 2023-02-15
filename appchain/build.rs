@@ -6,7 +6,7 @@ fn main() {
 }
 
 fn output_git_short_hash() {
-	let output = Command::new("git").args(["rev-parse", "--short=8", "HEAD"]).output();
+	let output = Command::new("git").args(["rev-parse", "HEAD"]).output();
 
 	let git_hash = match output {
 		Ok(o) if o.status.success() => {
