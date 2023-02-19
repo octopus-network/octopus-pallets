@@ -50,6 +50,13 @@ pallet-octopus-lpos = { path = "../lpos" }
 pallet-octopus-upward-messages = { path = "../upward-messages" }
 pallet-octopus-bridge = {path = "../bridge" }
 
+[build-dependencies]
+toml = "0.7.2"
+serde = { version = "1", features = ["derive"] }
+serde_derive = "1"
+anyhow = "1"
+url = "2.3"
+
 [features]
 default = ["std"]
 std = [

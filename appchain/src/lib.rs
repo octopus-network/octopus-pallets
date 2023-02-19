@@ -509,17 +509,17 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://rpc.testnet.near.org".into()
+				core::env!("NEAR_SECONDARY_TESTNET").into()
 			} else {
-				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
+				core::env!("NEAR_SECONDARY_MAINNET").into()
 			}
 		}
 
 		fn primary_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
+				core::env!("NEAR_PRIMARY_TESTNET").into()
 			} else {
-				"https://rpc.mainnet.near.org".into()
+				core::env!("NEAR_PRIMARY_MAINNET").into()
 			}
 		}
 

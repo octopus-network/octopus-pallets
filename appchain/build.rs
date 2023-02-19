@@ -1,8 +1,17 @@
-use std::{borrow::Cow, process::Command};
+use serde::Deserialize;
+use std::{
+	borrow::Cow,
+	fs,
+	io::{BufReader, Read},
+	process::Command,
+};
+use url::Url;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
 	// Make git hash available via GIT_HASH build-time env var:
 	output_git_short_hash();
+
+	output_near_rpc_endpoint()
 }
 
 fn output_git_short_hash() {
@@ -27,4 +36,57 @@ fn output_git_short_hash() {
 	println!("cargo:rerun-if-changed=../.git/HEAD");
 	println!("cargo:rerun-if-changed=../.git/refs");
 	println!("cargo:rerun-if-changed=build.rs");
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+	near: Option<NearConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NearConfig {
+	#[serde(deserialize_with = "deserialize_from_str")]
+	primary_mainnet_rpc_endpoint: Url,
+	#[serde(deserialize_with = "deserialize_from_str")]
+	primary_testnet_rpc_endpoint: Url,
+	#[serde(deserialize_with = "deserialize_from_str")]
+	secondary_mainnet_rpc_endpoint: Url,
+	#[serde(deserialize_with = "deserialize_from_str")]
+	secondary_testnet_rpc_endpoint: Url,
+}
+
+fn deserialize_from_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
+where
+	S: std::str::FromStr,
+	D: serde::Deserializer<'de>,
+	<S as std::str::FromStr>::Err: ToString,
+{
+	let amount_str: String = Deserialize::deserialize(deserializer)?;
+	amount_str.parse::<S>().map_err(|e| serde::de::Error::custom(e.to_string()))
+}
+fn output_near_rpc_endpoint() -> anyhow::Result<()> {
+	let file = fs::File::open("config.toml")?;
+	let mut buf_reader = BufReader::new(file);
+	let mut contents = String::new();
+	buf_reader.read_to_string(&mut contents)?;
+	println!("content: {:?}", contents);
+
+	let config: Config = toml::from_str(&contents)?;
+	if let Some(config) = config.near {
+		println!("cargo:rustc-env=NEAR_PRIMARY_MAINNET={}", config.primary_mainnet_rpc_endpoint);
+		println!("cargo:rustc-env=NEAR_PRIMARY_TESTNET={}", config.primary_testnet_rpc_endpoint);
+		println!(
+			"cargo:rustc-env=NEAR_SECONDARY_MAINNET={}",
+			config.secondary_mainnet_rpc_endpoint
+		);
+		println!(
+			"cargo:rustc-env=NEAR_SECONDARY_TESTNET={}",
+			config.secondary_testnet_rpc_endpoint
+		);
+	}
+	println!("cargo:rerun-if-changed=../.git/HEAD");
+	println!("cargo:rerun-if-changed=../.git/refs");
+	println!("cargo:rerun-if-changed=build.rs");
+
+	Ok(())
 }
