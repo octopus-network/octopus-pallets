@@ -46,13 +46,20 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 struct NearConfig {
 	#[serde(deserialize_with = "deserialize_from_str")]
-	primary_mainnet_rpc_endpoint: Url,
+	mainnet_rpc_endpoint: Url,
 	#[serde(deserialize_with = "deserialize_from_str")]
-	primary_testnet_rpc_endpoint: Url,
-	#[serde(deserialize_with = "deserialize_from_str")]
-	secondary_mainnet_rpc_endpoint: Url,
-	#[serde(deserialize_with = "deserialize_from_str")]
-	secondary_testnet_rpc_endpoint: Url,
+	testnet_rpc_endpoint: Url,
+}
+
+impl Default for NearConfig {
+	fn default() -> Self {
+		Self {
+			mainnet_rpc_endpoint: Url::parse("https://rpc.mainnet.near.org")
+				.expect("Never failed. q;w"),
+			testnet_rpc_endpoint: Url::parse("https://rpc.testnet.near.org")
+				.expect("Never failed. q;w"),
+		}
+	}
 }
 
 fn deserialize_from_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
@@ -73,16 +80,11 @@ fn output_near_rpc_endpoint() -> anyhow::Result<()> {
 
 	let config: Config = toml::from_str(&contents)?;
 	if let Some(config) = config.near {
-		println!("cargo:rustc-env=NEAR_PRIMARY_MAINNET={}", config.primary_mainnet_rpc_endpoint);
-		println!("cargo:rustc-env=NEAR_PRIMARY_TESTNET={}", config.primary_testnet_rpc_endpoint);
-		println!(
-			"cargo:rustc-env=NEAR_SECONDARY_MAINNET={}",
-			config.secondary_mainnet_rpc_endpoint
-		);
-		println!(
-			"cargo:rustc-env=NEAR_SECONDARY_TESTNET={}",
-			config.secondary_testnet_rpc_endpoint
-		);
+		println!("cargo:rustc-env=NEAR_MAINNET={}", config.mainnet_rpc_endpoint);
+		println!("cargo:rustc-env=NEAR_TESTNET={}", config.testnet_rpc_endpoint);
+	} else {
+		println!("cargo:rustc-env=NEAR_MAINNET={}", NearConfig::default().mainnet_rpc_endpoint);
+		println!("cargo:rustc-env=NEAR_TESTNET={}", NearConfig::default().testnet_rpc_endpoint);
 	}
 	println!("cargo:rerun-if-changed=../.git/HEAD");
 	println!("cargo:rerun-if-changed=../.git/refs");
