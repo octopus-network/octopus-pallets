@@ -1,46 +1,45 @@
 [package]
 name = "pallet-octopus-bridge-benchmarking"
-version = "4.0.0-pre.0"
-edition = "2021"
-authors = ["Octopus Network <hi@oct.network>"]
-license = "Apache-2.0"
-homepage = "https://oct.network"
-repository = "https://github.com/octopus-network/octopus-pallets.git"
 description = "Pallet benchmarking for octopus-appchain."
 readme = "README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-scale-info = { version = "2.1.1", default-features = false }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
+scale-info = { workspace = true, default-features = false }
+codec = { package = "parity-scale-codec", workspace = true, default-features = false, features = ["derive"] }
+sp-runtime = { workspace = true, default-features = false }
 
-frame-benchmarking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
-frame-support = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
-frame-system = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
+frame-benchmarking = { workspace = true, default-features = false }
+frame-support = { workspace = true, default-features = false }
+frame-system = { workspace = true, default-features = false }
 
 pallet-octopus-appchain = { default-features = false, path = "../../appchain" }
 pallet-octopus-bridge = { default-features = false, path = "../../bridge" }
 pallet-octopus-support = { default-features = false, path = "../../support" }
-pallet-assets = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
-pallet-uniques = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", default-features = false }
+pallet-assets = { workspace = true, default-features = false }
+pallet-uniques = { workspace = true, default-features = false }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
-scale-info = "2.1.1"
-sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
-sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
-sp-staking = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
-pallet-balances = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
-pallet-timestamp = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
-pallet-session = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30", features = ["historical"] }
+codec = { package = "parity-scale-codec", workspace = true, features = ["derive"] }
+scale-info.workspace = true
+sp-core.workspace = true
+sp-io.workspace = true
+sp-staking.workspace = true
+sp-std.workspace = true
+pallet-balances.workspace = true
+pallet-timestamp.workspace = true
+pallet-session = { workspace = true, features = ["historical"] }
 
 pallet-octopus-lpos = { path = "../../lpos" }
 pallet-octopus-upward-messages = { path = "../../upward-messages" }
-
-sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.30" }
 
 [features]
 default = ["std"]
