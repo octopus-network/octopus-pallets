@@ -37,6 +37,7 @@ where
 
 pub struct UnImplementAssets<T>(sp_std::marker::PhantomData<T>);
 
+// RELATE : https://github.com/paritytech/substrate/blob/fbddfbd76c60c6fda0024e8a44e82ad776033e4b/frame/assets/src/impl_fungibles.rs#L22
 impl<T, AccountId> fungibles::Inspect<AccountId> for UnImplementAssets<T>
 where
 	T: Config,
@@ -79,6 +80,10 @@ where
 		_amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
 		WithdrawConsequence::UnknownAsset
+	}
+
+	fn asset_exists(_asset : Self::AssetId) -> bool { 
+		false
 	}
 }
 

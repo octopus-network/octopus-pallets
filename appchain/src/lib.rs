@@ -427,6 +427,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit observations.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::submit_observations(payload.observations.len() as u32))]
 		pub fn submit_observations(
 			origin: OriginFor<T>,
@@ -464,6 +465,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_set_is_activated())]
 		pub fn force_set_is_activated(origin: OriginFor<T>, is_activated: bool) -> DispatchResult {
 			ensure_root(origin)?;
@@ -471,6 +473,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_set_id())]
 		pub fn force_set_next_set_id(origin: OriginFor<T>, next_set_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
@@ -480,6 +483,7 @@ pub mod pallet {
 		}
 
 		// Force set planned validators with sudo permissions.
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_set_planned_validators(validators.len() as u32))]
 		pub fn force_set_planned_validators(
 			origin: OriginFor<T>,
@@ -490,6 +494,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_set_next_notification_id())]
 		pub fn force_set_next_notification_id(
 			origin: OriginFor<T>,

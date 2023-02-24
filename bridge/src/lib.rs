@@ -180,6 +180,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::lock())]
 		#[transactional]
 		pub fn lock(
@@ -195,6 +196,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::burn_nep141())]
 		#[transactional]
 		pub fn burn_nep141(
@@ -211,6 +213,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::lock_nonfungible())]
 		#[transactional]
 		pub fn lock_nonfungible(
@@ -227,6 +230,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config>::WeightInfo::set_token_id())]
 		pub fn set_token_id(
 			origin: OriginFor<T>,
@@ -251,6 +255,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::delete_token_id())]
 		pub fn delete_token_id(origin: OriginFor<T>, token_id: Vec<u8>) -> DispatchResult {
 			ensure_root(origin)?;
@@ -265,6 +270,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_unlock())]
 		pub fn force_unlock(
 			origin: OriginFor<T>,
@@ -281,6 +287,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_mint_nep141())]
 		pub fn force_mint_nep141(
 			origin: OriginFor<T>,
@@ -297,6 +304,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(7)]
 		#[pallet::weight(<T as Config>::WeightInfo::force_unlock_nonfungible())]
 		pub fn force_unlock_nonfungible(
 			origin: OriginFor<T>,
@@ -318,6 +326,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as Config>::WeightInfo::set_oracle_account())]
 		pub fn set_oracle_account(
 			origin: OriginFor<T>,
@@ -332,6 +341,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(9)]
 		#[pallet::weight(<T as Config>::WeightInfo::set_token_price())]
 		pub fn set_token_price(
 			origin: OriginFor<T>,
@@ -358,6 +368,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(10)]
 		#[pallet::weight(0)]
 		pub fn set_coef_for_calculate_fee(origin: OriginFor<T>, coef: u32) -> DispatchResult {
 			ensure_root(origin)?;
