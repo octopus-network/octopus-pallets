@@ -194,6 +194,10 @@ impl pallet_assets::Config for Test {
 	type StringLimit = StringLimit;
 	type Freezer = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<1000>;
+	type AssetIdParameter = codec::Compact<AssetId>;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
+	type CallbackHandle = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
 }
 

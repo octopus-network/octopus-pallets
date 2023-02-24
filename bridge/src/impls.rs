@@ -82,7 +82,7 @@ where
 		WithdrawConsequence::UnknownAsset
 	}
 
-	fn asset_exists(_asset : Self::AssetId) -> bool { 
+	fn asset_exists(_asset: Self::AssetId) -> bool {
 		false
 	}
 }
