@@ -592,7 +592,7 @@ impl<T: Config> Pallet<T> {
 		let value1 = integer * (<Coef<T>>::get() as u64);
 		let integer1 = if value1 >= 100 { value1 / 100 } else { 0u64 };
 
-		if integer >= T::Threshold::get() {
+		if integer1 >= T::Threshold::get() {
 			return (T::Threshold::get(), Perbill::zero())
 		}
 
