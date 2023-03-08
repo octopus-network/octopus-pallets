@@ -55,3 +55,6 @@ jobs:
       - name: Check Build for Benchmarking
         run: |
           cargo check --features=runtime-benchmarks --release
+          
+      - name: Check no_std support
+        run: cargo check --no-default-features --target=wasm32-unknown-unknown
