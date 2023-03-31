@@ -23,7 +23,6 @@ frame-system = { workspace = true, default-features = false }
 pallet-assets = { workspace = true, default-features = false }
 pallet-uniques = { workspace = true, default-features = false }
 
-
 pallet-octopus-appchain = { default-features = false, path = "../../appchain" }
 pallet-octopus-bridge = { default-features = false, path = "../../bridge" }
 pallet-octopus-support = { default-features = false, path = "../../support" }
