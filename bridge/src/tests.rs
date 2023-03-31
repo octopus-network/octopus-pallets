@@ -136,8 +136,19 @@ fn test_burn_nep141() {
 			1000000000000000000,
 			100000,
 		));
-		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, source.clone(), true, 1));
-		assert_ok!(Assets::mint(origin.clone(), 0, source.clone(), 10000000000000000000000));
+		assert_ok!(Assets::force_create(
+			RuntimeOrigin::root(),
+			0u32.into(),
+			source.clone(),
+			true,
+			1
+		));
+		assert_ok!(Assets::mint(
+			origin.clone(),
+			0u32.into(),
+			source.clone(),
+			10000000000000000000000
+		));
 		assert_noop!(
 			OctopusBridge::burn_nep141(
 				origin.clone(),
@@ -228,7 +239,13 @@ pub fn test_force_mint_nep141() {
 	let ferdie: AccountId = AccountKeyring::Ferdie.into();
 	let source = sp_runtime::MultiAddress::Id(ferdie.clone());
 	new_tester().execute_with(|| {
-		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, source.clone(), true, 1));
+		assert_ok!(Assets::force_create(
+			RuntimeOrigin::root(),
+			0u32.into(),
+			source.clone(),
+			true,
+			1
+		));
 
 		assert_ok!(OctopusBridge::force_mint_nep141(
 			RuntimeOrigin::root(),

@@ -15,14 +15,14 @@ pub use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{
-		ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize, OnInitialize, Randomness,
-		StorageInfo,
+		AsEnsureOriginWithArg, ConstU128, ConstU32, Hooks, KeyOwnerProofSystem, OnFinalize,
+		OnInitialize, Randomness, StorageInfo,
 	},
 	weights::{IdentityFee, Weight},
 	PalletId, StorageValue,
 };
 
-use frame_system::EnsureRoot;
+use frame_system::{EnsureRoot, EnsureSigned};
 
 pub(crate) type BlockNumber = u32;
 pub type Signature = MultiSignature;
@@ -180,7 +180,9 @@ impl pallet_assets::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type AssetId = u32;
+	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
 	type AssetAccountDeposit = ConstU128<DOLLARS>;
@@ -190,7 +192,11 @@ impl pallet_assets::Config for Test {
 	type StringLimit = StringLimit;
 	type Freezer = ();
 	type Extra = ();
+	type CallbackHandle = ();
+	type RemoveItemsLimit = ConstU32<1000>;
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Test>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 pub struct OctopusAppCrypto;

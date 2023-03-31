@@ -80,6 +80,10 @@ where
 	) -> WithdrawConsequence<Self::Balance> {
 		WithdrawConsequence::UnknownAsset
 	}
+
+	fn asset_exists(_asset: Self::AssetId) -> bool {
+		false
+	}
 }
 
 impl<T, AccountId> fungibles::Mutate<AccountId> for UnImplementAssets<T>
