@@ -366,9 +366,8 @@ pub mod pallet {
 					); // last byte is 't'
 					log!(debug, "current mainchain_rpc_endpoint {:?}", mainchain_rpc_endpoint);
 
-					let secondary_mainchain_rpc_endpoint = Self::secondary_rpc_endpoint(
-						anchor_contract[anchor_contract.len() - 1] == 116,
-					); // last byte is 't'
+					let secondary_mainchain_rpc_endpoint =
+						Self::near_rpc_endpoint(anchor_contract[anchor_contract.len() - 1] == 116); // last byte is 't'
 					log!(
 						debug,
 						"current secondary_mainchain_rpc_endpoint {:?}",
@@ -507,19 +506,11 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn secondary_rpc_endpoint(is_testnet: bool) -> String {
+		fn near_rpc_endpoint(is_testnet: bool) -> String {
 			if is_testnet {
-				"https://rpc.testnet.near.org".into()
+				core::env!("NEAR_TESTNET").into()
 			} else {
-				"https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
-			}
-		}
-
-		fn primary_rpc_endpoint(is_testnet: bool) -> String {
-			if is_testnet {
-				"https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576".into()
-			} else {
-				"https://rpc.mainnet.near.org".into()
+				core::env!("NEAR_MAINNET").into()
 			}
 		}
 
@@ -531,12 +522,12 @@ pub mod pallet {
 			)
 			.unwrap_or_else(|| {
 				log!(debug, "No configuration for rpc, return default rpc url");
-				Self::primary_rpc_endpoint(is_testnet).into()
+				Self::near_rpc_endpoint(is_testnet).into()
 			});
 
 			let rpc_url = String::from_utf8(data).unwrap_or_else(|_| {
 				log!(warn, "Parse configure url error, return default rpc url");
-				Self::primary_rpc_endpoint(is_testnet)
+				Self::near_rpc_endpoint(is_testnet)
 			});
 
 			log!(debug, "The configure url is {:?} ", rpc_url);
