@@ -1,3 +1,3 @@
 [near]
-mainnet_rpc_endpoint = "https://near-mainnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576"
-testnet_rpc_endpoint = "https://near-testnet.infura.io/v3/dabe9e95376540b083ae09909ea7c576"
+mainnet_rpc_endpoint = "https://rpc.mainnet.near.org"
+testnet_rpc_endpoint = "https://rpc.testnet.near.org"
